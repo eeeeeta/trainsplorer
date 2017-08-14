@@ -234,7 +234,7 @@ fn osm() -> Result<()> {
     }
     println!("[+] All nodes separated, {} graph parts", cur_graph_part);
     conn.execute("UPDATE nodes SET distance = 'Infinity', visited = false, parent = NULL, parent_geom = NULL", &[])?;
-    const starting_node: i32 = 45896;
+    const starting_node: i32 = 45884;
     const goal_node: i32 = 45282;
     conn.execute("UPDATE nodes SET distance = 0 WHERE id = $1", &[&starting_node])?;
     let trans = conn.transaction()?;
@@ -244,18 +244,20 @@ fn osm() -> Result<()> {
     let dest = Node::from_select(&trans, "WHERE id = $1 AND graph_part = $2", &[&goal_node, &cur.graph_part])?.into_iter().nth(0)
         .ok_or("Finishing node does not exist, or is not in the same graph part as the starting node")?;
     let nodes_in_gp = count(&trans, "FROM nodes WHERE graph_part = $1", &[&cur.graph_part])?;
-    let bar = ProgressBar::new(nodes_in_gp as _);
+    let bar = ProgressBar::new_spinner();
     let mut distance: f32 = 0.0;
+    let mut considered = 0;
+    let mut updated = 0;
     'outer: loop {
         assert!(cur.distance != ::std::f32::INFINITY);
-        bar.set_message(&format!("Considering node {}", cur.id));
-        bar.inc(1);
+        bar.set_message(&format!("Considering node {} ({} considered, {} updated)", cur.id, considered, updated));
         let links = Link::from_select(&trans, "WHERE p1 = $1 OR p2 = $1", &[&cur.id])?;
         for link in links {
             let tent_dist = link.distance + cur.distance;
             let other_end = if link.p1 == cur.id { link.p2 } else { link.p1 };
-            for row in &trans.query("UPDATE nodes SET distance = CASE WHEN distance > $1 THEN $1 ELSE distance END WHERE id = $2 AND visited = false RETURNING id", &[&tent_dist, &other_end])? {
+            for row in &trans.query("UPDATE nodes SET distance = $1 WHERE id = $2 AND visited = false AND distance > $1 RETURNING id", &[&tent_dist, &other_end])? {
                 let id: i32 = row.get(0);
+                updated += 1;
                 trans.execute("UPDATE nodes SET parent = $1, parent_geom = $2 WHERE id = $3", &[&cur.id, &link.way, &id])?;
                 if id == dest.id {
                     distance = tent_dist;
@@ -264,6 +266,7 @@ fn osm() -> Result<()> {
             }
         }
         trans.execute("UPDATE nodes SET visited = true WHERE id = $1", &[&cur.id])?;
+        considered += 1;
         let next = Node::from_select(&trans, "WHERE visited = false AND graph_part = $1 ORDER BY distance ASC LIMIT 1", &[&cur.graph_part])?;
         for node in next {
             cur = node;
@@ -289,7 +292,28 @@ fn osm() -> Result<()> {
         let mut vec = Node::from_select(&conn, "WHERE id = $1", &[&cur_node.parent.unwrap()])?;
         cur_node = vec.remove(0);
     }
-    println!("[+] Path is: {:?}", ret.iter().rev().collect::<Vec<_>>());
+    let ret = ret.iter().rev().collect::<Vec<_>>();
+    println!("[+] Path is: {:?}", ret);
+    println!(r#"
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx
+ version="1.0"
+creator="GPSBabel - http://www.gpsbabel.org"
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+xmlns="http://www.topografix.com/GPX/1/0"
+xsi:schemaLocation="http://www.topografix.com/GPX/1/0 http://www.topografix.com/GPX/1/0/gpx.xsd">
+<trk>
+<trkseg>
+"#);
+    for node in ret {
+        for node in Node::from_select(&conn, "WHERE id = $1", &[&node])? {
+            println!(r#"<trkpt lat="{}" lon="{}" />"#, node.location.y, node.location.x);
+        }
+    }
+    println!(r#"
+</trkseg>
+</trk>
+</gpx>"#);
     Ok(())
 }
 quick_main!(osm);
