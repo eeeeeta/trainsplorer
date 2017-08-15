@@ -11,6 +11,7 @@ static HUXLEY_URL: &str = "https://huxley.apphb.com";
 use std::collections::{HashSet, HashMap};
 use postgres::{Connection, GenericConnection, TlsMode};
 use postgres::types::ToSql;
+use postgres::rows::Row;
 use postgis::ewkb::{Point, LineString, Polygon};
 use nrd::*;
 use indicatif::ProgressBar;
@@ -258,18 +259,28 @@ fn osm() -> Result<()> {
     }
     println!("[+] Djikstra's algorithm complete! Distance = {}", distance);
     println!("[+] Producing actual path...");
-    let mut ret = vec![];
+    let mut nodes = vec![];
+    let mut path = vec![];
     let mut cur_node = Node::from_select(&conn, "WHERE id = $1 AND graph_part = $2", &[&goal_node, &cur.graph_part])?.into_iter().nth(0).unwrap();
     loop {
-        ret.push(cur_node.id);
+        nodes.insert(0, cur_node.id);
         if cur_node.parent.is_none() {
             break;
+        }
+        if let Some(ref geom) = cur_node.parent_geom {
+            let geom: LineString = conn.query(
+                "SELECT CASE WHEN ST_Intersects(ST_EndPoint($1), $2) THEN $1 ELSE ST_Reverse($1) END",
+                &[&geom, &cur_node.location])?.into_iter()
+                .nth(0)
+                .unwrap()
+                .get(0);
+            path.insert(0, geom.clone())
         }
         let mut vec = Node::from_select(&conn, "WHERE id = $1", &[&cur_node.parent.unwrap()])?;
         cur_node = vec.remove(0);
     }
-    let ret = ret.iter().rev().collect::<Vec<_>>();
-    println!("[+] Path is: {:?}", ret);
+    let path: LineString = conn.query("SELECT ST_MakeLine(CAST($1 AS geometry[]))", &[&path])?.into_iter()
+        .nth(0).unwrap().get(0);
     println!(r#"
 <?xml version="1.0" encoding="UTF-8"?>
 <gpx
@@ -281,10 +292,8 @@ xsi:schemaLocation="http://www.topografix.com/GPX/1/0 http://www.topografix.com/
 <trk>
 <trkseg>
 "#);
-    for node in ret {
-        for node in Node::from_select(&conn, "WHERE id = $1", &[&node])? {
-            println!(r#"<trkpt lat="{}" lon="{}" />"#, node.location.y, node.location.x);
-        }
+    for node in path.points {
+        println!(r#"<trkpt lat="{}" lon="{}" />"#, node.y, node.x);
     }
     println!(r#"
 </trkseg>
@@ -292,4 +301,4 @@ xsi:schemaLocation="http://www.topografix.com/GPX/1/0 http://www.topografix.com/
 </gpx>"#);
     Ok(())
 }
-quick_main!(rail);
+quick_main!(osm);

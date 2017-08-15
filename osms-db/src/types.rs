@@ -152,3 +152,32 @@ pub struct StationPath {
     pub way: LineString,
     pub nodes: Vec<i32>
 }
+impl DbType for StationPath {
+    fn table_name() -> &'static str {
+        "station_paths"
+    }
+    fn table_desc() -> &'static str {
+        r#"
+s1 VARCHAR NOT NULL,
+s2 VARCHAR NOT NULL,
+way geometry NOT NULL,
+nodes INT[] NOT NULL,
+PRIMARY KEY(s1, s2)
+"#
+    }
+    fn from_row(row: &Row) -> Self {
+        Self {
+            s1: row.get(0),
+            s2: row.get(1),
+            way: row.get(2),
+            nodes: row.get(3)
+        }
+    }
+}
+impl StationPath {
+    pub fn insert<T: GenericConnection>(&self, conn: &T) -> Result<()> {
+        conn.execute("INSERT INTO station_paths (s1, s2, way, nodes) VALUES ($1, $2, $3, $4)",
+                     &[&self.s1, &self.s2, &self.way, &self.nodes])?;
+        Ok(())
+    }
+}
