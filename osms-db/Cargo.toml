@@ -1,0 +1,11 @@
+[package]
+authors = ["eeeeeta <eeeeeta@users.noreply.github.com>"]
+name = "osms-db"
+version = "0.1.0"
+
+[dependencies]
+error-chain = "0.10.0"
+indicatif = "0.6.0"
+postgis = "0.4.0"
+postgres = "0.14"
+national-rail-departures = { path = "../national-rail-departures" }

@@ -1,27 +1,24 @@
 #[macro_use] extern crate error_chain;
-extern crate osm_signal;
+extern crate national_rail_departures as nrd;
 extern crate postgres;
-extern crate geo;
 extern crate indicatif;
 extern crate postgis;
-extern crate ordered_float;
 
 static ACCESS_TOKEN: &str = "[REDACTED]";
 static DATABASE_URL: &str = "postgresql://eeeeeta@127.0.0.1/osm";
 static HUXLEY_URL: &str = "https://huxley.apphb.com";
 
-use std::collections::{HashSet, BTreeSet, HashMap};
+use std::collections::{HashSet, HashMap};
 use postgres::{Connection, GenericConnection, TlsMode};
 use postgres::rows::Row;
 use postgres::types::ToSql;
-use postgis::ewkb::{Point, LineString, Geometry, LineStringT, Polygon, GeometryCollection};
-use osm_signal::*;
-use ordered_float::OrderedFloat;
+use postgis::ewkb::{Point, LineString, Polygon};
+use nrd::*;
 use indicatif::ProgressBar;
 mod errors {
     error_chain! {
         links {
-            Rail(::osm_signal::errors::RailError, ::osm_signal::errors::RailErrorKind);
+            Rail(::nrd::errors::RailError, ::nrd::errors::RailErrorKind);
         }
         foreign_links {
             Io(::std::io::Error);
