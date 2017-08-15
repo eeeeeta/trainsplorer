@@ -115,6 +115,81 @@ fn make_stations<T: GenericConnection>(conn: &T) -> Result<()> {
     trans.commit()?;
     Ok(())
 }
+fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<StationPath> {
+    conn.execute("UPDATE nodes SET distance = 'Infinity', visited = false, parent = NULL, parent_geom = NULL", &[])?;
+    let starting_node = Station::from_select(conn, "WHERE nr_ref = $1", &[&from])?.into_iter()
+        .nth(0).ok_or("Starting station does not exist!")?.point;
+    let goal_node = Station::from_select(conn, "WHERE nr_ref = $1", &[&to])?.into_iter()
+        .nth(0).ok_or("Finishing station does not exist!")?.point;
+    conn.execute("UPDATE nodes SET distance = 0 WHERE id = $1", &[&starting_node])?;
+    let trans = conn.transaction()?;
+    println!("[+] Navigating from {} to {}", starting_node, goal_node);
+    let mut cur = Node::from_select(&trans, "WHERE id = $1", &[&starting_node])?.into_iter().nth(0)
+        .ok_or("Starting node does not exist!")?;
+    let dest = Node::from_select(&trans, "WHERE id = $1 AND graph_part = $2", &[&goal_node, &cur.graph_part])?.into_iter().nth(0)
+        .ok_or("Finishing node does not exist, or is not in the same graph part as the starting node")?;
+    let bar = ProgressBar::new_spinner();
+    let mut distance: f32 = 0.0;
+    let mut considered = 0;
+    let mut updated = 0;
+    'outer: loop {
+        assert!(cur.distance != ::std::f32::INFINITY);
+        bar.set_message(&format!("Considering node {} ({} considered, {} updated)", cur.id, considered, updated));
+        let links = Link::from_select(&trans, "WHERE p1 = $1 OR p2 = $1", &[&cur.id])?;
+        for link in links {
+            let tent_dist = link.distance + cur.distance;
+            let other_end = if link.p1 == cur.id { link.p2 } else { link.p1 };
+            for row in &trans.query("UPDATE nodes SET distance = $1 WHERE id = $2 AND visited = false AND distance > $1 RETURNING id", &[&tent_dist, &other_end])? {
+                let id: i32 = row.get(0);
+                updated += 1;
+                trans.execute("UPDATE nodes SET parent = $1, parent_geom = $2 WHERE id = $3", &[&cur.id, &link.way, &id])?;
+                if id == dest.id {
+                    distance = tent_dist;
+                    break 'outer;
+                }
+            }
+        }
+        trans.execute("UPDATE nodes SET visited = true WHERE id = $1", &[&cur.id])?;
+        considered += 1;
+        let next = Node::from_select(&trans, "WHERE visited = false AND graph_part = $1 ORDER BY distance ASC LIMIT 1", &[&cur.graph_part])?;
+        for node in next {
+            cur = node;
+            continue 'outer;
+        }
+        break;
+    }
+    trans.commit()?;
+    bar.finish();
+    if distance == 0.0 {
+        println!("[+] It is unpossible! No path found...");
+        bail!("No path found");
+    }
+    println!("[+] Djikstra's algorithm complete! Distance = {}", distance);
+    println!("[+] Producing actual path...");
+    let mut nodes = vec![];
+    let mut path = vec![];
+    let mut cur_node = Node::from_select(conn, "WHERE id = $1 AND graph_part = $2", &[&goal_node, &cur.graph_part])?.into_iter().nth(0).unwrap();
+    loop {
+        nodes.insert(0, cur_node.id);
+        if cur_node.parent.is_none() {
+            break;
+        }
+        if let Some(ref geom) = cur_node.parent_geom {
+            let geom: LineString = conn.query(
+                "SELECT CASE WHEN ST_Intersects(ST_EndPoint($1), $2) THEN $1 ELSE ST_Reverse($1) END",
+                &[&geom, &cur_node.location])?.into_iter()
+                .nth(0)
+                .unwrap()
+                .get(0);
+            path.insert(0, geom.clone())
+        }
+        let mut vec = Node::from_select(conn, "WHERE id = $1", &[&cur_node.parent.unwrap()])?;
+        cur_node = vec.remove(0);
+    }
+    let path: LineString = conn.query("SELECT ST_MakeLine(CAST($1 AS geometry[]))", &[&path])?.into_iter()
+        .nth(0).unwrap().get(0);
+    Ok(StationPath { s1: from.to_string(), s2: to.to_string(), way: path, nodes })
+}
 fn osm() -> Result<()> {
     let conn = Connection::connect(DATABASE_URL, TlsMode::None)?;
     println!("[+] Creating tables...");
@@ -209,78 +284,7 @@ fn osm() -> Result<()> {
         }
     }
     println!("[+] All nodes separated, {} graph parts", cur_graph_part);
-    conn.execute("UPDATE nodes SET distance = 'Infinity', visited = false, parent = NULL, parent_geom = NULL", &[])?;
-    let start = "CLJ";
-    let end = "QRB";
-    let starting_node = Station::from_select(&conn, "WHERE nr_ref = $1", &[&start])?[0].point;
-    let goal_node = Station::from_select(&conn, "WHERE nr_ref = $1", &[&end])?[0].point;
-    conn.execute("UPDATE nodes SET distance = 0 WHERE id = $1", &[&starting_node])?;
-    let trans = conn.transaction()?;
-    println!("[+] Navigating from {} to {}", starting_node, goal_node);
-    let mut cur = Node::from_select(&trans, "WHERE id = $1", &[&starting_node])?.into_iter().nth(0)
-        .ok_or("Starting node does not exist!")?;
-    let dest = Node::from_select(&trans, "WHERE id = $1 AND graph_part = $2", &[&goal_node, &cur.graph_part])?.into_iter().nth(0)
-        .ok_or("Finishing node does not exist, or is not in the same graph part as the starting node")?;
-    let bar = ProgressBar::new_spinner();
-    let mut distance: f32 = 0.0;
-    let mut considered = 0;
-    let mut updated = 0;
-    'outer: loop {
-        assert!(cur.distance != ::std::f32::INFINITY);
-        bar.set_message(&format!("Considering node {} ({} considered, {} updated)", cur.id, considered, updated));
-        let links = Link::from_select(&trans, "WHERE p1 = $1 OR p2 = $1", &[&cur.id])?;
-        for link in links {
-            let tent_dist = link.distance + cur.distance;
-            let other_end = if link.p1 == cur.id { link.p2 } else { link.p1 };
-            for row in &trans.query("UPDATE nodes SET distance = $1 WHERE id = $2 AND visited = false AND distance > $1 RETURNING id", &[&tent_dist, &other_end])? {
-                let id: i32 = row.get(0);
-                updated += 1;
-                trans.execute("UPDATE nodes SET parent = $1, parent_geom = $2 WHERE id = $3", &[&cur.id, &link.way, &id])?;
-                if id == dest.id {
-                    distance = tent_dist;
-                    break 'outer;
-                }
-            }
-        }
-        trans.execute("UPDATE nodes SET visited = true WHERE id = $1", &[&cur.id])?;
-        considered += 1;
-        let next = Node::from_select(&trans, "WHERE visited = false AND graph_part = $1 ORDER BY distance ASC LIMIT 1", &[&cur.graph_part])?;
-        for node in next {
-            cur = node;
-            continue 'outer;
-        }
-        break;
-    }
-    trans.commit()?;
-    bar.finish();
-    if distance == 0.0 {
-        println!("[+] It is unpossible! No path found...");
-        return Ok(());
-    }
-    println!("[+] Djikstra's algorithm complete! Distance = {}", distance);
-    println!("[+] Producing actual path...");
-    let mut nodes = vec![];
-    let mut path = vec![];
-    let mut cur_node = Node::from_select(&conn, "WHERE id = $1 AND graph_part = $2", &[&goal_node, &cur.graph_part])?.into_iter().nth(0).unwrap();
-    loop {
-        nodes.insert(0, cur_node.id);
-        if cur_node.parent.is_none() {
-            break;
-        }
-        if let Some(ref geom) = cur_node.parent_geom {
-            let geom: LineString = conn.query(
-                "SELECT CASE WHEN ST_Intersects(ST_EndPoint($1), $2) THEN $1 ELSE ST_Reverse($1) END",
-                &[&geom, &cur_node.location])?.into_iter()
-                .nth(0)
-                .unwrap()
-                .get(0);
-            path.insert(0, geom.clone())
-        }
-        let mut vec = Node::from_select(&conn, "WHERE id = $1", &[&cur_node.parent.unwrap()])?;
-        cur_node = vec.remove(0);
-    }
-    let path: LineString = conn.query("SELECT ST_MakeLine(CAST($1 AS geometry[]))", &[&path])?.into_iter()
-        .nth(0).unwrap().get(0);
+    let sp = navigate(&conn, "CLJ", "WAT")?;
     println!(r#"
 <?xml version="1.0" encoding="UTF-8"?>
 <gpx
@@ -292,7 +296,7 @@ xsi:schemaLocation="http://www.topografix.com/GPX/1/0 http://www.topografix.com/
 <trk>
 <trkseg>
 "#);
-    for node in path.points {
+    for node in sp.way.points {
         println!(r#"<trkpt lat="{}" lon="{}" />"#, node.y, node.x);
     }
     println!(r#"
