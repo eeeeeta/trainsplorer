@@ -4,17 +4,17 @@ extern crate postgres;
 extern crate indicatif;
 extern crate postgis;
 
-static ACCESS_TOKEN: &str = "[REDACTED]";
+static ACCESS_TOKEN: &str = include_str!("../access_token");
 static DATABASE_URL: &str = "postgresql://eeeeeta@127.0.0.1/osm";
 static HUXLEY_URL: &str = "https://huxley.apphb.com";
 
 use std::collections::{HashSet, HashMap};
 use postgres::{Connection, GenericConnection, TlsMode};
-use postgres::rows::Row;
 use postgres::types::ToSql;
 use postgis::ewkb::{Point, LineString, Polygon};
 use nrd::*;
 use indicatif::ProgressBar;
+
 mod errors {
     error_chain! {
         links {
@@ -27,6 +27,8 @@ mod errors {
         }
     }
 }
+mod types;
+use types::*;
 use errors::*;
 fn rail() -> Result<()> {
     let mut cli = RailClient::new(ACCESS_TOKEN, HUXLEY_URL)?;
@@ -45,145 +47,6 @@ fn rail() -> Result<()> {
         println!("{:#?}", serv);
     }
     Ok(())
-}
-#[derive(Debug, Clone)]
-pub struct Node {
-    id: i32,
-    location: Point,
-    distance: f32,
-    parent: Option<i32>,
-    visited: bool,
-    graph_part: i32,
-    parent_geom: Option<LineString>
-}
-impl Node {
-    pub fn make_table<T: GenericConnection>(conn: &T) -> Result<()> {
-        conn.execute(r#"
-CREATE TABLE IF NOT EXISTS nodes (
-id SERIAL PRIMARY KEY,
-location geometry UNIQUE NOT NULL,
-distance REAL NOT NULL DEFAULT 'Infinity',
-parent INT,
-visited BOOL NOT NULL DEFAULT false,
-graph_part INT NOT NULL DEFAULT 0,
-parent_geom geometry
-);"#, &[])?;
-        Ok(())
-    }
-    pub fn from_select<T: GenericConnection>(conn: &T, where_clause: &str, args: &[&ToSql]) -> Result<Vec<Self>> {
-        let query = format!("SELECT * FROM nodes {}", where_clause);
-        let qry = conn.query(&query, args)?;
-        let mut ret = vec![];
-        for row in &qry {
-            ret.push(Self::from_row(&row));
-        }
-        Ok(ret)
-    }
-    pub fn from_row(row: &Row) -> Self {
-        Self {
-            id: row.get(0),
-            location: row.get(1),
-            distance: row.get(2),
-            parent: row.get(3),
-            visited: row.get(4),
-            graph_part: row.get(5),
-            parent_geom: row.get(6)
-        }
-    }
-    pub fn insert<T: GenericConnection>(conn: &T, location: Point) -> Result<i32> {
-        let qry = conn.query("INSERT INTO nodes (location) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id",
-                             &[&location])?;
-        let mut ret = None;
-        for row in &qry {
-            ret = Some(row.get(0))
-        }
-        if ret.is_none() {
-            for row in &conn.query("SELECT id FROM nodes WHERE location = $1", &[&location])? {
-                ret = Some(row.get(0))
-            }
-        }
-        Ok(ret.expect("Somehow, we never got an id in Node::insert..."))
-    }
-}
-#[derive(Debug, Clone)]
-pub struct Station {
-    nr_ref: String,
-    point: i32,
-    area: Polygon
-}
-impl Station {
-    pub fn make_table<T: GenericConnection>(conn: &T) -> Result<()> {
-        conn.execute(r#"
-CREATE TABLE IF NOT EXISTS stations (
-nr_ref VARCHAR UNIQUE NOT NULL,
-point INT NOT NULL,
-area geometry NOT NULL
-);"#, &[])?;
-        Ok(())
-    }
-    pub fn from_select<T: GenericConnection>(conn: &T, where_clause: &str, args: &[&ToSql]) -> Result<Vec<Self>> {
-        let query = format!("SELECT * FROM stations {}", where_clause);
-        let qry = conn.query(&query, args)?;
-        let mut ret = vec![];
-        for row in &qry {
-            ret.push(Self::from_row(&row));
-        }
-        Ok(ret)
-    }
-    pub fn from_row(row: &Row) -> Self {
-        Self {
-            nr_ref: row.get(0),
-            point: row.get(1),
-            area: row.get(2),
-        }
-    }
-    pub fn insert<T: GenericConnection>(conn: &T, nr_ref: &str, point: i32, area: Polygon) -> Result<()> {
-        conn.execute("INSERT INTO stations (nr_ref, point, area) VALUES ($1, $2, $3)",
-                     &[&nr_ref, &point, &area])?;
-        Ok(())
-    }
-
-}
-#[derive(Debug, Clone)]
-pub struct Link {
-    p1: i32,
-    p2: i32,
-    way: LineString,
-    distance: f32
-}
-impl Link {
-    pub fn make_table<T: GenericConnection>(conn: &T) -> Result<()> {
-        conn.execute(r#"
-CREATE TABLE IF NOT EXISTS links (
-p1 INT NOT NULL,
-p2 INT NOT NULL,
-way geometry NOT NULL,
-distance REAL NOT NULL
-);"#, &[])?;
-        Ok(())
-    }
-    pub fn from_select<T: GenericConnection>(conn: &T, where_clause: &str, args: &[&ToSql]) -> Result<Vec<Self>> {
-        let query = format!("SELECT p1, p2, way, distance FROM links {}", where_clause);
-        let qry = conn.query(&query, args)?;
-        let mut ret = vec![];
-        for row in &qry {
-            ret.push(Self::from_row(&row));
-        }
-        Ok(ret)
-    }
-    pub fn from_row(row: &Row) -> Self {
-        Self {
-            p1: row.get(0),
-            p2: row.get(1),
-            way: row.get(2),
-            distance: row.get(3)
-        }
-    }
-    pub fn insert<T: GenericConnection>(&self, conn: &T) -> Result<()> {
-        conn.execute("INSERT INTO links (p1, p2, way, distance) VALUES ($1, $2, $3, $4)",
-                     &[&self.p1, &self.p2, &self.way, &self.distance])?;
-        Ok(())
-    }
 }
 
 fn count<T: GenericConnection>(conn: &T, details: &str, args: &[&ToSql]) -> Result<i64> {
@@ -357,7 +220,6 @@ fn osm() -> Result<()> {
         .ok_or("Starting node does not exist!")?;
     let dest = Node::from_select(&trans, "WHERE id = $1 AND graph_part = $2", &[&goal_node, &cur.graph_part])?.into_iter().nth(0)
         .ok_or("Finishing node does not exist, or is not in the same graph part as the starting node")?;
-    let nodes_in_gp = count(&trans, "FROM nodes WHERE graph_part = $1", &[&cur.graph_part])?;
     let bar = ProgressBar::new_spinner();
     let mut distance: f32 = 0.0;
     let mut considered = 0;
@@ -430,4 +292,4 @@ xsi:schemaLocation="http://www.topografix.com/GPX/1/0 http://www.topografix.com/
 </gpx>"#);
     Ok(())
 }
-quick_main!(osm);
+quick_main!(rail);

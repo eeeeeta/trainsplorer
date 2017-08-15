@@ -229,7 +229,12 @@ fn times_to_info(s: Option<String>, e: Option<String>, actual: bool) -> TimingIn
                     Ok(t) => t,
                     Err(_) => return Scheduled(nt)
                 };
-                Delayed { scheduled: nt, updated: ne, actual }
+                if ne == nt {
+                    OnTime { time: nt, actual }
+                }
+                else {
+                    Delayed { scheduled: nt, updated: ne, actual }
+                }
             }
         }
         else {
