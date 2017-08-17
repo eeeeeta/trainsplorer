@@ -41,7 +41,7 @@ impl DbType for Node {
     fn table_desc() -> &'static str {
         r#"
 id SERIAL PRIMARY KEY,
-location geometry UNIQUE NOT NULL,
+location geometry NOT NULL,
 distance REAL NOT NULL DEFAULT 'Infinity',
 parent INT,
 visited BOOL NOT NULL DEFAULT false,
@@ -63,16 +63,15 @@ parent_geom geometry
 }
 impl Node {
     pub fn insert<T: GenericConnection>(conn: &T, location: Point) -> Result<i32> {
-        let qry = conn.query("INSERT INTO nodes (location) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id",
+        for row in &conn.query("SELECT id FROM nodes WHERE location = $1",
+                               &[&location])? {
+            return Ok(row.get(0));
+        }
+        let qry = conn.query("INSERT INTO nodes (location) VALUES ($1) RETURNING id",
                              &[&location])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))
-        }
-        if ret.is_none() {
-            for row in &conn.query("SELECT id FROM nodes WHERE location = $1", &[&location])? {
-                ret = Some(row.get(0))
-            }
         }
         Ok(ret.expect("Somehow, we never got an id in Node::insert..."))
     }
@@ -176,8 +175,14 @@ PRIMARY KEY(s1, s2)
 }
 impl StationPath {
     pub fn insert<T: GenericConnection>(&self, conn: &T) -> Result<()> {
-        conn.execute("INSERT INTO station_paths (s1, s2, way, nodes) VALUES ($1, $2, $3, $4)",
+        conn.execute("INSERT INTO station_paths (s1, s2, way, nodes) VALUES ($1, $2, $3, $4) ON CONFLICT DO UPDATE",
                      &[&self.s1, &self.s2, &self.way, &self.nodes])?;
         Ok(())
     }
+}
+#[derive(Debug, Clone)]
+pub struct Train {
+    pub id: i32,
+    pub rsid: String,
+
 }

@@ -3,3 +3,6 @@
 *.pbf
 *.gpx
 access_token
+*.sql
+*.geojson
+*.kml
