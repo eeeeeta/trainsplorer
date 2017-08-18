@@ -75,6 +75,43 @@ impl Node {
         }
         Ok(ret.expect("Somehow, we never got an id in Node::insert..."))
     }
+    pub fn new_at_point<T: GenericConnection>(conn: &T, point: Point) -> Result<i32> {
+        let trans = conn.transaction()?;
+        let links = Link::from_select(
+            &trans,
+            "WHERE ST_Intersects(way, $1)
+             AND NOT ST_Intersects(ST_EndPoint(way), $1)
+             AND NOT ST_Intersects(ST_StartPoint(way), $1)",
+            &[&point])?;
+        let node = Self::insert(&trans, point.clone())?;
+        for link in links {
+            debug!("splitting link {} <-> {}", link.p1, link.p2);
+            for row in &trans.query(
+                "SELECT ST_GeometryN(ST_Split($1, $2), 1),
+                        ST_GeometryN(ST_Split($1, $2), 2),
+                        CAST(ST_Length(ST_GeometryN(ST_Split($1, $2), 1)) AS REAL),
+                        CAST(ST_Length(ST_GeometryN(ST_Split($1, $2), 2)) AS REAL)",
+                &[&link.way, &point])? {
+
+                let (first, last): (LineString, LineString) = (row.get(0), row.get(1));
+                let (df, dl): (f32, f32) = (row.get(2), row.get(3));
+                trans.execute(
+                    "UPDATE links SET p2 = $1, way = $2, distance = $3 WHERE p1 = $4 AND p2 = $5",
+                    &[&node, &first, &df, &link.p1, &link.p2]
+                )?;
+                let new = Link {
+                    p1: node,
+                    p2: link.p2,
+                    distance: dl,
+                    way: last
+                };
+                debug!("new setup: {} <-> {} <-> {}\n", link.p1, node, link.p2);
+                new.insert(&trans)?;
+            }
+        }
+        trans.commit()?;
+        Ok(node)
+    }
 }
 #[derive(Debug, Clone)]
 pub struct Station {

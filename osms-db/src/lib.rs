@@ -1,0 +1,299 @@
+#[macro_use] extern crate error_chain;
+extern crate postgres;
+extern crate postgis;
+#[macro_use] extern crate log;
+
+use std::collections::{HashSet, HashMap};
+use postgres::GenericConnection;
+use postgres::types::ToSql;
+use postgis::ewkb::{Point, LineString, Polygon};
+
+pub mod errors {
+    error_chain! {
+        foreign_links {
+            Io(::std::io::Error);
+            Postgres(::postgres::error::Error);
+        }
+    }
+}
+
+pub mod types;
+use types::*;
+use errors::*;
+
+pub fn count<T: GenericConnection>(conn: &T, details: &str, args: &[&ToSql]) -> Result<i64> {
+    Ok(conn.query(&format!("SELECT COUNT(*) {}", details), args)?.into_iter()
+        .nth(0)
+        .ok_or("Count query failed")?
+        .get(0))
+}
+pub fn make_stations<T: GenericConnection>(conn: &T) -> Result<()> {
+    let trans = conn.transaction()?;
+    let mut areas: HashMap<String, (Polygon, Point)> = HashMap::new();
+    for row in &trans.query(
+        "SELECT ref, way, ST_Centroid(way)
+         FROM planet_osm_polygon
+         WHERE railway = 'station' AND ref IS NOT NULL", &[])? {
+
+        areas.insert(row.get(0), (row.get(1), row.get(2)));
+    }
+    for row in &trans.query(
+        "SELECT ref, ST_Buffer(way::geography, 50)::geometry, way
+         FROM planet_osm_point
+         WHERE railway = 'station' AND ref IS NOT NULL", &[])? {
+
+        areas.insert(row.get(0), (row.get(1), row.get(2)));
+    }
+    debug!("make_stations: {} stations to process", areas.len());
+    for (nr_ref, (poly, point)) in areas {
+        let node = Node::new_at_point(&trans, point.clone())?;
+        for row in &trans.query(
+            "SELECT ST_ShortestLine($1, way), ST_EndPoint(ST_ShortestLine($1, way))
+             FROM planet_osm_line
+             WHERE railway = 'rail' AND ST_Intersects(way, $2)",
+            &[&point, &poly])? {
+
+            let (way, end): (LineString, Point) = (row.get(0), row.get(1));
+            let end = Node::new_at_point(&trans, end)?;
+            let link = Link {
+                p1: node,
+                p2: end,
+                distance: 0.0,
+                way: way
+            };
+            link.insert(&trans)?;
+        }
+        Station::insert(&trans, &nr_ref, node, poly)?;
+    }
+    trans.commit()?;
+    Ok(())
+}
+pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<StationPath> {
+    // Create a transaction: we don't actually want to modify the database here.
+    // This transaction will be reverted when we return.
+    let trans = conn.transaction()?;
+
+    let starting_node = Station::from_select(&trans, "WHERE nr_ref = $1", &[&from])?.into_iter()
+        .nth(0).ok_or("Starting station does not exist.")?.point;
+
+    let goal_node = Station::from_select(&trans, "WHERE nr_ref = $1", &[&to])?.into_iter()
+        .nth(0).ok_or("Finishing station does not exist.")?.point;
+
+    trans.execute("UPDATE nodes SET distance = 0 WHERE id = $1", &[&starting_node])?;
+
+    debug!("navigate: navigating from {} to {}", starting_node, goal_node);
+
+    let mut cur = Node::from_select(&trans, "WHERE id = $1", &[&starting_node])
+        ?.into_iter().nth(0)
+        .ok_or("Starting node does not exist.")?;
+    let dest = Node::from_select(&trans, "WHERE id = $1 AND graph_part = $2",
+                                 &[&goal_node, &cur.graph_part])
+        ?.into_iter().nth(0)
+        .ok_or(
+            "Finishing node does not exist, or is not in the same graph part as the starting node."
+        )?;
+
+    let mut considered = 0;
+    let mut updated = 0;
+
+    'outer: loop {
+        if cur.distance == ::std::f32::INFINITY {
+            error!("navigate: node {}'s distance = inf!", cur.id);
+            bail!("Current node distance = inf, something has gone seriously wrong...");
+        }
+
+        let links = Link::from_select(&trans, "WHERE p1 = $1 OR p2 = $1", &[&cur.id])?;
+        for link in links {
+            let tent_dist = link.distance + cur.distance;
+            let other_end = if link.p1 == cur.id { link.p2 } else { link.p1 };
+            for row in &trans.query(
+                "UPDATE nodes
+                 SET distance = $1
+                 WHERE id = $2 AND visited = false AND distance > $1
+                 RETURNING id", &[&tent_dist, &other_end])? {
+
+                let id: i32 = row.get(0);
+                updated += 1;
+                trans.execute(
+                    "UPDATE nodes
+                     SET parent = $1, parent_geom = $2
+                     WHERE id = $3", &[&cur.id, &link.way, &id])?;
+                if id == dest.id {
+                    break 'outer;
+                }
+            }
+        }
+        trans.execute("UPDATE nodes SET visited = true WHERE id = $1", &[&cur.id])?;
+        considered += 1;
+        if (considered % 1000) == 0 {
+            debug!("navigate: considered {} nodes ({} updated)", considered, updated);
+        }
+        let next = Node::from_select(&trans,
+                                     "WHERE visited = false AND graph_part = $1
+                                      ORDER BY distance ASC
+                                      LIMIT 1", &[&cur.graph_part])?;
+        for node in next {
+            cur = node;
+            continue 'outer;
+        }
+        error!("navigate: no path found, probably an issue with the db");
+        bail!("No path found!");
+    }
+    let mut nodes = vec![];
+    let mut path = vec![];
+    let mut cur_node = Node::from_select(conn,
+                                         "WHERE id = $1 AND graph_part = $2",
+                                         &[&goal_node, &cur.graph_part])
+        ?.into_iter().nth(0).unwrap();
+    loop {
+        nodes.insert(0, cur_node.id);
+        if cur_node.parent.is_none() {
+            break;
+        }
+        if let Some(ref geom) = cur_node.parent_geom {
+            let geom: LineString = conn.query(
+                "SELECT
+                 CASE WHEN ST_Intersects(ST_EndPoint($1), $2)
+                      THEN $1
+                      ELSE ST_Reverse($1)
+                 END",
+                &[&geom, &cur_node.location])
+                ?.into_iter().nth(0).unwrap().get(0);
+            path.insert(0, geom.clone())
+        }
+        let mut vec = Node::from_select(conn, "WHERE id = $1", &[&cur_node.parent.unwrap()])?;
+        cur_node = vec.remove(0);
+    }
+    let path: LineString = conn.query("SELECT ST_MakeLine(CAST($1 AS geometry[]))", &[&path])
+        ?.into_iter().nth(0).unwrap().get(0);
+    debug!("navigate: completed");
+    Ok(StationPath { s1: from.to_string(), s2: to.to_string(), way: path, nodes })
+}
+pub fn make_nodes<T: GenericConnection>(conn: &T) -> Result<()> {
+    debug!("make_nodes: making nodes from OSM data...");
+    let trans = conn.transaction()?;
+    let mut compl = 0;
+    for row in &trans.query("SELECT ST_StartPoint(way), ST_EndPoint(way) FROM planet_osm_line WHERE railway IS NOT NULL", &[])? {
+        Node::insert(&trans, row.get(0))?;
+        Node::insert(&trans, row.get(1))?;
+        compl += 1;
+        if (compl % 1000) == 0 {
+            debug!("make_nodes: completed {} rows", compl);
+        }
+    }
+    trans.commit()?;
+    debug!("make_nodes: complete!");
+    Ok(())
+}
+pub fn make_links<T: GenericConnection>(conn: &T) -> Result<()> {
+    debug!("make_links: making links from OSM data...");
+    let trans = conn.transaction()?;
+    let mut compl = 0;
+    for node in Node::from_select(&trans, "", &[])? {
+        for row in &trans.query("SELECT way, CAST(ST_Length(way) AS REAL), id FROM planet_osm_line INNER JOIN nodes ON ST_EndPoint(planet_osm_line.way) = nodes.location WHERE railway IS NOT NULL AND ST_Intersects(ST_StartPoint(way), $1)", &[&node.location])? {
+            let link = Link { p1: node.id, p2: row.get(2), way: row.get(0), distance: row.get(1) };
+            link.insert(&trans)?;
+        }
+        compl += 1;
+        if (compl % 1000) == 0 {
+            debug!("make_links: completed {} rows", compl);
+        }
+    }
+    trans.commit()?;
+    debug!("make_links: complete!");
+    Ok(())
+}
+pub fn the_great_connectifier<T: GenericConnection>(conn: &T) -> Result<()> {
+    debug!("the_great_connectifier: running...");
+    let trans = conn.transaction()?;
+    let mut compl = 0;
+    for n1 in Node::from_select(&trans, "", &[])? {
+        let _ = Node::new_at_point(&trans, n1.location);
+        compl += 1;
+        if (compl % 1000) == 0 {
+            debug!("the_great_connectifier: completed {} rows", compl);
+        }
+    }
+    trans.commit()?;
+    debug!("the_great_connectifier: complete!");
+    Ok(())
+}
+pub fn separate_nodes<T: GenericConnection>(conn: &T) -> Result<()> {
+    debug!("separate_nodes: running...");
+    let trans = conn.transaction()?;
+    let mut cur_graph_part = 1;
+    loop {
+        let vec = Node::from_select(&trans, "WHERE graph_part = 0 LIMIT 1", &[])?;
+        if vec.len() == 0 {
+            break;
+        }
+        for node in vec {
+            let mut part_of_this = HashSet::new();
+            part_of_this.insert(node.id);
+            let mut current_roots = HashSet::new();
+            current_roots.insert(node.id);
+            loop {
+                if current_roots.len() == 0 {
+                    break;
+                }
+                for root in ::std::mem::replace(&mut current_roots, HashSet::new()) {
+                    for link in Link::from_select(&trans, "WHERE p1 = $1 OR p2 = $1", &[&root])? {
+                        let other_end = if link.p1 == root { link.p2 } else { link.p1 };
+                        if other_end != root && part_of_this.insert(other_end) {
+                            current_roots.insert(other_end);
+                        }
+                    }
+                }
+            }
+            let part_of_this = part_of_this.into_iter().collect::<Vec<_>>();
+            trans.execute("UPDATE nodes SET graph_part = $1 WHERE id = ANY($2)",
+                          &[&cur_graph_part, &part_of_this])?;
+        }
+        debug!("separate_nodes: finished processing graph part {}", cur_graph_part);
+        cur_graph_part += 1;
+    }
+    trans.commit()?;
+    debug!("separate_nodes: separated graph into {} parts", cur_graph_part);
+    Ok(())
+}
+pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
+    debug!("initialize_database: making tables...");
+    Node::make_table(conn)?;
+    Link::make_table(conn)?;
+    Station::make_table(conn)?;
+    let mut changed = false;
+    let mut nodes = count(conn, "FROM nodes", &[])?;
+    if nodes == 0 {
+        make_nodes(conn)?;
+        nodes = count(conn, "FROM nodes", &[])?;
+        changed = true;
+        debug!("initialize_database: {} nodes after node creation", nodes);
+    }
+    let mut links = count(conn, "FROM links", &[])?;
+    if links == 0 {
+        make_links(conn)?;
+        links = count(conn, "FROM links", &[])?;
+        changed = true;
+        debug!("initialize_database: {} links after link creation", nodes);
+    }
+    let mut stations = count(conn, "FROM stations", &[])?;
+    if stations == 0 {
+        make_stations(conn)?;
+        stations = count(conn, "FROM stations", &[])?;
+        changed = true;
+        debug!("initialize_database: {} stations after station creation", nodes);
+    }
+    let unclassified = count(conn, "FROM nodes WHERE graph_part = 0", &[])?;
+    if unclassified != 0 {
+        separate_nodes(conn)?;
+        changed = true;
+    }
+    if changed {
+        debug!("initialize_database: changes occurred, running connectifier...");
+        the_great_connectifier(conn)?;
+        debug!("initialize_database: {} nodes, {} links after connectification", nodes, links);
+    }
+    debug!("initialize_database: database OK (nodes = {}, links = {}, stations = {})",
+           nodes, links, stations);
+    Ok(())
+}

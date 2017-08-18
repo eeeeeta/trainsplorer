@@ -5,7 +5,10 @@ version = "0.1.0"
 
 [dependencies]
 error-chain = "0.10.0"
-indicatif = "0.6.0"
+log = "0.3.8"
 postgis = "0.4.0"
 postgres = "0.14"
-national-rail-departures = { path = "../national-rail-departures" }
+
+[dev-dependencies]
+clap = "2.26.0"
+env_logger = "0.4"
