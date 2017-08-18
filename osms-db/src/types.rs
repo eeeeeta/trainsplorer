@@ -105,7 +105,7 @@ impl Node {
                     distance: dl,
                     way: last
                 };
-                debug!("new setup: {} <-> {} <-> {}\n", link.p1, node, link.p2);
+                debug!("new setup: {} <-> {} <-> {}", link.p1, node, link.p2);
                 new.insert(&trans)?;
             }
         }
