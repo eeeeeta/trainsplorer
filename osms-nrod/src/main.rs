@@ -1,8 +1,6 @@
 extern crate stomp;
-extern crate serde;
-#[macro_use] extern crate serde_derive;
 extern crate serde_json;
-extern crate chrono;
+extern crate ntrod_types;
 
 use stomp::handler::Handler;
 use stomp::session::Session;
@@ -10,11 +8,17 @@ use stomp::frame::Frame;
 use stomp::subscription::AckOrNack;
 use stomp::connection::*;
 
-mod types;
+use ntrod_types::movements::Records;
 static TOKEN: &str = include_str!("../access_token");
 
 fn on_message(hdl: &mut LoginHandler, sess: &mut Session<LoginHandler>, fr: &Frame) -> AckOrNack {
-    println!("msg: {}", fr);
+    let st = String::from_utf8_lossy(&fr.body);
+    let recs: Result<Records, _> = serde_json::from_str(&st);
+    match recs {
+        Ok(r) => println!("recs: {:#?}", r),
+        Err(e) => println!("### ERROR ###\nerr: {}\ndata: {}", e, &st)
+    }
+
     AckOrNack::Ack
 }
 struct LoginHandler;

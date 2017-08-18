@@ -1,0 +1,337 @@
+{
+  "VSTPCIFMsgV1": {
+    "classification": "industry",
+    "timestamp": "1502978661000",
+    "owner": "Network Rail",
+    "originMsgId": "2017-08-17T14:04:21-00:00vstp.networkrail.co.uk",
+    "Sender": {
+      "organisation": "Network Rail",
+      "application": "TSIA",
+      "component": "TSIA",
+      "userID": "QMTRC02",
+      "sessionID": "VF06000"
+    },
+    "schedule": {
+      "schedule_id": "",
+      "transaction_type": "Create",
+      "schedule_start_date": "2017-08-17",
+      "schedule_end_date": "2017-08-17",
+      "schedule_days_runs": "0001000",
+      "applicable_timetable": "N",
+      "CIF_bank_holiday_running": "",
+      "CIF_train_uid": " 20320",
+      "train_status": "2",
+      "CIF_stp_indicator": "N",
+      "schedule_segment": [
+        {
+          "signalling_id": "",
+          "uic_code": "",
+          "atoc_code": "",
+          "CIF_train_category": "",
+          "CIF_headcode": "",
+          "CIF_course_indicator": "",
+          "CIF_train_service_code": "57121020",
+          "CIF_business_sector": "",
+          "CIF_power_type": "D",
+          "CIF_timing_load": "",
+          "CIF_speed": "",
+          "CIF_operating_characteristics": "",
+          "CIF_train_class": "",
+          "CIF_sleepers": "",
+          "CIF_reservations": "",
+          "CIF_connection_indicator": "",
+          "CIF_catering_code": "",
+          "CIF_service_branding": "",
+          "CIF_traction_class": "",
+          "schedule_location": [
+            {
+              "scheduled_arrival_time": " ",
+              "scheduled_departure_time": "154700",
+              "scheduled_pass_time": " ",
+              "public_arrival_time": " ",
+              "public_departure_time": "      ",
+              "CIF_platform": "",
+              "CIF_line": "",
+              "CIF_path": " ",
+              "CIF_activity": "TB",
+              "CIF_engineering_allowance": "",
+              "CIF_pathing_allowance": "",
+              "CIF_performance_allowance": "",
+              "location": {
+                "tiploc": {
+                  "tiploc_id": "HTHRGRS"
+                }
+              }
+            },
+            {
+              "scheduled_arrival_time": "      ",
+              "scheduled_departure_time": "      ",
+              "scheduled_pass_time": "155200",
+              "public_arrival_time": "      ",
+              "public_departure_time": "      ",
+              "CIF_platform": "",
+              "CIF_line": "",
+              "CIF_path": "",
+              "CIF_activity": "",
+              "CIF_engineering_allowance": "",
+              "CIF_pathing_allowance": "",
+              "CIF_performance_allowance": "",
+              "location": {
+                "tiploc": {
+                  "tiploc_id": "LEESPRJ"
+                }
+              }
+            },
+            {
+              "scheduled_arrival_time": "      ",
+              "scheduled_departure_time": "      ",
+              "scheduled_pass_time": "155600",
+              "public_arrival_time": "      ",
+              "public_departure_time": "      ",
+              "CIF_platform": "",
+              "CIF_line": "",
+              "CIF_path": "",
+              "CIF_activity": "",
+              "CIF_engineering_allowance": "",
+              "CIF_pathing_allowance": "",
+              "CIF_performance_allowance": "",
+              "location": {
+                "tiploc": {
+                  "tiploc_id": "LEEE"
+                }
+              }
+            },
+            {
+              "scheduled_arrival_time": "      ",
+              "scheduled_departure_time": "      ",
+              "scheduled_pass_time": "160330",
+              "public_arrival_time": "      ",
+              "public_departure_time": "      ",
+              "CIF_platform": "",
+              "CIF_line": "",
+              "CIF_path": "",
+              "CIF_activity": "",
+              "CIF_engineering_allowance": "",
+              "CIF_pathing_allowance": "",
+              "CIF_performance_allowance": "",
+              "location": {
+                "tiploc": {
+                  "tiploc_id": "SIDCUP"
+                }
+              }
+            },
+            {
+              "scheduled_arrival_time": "      ",
+              "scheduled_departure_time": "      ",
+              "scheduled_pass_time": "160830",
+              "public_arrival_time": "      ",
+              "public_departure_time": "      ",
+              "CIF_platform": "",
+              "CIF_line": "",
+              "CIF_path": "",
+              "CIF_activity": "",
+              "CIF_engineering_allowance": "",
+              "CIF_pathing_allowance": "2",
+              "CIF_performance_allowance": "",
+              "location": {
+                "tiploc": {
+                  "tiploc_id": "CRFD"
+                }
+              }
+            },
+            {
+              "scheduled_arrival_time": "      ",
+              "scheduled_departure_time": "      ",
+              "scheduled_pass_time": "161000",
+              "public_arrival_time": "      ",
+              "public_departure_time": "      ",
+              "CIF_platform": "",
+              "CIF_line": "",
+              "CIF_path": "",
+              "CIF_activity": "",
+              "CIF_engineering_allowance": "",
+              "CIF_pathing_allowance": "",
+              "CIF_performance_allowance": "",
+              "location": {
+                "tiploc": {
+                  "tiploc_id": "CRFDSPB"
+                }
+              }
+            },
+            {
+              "scheduled_arrival_time": "161200",
+              "scheduled_departure_time": "161300",
+              "scheduled_pass_time": "      ",
+              "public_arrival_time": "      ",
+              "public_departure_time": "      ",
+              "CIF_platform": "",
+              "CIF_line": "",
+              "CIF_path": "",
+              "CIF_activity": "",
+              "CIF_engineering_allowance": "",
+              "CIF_pathing_allowance": " H",
+              "CIF_performance_allowance": "",
+              "location": {
+                "tiploc": {
+                  "tiploc_id": "CRFDSPR"
+                }
+              }
+            },
+            {
+              "scheduled_arrival_time": "      ",
+              "scheduled_departure_time": "      ",
+              "scheduled_pass_time": "161330",
+              "public_arrival_time": "      ",
+              "public_departure_time": "      ",
+              "CIF_platform": "",
+              "CIF_line": "",
+              "CIF_path": "",
+              "CIF_activity": "",
+              "CIF_engineering_allowance": "",
+              "CIF_pathing_allowance": "",
+              "CIF_performance_allowance": "",
+              "location": {
+                "tiploc": {
+                  "tiploc_id": "CRFDSPA"
+                }
+              }
+            },
+            {
+              "scheduled_arrival_time": "      ",
+              "scheduled_departure_time": "      ",
+              "scheduled_pass_time": "161530",
+              "public_arrival_time": "      ",
+              "public_departure_time": "      ",
+              "CIF_platform": "",
+              "CIF_line": "",
+              "CIF_path": "",
+              "CIF_activity": "",
+              "CIF_engineering_allowance": "",
+              "CIF_pathing_allowance": "",
+              "CIF_performance_allowance": "",
+              "location": {
+                "tiploc": {
+                  "tiploc_id": "CRFDCKJ"
+                }
+              }
+            },
+            {
+              "scheduled_arrival_time": "      ",
+              "scheduled_departure_time": "      ",
+              "scheduled_pass_time": "161900",
+              "public_arrival_time": "      ",
+              "public_departure_time": "      ",
+              "CIF_platform": "",
+              "CIF_line": "",
+              "CIF_path": "",
+              "CIF_activity": "",
+              "CIF_engineering_allowance": "",
+              "CIF_pathing_allowance": "",
+              "CIF_performance_allowance": "",
+              "location": {
+                "tiploc": {
+                  "tiploc_id": "SLADEGN"
+                }
+              }
+            },
+            {
+              "scheduled_arrival_time": "      ",
+              "scheduled_departure_time": "      ",
+              "scheduled_pass_time": "163100",
+              "public_arrival_time": "      ",
+              "public_departure_time": "      ",
+              "CIF_platform": "",
+              "CIF_line": "",
+              "CIF_path": "",
+              "CIF_activity": "",
+              "CIF_engineering_allowance": "",
+              "CIF_pathing_allowance": "",
+              "CIF_performance_allowance": "",
+              "location": {
+                "tiploc": {
+                  "tiploc_id": "PLMS"
+                }
+              }
+            },
+            {
+              "scheduled_arrival_time": "      ",
+              "scheduled_departure_time": "      ",
+              "scheduled_pass_time": "163430",
+              "public_arrival_time": "      ",
+              "public_departure_time": "      ",
+              "CIF_platform": "",
+              "CIF_line": "",
+              "CIF_path": "",
+              "CIF_activity": "",
+              "CIF_engineering_allowance": "",
+              "CIF_pathing_allowance": "",
+              "CIF_performance_allowance": "",
+              "location": {
+                "tiploc": {
+                  "tiploc_id": "WOLWCHA"
+                }
+              }
+            },
+            {
+              "scheduled_arrival_time": "      ",
+              "scheduled_departure_time": "      ",
+              "scheduled_pass_time": "163830",
+              "public_arrival_time": "      ",
+              "public_departure_time": "      ",
+              "CIF_platform": "",
+              "CIF_line": "",
+              "CIF_path": "",
+              "CIF_activity": "",
+              "CIF_engineering_allowance": "",
+              "CIF_pathing_allowance": "",
+              "CIF_performance_allowance": "",
+              "location": {
+                "tiploc": {
+                  "tiploc_id": "CRLN"
+                }
+              }
+            },
+            {
+              "scheduled_arrival_time": "      ",
+              "scheduled_departure_time": "      ",
+              "scheduled_pass_time": "164530",
+              "public_arrival_time": "      ",
+              "public_departure_time": "      ",
+              "CIF_platform": "",
+              "CIF_line": "",
+              "CIF_path": "",
+              "CIF_activity": "",
+              "CIF_engineering_allowance": "",
+              "CIF_pathing_allowance": "",
+              "CIF_performance_allowance": "",
+              "location": {
+                "tiploc": {
+                  "tiploc_id": "ANGRSTW"
+                }
+              }
+            },
+            {
+              "scheduled_arrival_time": "165400",
+              "scheduled_departure_time": " ",
+              "scheduled_pass_time": " ",
+              "public_arrival_time": "      ",
+              "public_departure_time": " ",
+              "CIF_platform": "",
+              "CIF_line": " ",
+              "CIF_path": "",
+              "CIF_activity": "TF",
+              "CIF_engineering_allowance": " ",
+              "CIF_pathing_allowance": " ",
+              "CIF_performance_allowance": " ",
+              "location": {
+                "tiploc": {
+                  "tiploc_id": "ANGRTAR"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

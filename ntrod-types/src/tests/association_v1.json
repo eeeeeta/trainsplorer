@@ -1,0 +1,17 @@
+{
+  "JsonAssociationV1": {
+    "transaction_type": "Create",
+    "main_train_uid": "Y61583",
+    "assoc_train_uid": "Y61611",
+    "assoc_start_date": "2016-12-11T00:00:00Z",
+    "assoc_end_date": "2017-10-01T00:00:00Z",
+    "assoc_days": "0000001",
+    "category": "NP",
+    "date_indicator": "S",
+    "location": "SHEFFLD",
+    "base_location_suffix": null,
+    "assoc_location_suffix": null,
+    "diagram_type": "T",
+    "CIF_stp_indicator": "P"
+  }
+}

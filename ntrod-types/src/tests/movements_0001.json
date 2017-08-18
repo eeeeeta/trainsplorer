@@ -1,0 +1,20 @@
+{
+    "schedule_source": "C",
+    "train_file_address": null,
+    "schedule_end_date": "2017-10-27",
+    "train_id": "151T10ME18",
+    "tp_origin_timestamp": "2017-08-18",
+    "creation_timestamp": "1503044393000",
+    "tp_origin_stanox": "",
+    "origin_dep_timestamp": "1503047940000",
+    "train_service_code": "22241000",
+    "toc_id": "51",
+    "d1266_record_number": "00000",
+    "train_call_type": "AUTOMATIC",
+    "train_uid": "Y74092",
+    "train_call_mode": "NORMAL",
+    "schedule_type": "O",
+    "sched_origin_stanox": "15521",
+    "schedule_wtt_id": "1T10M",
+    "schedule_start_date": "2017-03-27"
+}

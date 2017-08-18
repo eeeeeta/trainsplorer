@@ -1,0 +1,12 @@
+[package]
+name = "ntrod-types"
+version = "0.1.0"
+authors = ["eeeeeta <eeeeeta@users.noreply.github.com>"]
+
+[dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+serde = "1.0.11"
+serde_derive = "1.0.11"
+
+[dev-dependencies]
+serde_json = "1.0"

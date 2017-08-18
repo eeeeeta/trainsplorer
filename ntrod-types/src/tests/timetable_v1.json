@@ -1,0 +1,16 @@
+{
+  "JsonTimetableV1": {
+    "classification": "public",
+    "timestamp": 1502838769,
+    "owner": "Network Rail",
+    "Sender": {
+      "organisation": "Rockshore",
+      "application": "NTROD",
+      "component": "SCHEDULE"
+    },
+    "Metadata": {
+      "type": "full",
+      "sequence": 1889
+    }
+  }
+}

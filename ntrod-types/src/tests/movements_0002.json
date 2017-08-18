@@ -1,0 +1,14 @@
+{
+    "train_file_address": null,
+    "train_service_code": "24676004",
+    "orig_loc_stanox": "",
+    "toc_id": "84",
+    "dep_timestamp": "1503052500000",
+    "division_code": "84",
+    "loc_stanox": "86311",
+    "canx_timestamp": "1503045300000",
+    "canx_reason_code": "PD",
+    "train_id": "865T17MH18",
+    "orig_loc_timestamp": "",
+    "canx_type": "ON CALL"
+}
