@@ -2,7 +2,7 @@ use chrono::*;
 use super::cif::*;
 use super::fns::*;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MvtHeader {
     msg_type: String,
     source_dev_id: String,
@@ -11,33 +11,33 @@ pub struct MvtHeader {
 }
 
 pub type Records = Vec<Record>;
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Record {
     header: MvtHeader,
     body: MvtBody
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub enum ScheduleSource {
     #[serde(rename = "C")]
     CifItps,
     #[serde(rename = "V")]
     VstpTops
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub enum AutomaticOrManual {
     #[serde(rename = "AUTOMATIC")]
     Automatic,
     #[serde(rename = "MANUAL")]
     Manual
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub enum CallMode {
     #[serde(rename = "NORMAL")]
     Normal,
     #[serde(rename = "OVERNIGHT")]
     Overnight
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub enum EventType {
     #[serde(rename = "ARRIVAL")]
     Arrival,
@@ -47,7 +47,7 @@ pub enum EventType {
     Destination
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub enum CanxType {
     #[serde(rename = "ON CALL")]
     OnActivation,
@@ -59,7 +59,7 @@ pub enum CanxType {
     OffRoute
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub enum VariationStatus {
     #[serde(rename = "ON TIME")]
     OnTime,
@@ -70,7 +70,7 @@ pub enum VariationStatus {
     #[serde(rename = "OFF ROUTE")]
     OffRoute
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub enum UpOrDown {
     #[serde(rename = "UP")]
     Up,
@@ -79,7 +79,7 @@ pub enum UpOrDown {
     #[serde(rename = "")]
     None
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(untagged)]
 pub enum MvtBody {
     Activation(Activation),
@@ -89,7 +89,7 @@ pub enum MvtBody {
     ChangeOfOrigin(ChangeOfOrigin),
     ChangeOfIdentity(ChangeOfIdentity)
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Activation {
     schedule_source: ScheduleSource,
     #[serde(deserialize_with = "non_empty_str_opt")]
@@ -125,7 +125,7 @@ pub struct Activation {
     #[serde(deserialize_with = "from_str")]
     schedule_start_date: NaiveDate
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Cancellation {
     #[serde(deserialize_with = "non_empty_str")]
     train_service_code: String,
@@ -151,7 +151,7 @@ pub struct Cancellation {
     orig_loc_timestamp: Option<NaiveDateTime>,
     canx_type: CanxType
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Movement {
     event_type: EventType,
     #[serde(deserialize_with = "parse_ts_opt")]
@@ -208,7 +208,7 @@ pub struct Movement {
     line_ind: Option<char>
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Reinstatement {
     #[serde(deserialize_with = "non_empty_str")]
     train_id: String,
@@ -231,7 +231,7 @@ pub struct Reinstatement {
     #[serde(deserialize_with = "non_empty_str")]
     train_service_code: String
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ChangeOfOrigin {
     #[serde(deserialize_with = "non_empty_str")]
     train_id: String,
@@ -255,7 +255,7 @@ pub struct ChangeOfOrigin {
     coo_timestamp: NaiveDateTime
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ChangeOfIdentity {
     #[serde(deserialize_with = "non_empty_str")]
     train_id: String,

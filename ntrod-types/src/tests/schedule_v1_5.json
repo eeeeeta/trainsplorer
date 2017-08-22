@@ -1,0 +1,98 @@
+
+
+{
+  "JsonScheduleV1": {
+    "CIF_bank_holiday_running": null,
+    "CIF_stp_indicator": "O",
+    "CIF_train_uid": "L04452",
+    "applicable_timetable": "Y",
+    "atoc_code": "SN",
+    "new_schedule_segment": {
+      "traction_class": "",
+      "uic_code": ""
+    },
+    "schedule_days_runs": "0000001",
+    "schedule_end_date": "2017-09-24",
+    "schedule_segment": {
+      "signalling_id": "2B15",
+      "CIF_train_category": "OO",
+      "CIF_headcode": "",
+      "CIF_course_indicator": 1,
+      "CIF_train_service_code": "24745000",
+      "CIF_business_sector": "??",
+      "CIF_power_type": "EMU",
+      "CIF_timing_load": null,
+      "CIF_speed": "100",
+      "CIF_operating_characteristics": "G",
+      "CIF_train_class": "B",
+      "CIF_sleepers": null,
+      "CIF_reservations": null,
+      "CIF_connection_indicator": null,
+      "CIF_catering_code": null,
+      "CIF_service_branding": "",
+      "schedule_location": [
+        {
+          "location_type": "LO",
+          "record_identity": "LO",
+          "tiploc_code": "REDHILL",
+          "tiploc_instance": null,
+          "departure": "1440",
+          "public_departure": "1440",
+          "platform": "1A",
+          "line": null,
+          "engineering_allowance": null,
+          "pathing_allowance": null,
+          "performance_allowance": null
+        },
+        {
+          "location_type": "LI",
+          "record_identity": "LI",
+          "tiploc_code": "NUTFILD",
+          "tiploc_instance": null,
+          "arrival": "1444",
+          "departure": "1444H",
+          "pass": null,
+          "public_arrival": "1444",
+          "public_departure": "1444",
+          "platform": null,
+          "line": null,
+          "path": null,
+          "engineering_allowance": null,
+          "pathing_allowance": null,
+          "performance_allowance": null
+        },
+        {
+          "location_type": "LI",
+          "record_identity": "LI",
+          "tiploc_code": "GODSTON",
+          "tiploc_instance": null,
+          "arrival": "1449H",
+          "departure": "1450",
+          "pass": null,
+          "public_arrival": "1450",
+          "public_departure": "1450",
+          "platform": null,
+          "line": null,
+          "path": null,
+          "engineering_allowance": null,
+          "pathing_allowance": null,
+          "performance_allowance": null
+        },
+        {
+          "location_type": "LT",
+          "record_identity": "LT",
+          "tiploc_code": "EDNB",
+          "tiploc_instance": null,
+          "arrival": "1455",
+          "public_arrival": "1455",
+          "platform": null,
+          "path": null
+        }
+      ]
+    },
+    "schedule_start_date": "2017-09-24",
+    "train_status": "P",
+    "transaction_type": "Create"
+  }
+}
+

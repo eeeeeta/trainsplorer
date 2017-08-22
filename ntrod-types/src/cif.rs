@@ -1,4 +1,5 @@
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]
 pub enum TrainStatus {
     #[serde(rename = "B")]
     Bus,
@@ -20,11 +21,14 @@ pub enum TrainStatus {
     StpShip,
     #[serde(rename = "5")]
     StpBus,
+    #[serde(rename = " ")]
+    Empty,
     #[serde(rename = "")]
     None,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]
 pub enum StpIndicator {
     #[serde(rename = "C")]
     Cancellation,
@@ -37,8 +41,25 @@ pub enum StpIndicator {
     #[serde(rename = "")]
     None
 }
-
-#[derive(Serialize, Deserialize, Debug)]
+impl StpIndicator {
+    pub fn create_type() -> &'static str {
+        r#"
+DO $$
+BEGIN
+IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'StpIndicator') THEN
+CREATE TYPE "StpIndicator" AS ENUM (
+'Cancellation',
+'NewSchedule',
+'Overlay',
+'Permanent',
+'None'
+);
+END IF;
+END$$;"#
+    }
+}
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]
 pub enum PowerType {
     #[serde(rename = "D")]
     Diesel,
@@ -59,7 +80,8 @@ pub enum PowerType {
     #[serde(rename = "")]
     None
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]
 pub enum TrainCategory {
     #[serde(rename="OL")]
     LondonUnderground,

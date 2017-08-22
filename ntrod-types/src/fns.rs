@@ -1,4 +1,6 @@
 use chrono::*;
+use chrono_tz::Europe::London;
+use chrono_tz::Tz;
 use serde::*;
 use std::fmt::Display;
 use std::str::FromStr;
@@ -39,6 +41,10 @@ pub fn parse_24h_time_force<'de, D>(d: D) -> Result<NaiveTime, D::Error> where D
         None => Err(de::Error::custom(format!("failed to parse a 24h time: {}", x)))
     }
 }
+pub fn naive_date_to_london<'de, D>(d: D) -> Result<Date<Tz>, D::Error> where D: Deserializer<'de> {
+    let d: NaiveDate = Deserialize::deserialize(d)?;
+    Ok(London.from_local_date(&d).single().ok_or("Timezone fail").map_err(de::Error::custom)?)
+}
 pub fn fix_buggy_schedule_type<'de, D>(d: D) -> Result<StpIndicator, D::Error> where D: Deserializer<'de> {
     Deserialize::deserialize(d)
         .map(|x: StpIndicator| {
@@ -77,7 +83,7 @@ pub fn non_empty_str<'de, D>(deserializer: D) -> Result<String, D::Error>
     where D: Deserializer<'de>
 {
     let s = String::deserialize(deserializer)?;
-    if s == "" {
+    if s.trim() == "" {
         Err(de::Error::custom("expected non-empty string, got empty string"))
     }
     else {
@@ -89,7 +95,7 @@ pub fn non_empty_str_opt<'de, D>(deserializer: D) -> Result<Option<String>, D::E
 {
     let s: Option<String> = Deserialize::deserialize(deserializer)?;
     Ok(if let Some(s) = s {
-        if s == "" { None }
+        if s.trim() == "" { None }
         else { Some(s) }
     }
     else {

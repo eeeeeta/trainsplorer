@@ -2,17 +2,25 @@
 extern crate postgres;
 extern crate postgis;
 #[macro_use] extern crate log;
+extern crate ntrod_types;
+extern crate chrono;
+extern crate chrono_tz;
+extern crate serde_json;
 
 use std::collections::{HashSet, HashMap};
 use postgres::GenericConnection;
 use postgres::types::ToSql;
 use postgis::ewkb::{Point, LineString, Polygon};
+use ntrod_types::reference::{CorpusData, CorpusEntry};
+use ntrod_types::{cif, schedule};
+use std::io::{BufRead, Read};
 
 pub mod errors {
     error_chain! {
         foreign_links {
             Io(::std::io::Error);
             Postgres(::postgres::error::Error);
+            Serde(::serde_json::Error);
         }
     }
 }
@@ -101,6 +109,7 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
             error!("navigate: node {}'s distance = inf!", cur.id);
             bail!("Current node distance = inf, something has gone seriously wrong...");
         }
+        trace!("considering node {} with dist {} ({}c/{}u)", cur.id, cur.distance, considered, updated);
 
         let links = Link::from_select(&trans, "WHERE p1 = $1 OR p2 = $1", &[&cur.id])?;
         for link in links {
@@ -227,6 +236,7 @@ pub fn separate_nodes<T: GenericConnection>(conn: &T) -> Result<()> {
         if vec.len() == 0 {
             break;
         }
+        let mut nodes_touched = 0;
         for node in vec {
             let mut part_of_this = HashSet::new();
             part_of_this.insert(node.id);
@@ -234,6 +244,7 @@ pub fn separate_nodes<T: GenericConnection>(conn: &T) -> Result<()> {
             current_roots.insert(node.id);
             loop {
                 if current_roots.len() == 0 {
+                    nodes_touched = part_of_this.len();
                     break;
                 }
                 for root in ::std::mem::replace(&mut current_roots, HashSet::new()) {
@@ -249,18 +260,76 @@ pub fn separate_nodes<T: GenericConnection>(conn: &T) -> Result<()> {
             trans.execute("UPDATE nodes SET graph_part = $1 WHERE id = ANY($2)",
                           &[&cur_graph_part, &part_of_this])?;
         }
-        debug!("separate_nodes: finished processing graph part {}", cur_graph_part);
+        if nodes_touched > 10 {
+            debug!("separate_nodes: finished processing graph part {}", cur_graph_part);
+        }
         cur_graph_part += 1;
     }
     trans.commit()?;
     debug!("separate_nodes: separated graph into {} parts", cur_graph_part);
     Ok(())
 }
+pub fn apply_schedule_records<T: GenericConnection, R: BufRead>(conn: &T, rdr: R) -> Result<()> {
+    debug!("apply_schedule_records: running...");
+    let mut inserted = 0;
+    let trans = conn.transaction()?;
+    for line in rdr.lines() {
+        let line = line?;
+        let rec: ::std::result::Result<schedule::Record, _> = serde_json::from_str(&line);
+        let rec = match rec {
+            Ok(r) => r,
+            Err(e) => {
+                warn!("apply_schedule_records: error parsing: {}", e);
+                debug!("apply_schedule_records: line was: {}", line);
+                continue;
+            }
+        };
+        match rec {
+            schedule::Record::Schedule(rec) => {
+                Schedule::apply_rec(&trans, rec)?;
+                inserted += 1;
+            },
+            schedule::Record::Timetable(rec) => {
+                debug!("apply_schedule_records: this is a {}-type timetable from {} (ts: {})",
+                       rec.classification, rec.owner, rec.timestamp);
+            },
+            _ => {}
+        }
+    }
+    trans.commit()?;
+    debug!("apply_schedule_record: applied {} entries", inserted);
+    Ok(())
+}
+pub fn import_corpus<T: GenericConnection, R: Read>(conn: &T, rdr: R) -> Result<()> {
+    debug!("import_corpus: loading data from file...");
+    let data: CorpusData = serde_json::from_reader(rdr)?;
+    debug!("import_corpus: inserting data into database...");
+    let mut inserted = 0;
+    let trans = conn.transaction()?;
+    for ent in data.tiploc_data {
+        if ent.contains_data() {
+            ent.insert_self(&trans)?;
+            inserted += 1;
+        }
+    }
+    trans.commit()?;
+    debug!("import_corpus: inserted {} entries", inserted);
+    Ok(())
+}
 pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
+    debug!("initialize_database: making types...");
+    conn.execute(schedule::Days::create_type(), &[])?;
+    conn.execute(cif::StpIndicator::create_type(), &[])?;
     debug!("initialize_database: making tables...");
     Node::make_table(conn)?;
     Link::make_table(conn)?;
     Station::make_table(conn)?;
+    StationPath::make_table(conn)?;
+    Schedule::make_table(conn)?;
+    ScheduleLocation::make_table(conn)?;
+    Train::make_table(conn)?;
+    ScheduleWay::make_table(conn)?;
+    CorpusEntry::make_table(conn)?;
     let mut changed = false;
     let mut nodes = count(conn, "FROM nodes", &[])?;
     if nodes == 0 {
@@ -283,15 +352,15 @@ pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
         changed = true;
         debug!("initialize_database: {} stations after station creation", nodes);
     }
-    let unclassified = count(conn, "FROM nodes WHERE graph_part = 0", &[])?;
-    if unclassified != 0 {
-        separate_nodes(conn)?;
-        changed = true;
-    }
     if changed {
         debug!("initialize_database: changes occurred, running connectifier...");
         the_great_connectifier(conn)?;
         debug!("initialize_database: {} nodes, {} links after connectification", nodes, links);
+    }
+    let unclassified = count(conn, "FROM nodes WHERE graph_part = 0", &[])?;
+    if unclassified != 0 || changed {
+        debug!("initialize_database: running node separator...");
+        separate_nodes(conn)?;
     }
     debug!("initialize_database: database OK (nodes = {}, links = {}, stations = {})",
            nodes, links, stations);

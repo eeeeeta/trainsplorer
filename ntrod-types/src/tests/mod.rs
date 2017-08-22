@@ -14,8 +14,14 @@ macro_rules! mktest {
 }
 mktest! {
     parse_schedule_v1, "schedule_v1.json", schedule::Record,
+    parse_schedule_v1_2, "schedule_v1_2.json", schedule::Record,
+    parse_schedule_v1_3, "schedule_v1_3.json", schedule::Record,
+    parse_schedule_v1_4, "schedule_v1_4.json", schedule::Record,
+    parse_schedule_v1_5, "schedule_v1_5.json", schedule::Record,
+    parse_schedule_v1_6, "schedule_v1_6.json", schedule::Record,
     parse_association_v1, "association_v1.json", schedule::Record,
     parse_timetable_v1, "timetable_v1.json", schedule::Record,
+    parse_tiploc_v1, "tiploc_v1.json", schedule::Record,
     parse_vstp_v1, "vstp_v1.json", vstp::Record,
     parse_movements_various_1, "movements_various_1.json", movements::Records,
     parse_movements_various_2, "movements_various_2.json", movements::Records,

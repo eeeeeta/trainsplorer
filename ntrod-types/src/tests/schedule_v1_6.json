@@ -1,0 +1,30 @@
+{
+  "JsonScheduleV1": {
+    "CIF_bank_holiday_running": null,
+    "CIF_stp_indicator": "C",
+    "CIF_train_uid": "Y62262",
+    "schedule_days_runs": "0000010",
+    "schedule_end_date": "2017-10-28",
+    "schedule_segment": {
+      "signalling_id": "    ",
+      "CIF_train_category": "",
+      "CIF_headcode": "",
+      "CIF_course_indicator": 1,
+      "CIF_train_service_code": "        ",
+      "CIF_business_sector": "??",
+      "CIF_power_type": null,
+      "CIF_timing_load": null,
+      "CIF_speed": null,
+      "CIF_operating_characteristics": null,
+      "CIF_train_class": null,
+      "CIF_sleepers": null,
+      "CIF_reservations": null,
+      "CIF_connection_indicator": null,
+      "CIF_catering_code": null,
+      "CIF_service_branding": ""
+    },
+    "schedule_start_date": "2017-10-21",
+    "train_status": " ",
+    "transaction_type": "Create"
+  }
+}

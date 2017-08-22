@@ -1,0 +1,11 @@
+{
+  "TiplocV1": {
+    "transaction_type": "Create",
+    "tiploc_code": "WISBECH",
+    "nalco": "718902",
+    "stanox": null,
+    "crs_code": null,
+    "description": null,
+    "tps_description": "WISBECH"
+  }
+}
