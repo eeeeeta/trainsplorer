@@ -26,21 +26,25 @@ fn example() -> Result<()> {
              .short("f")
              .long("file")
              .value_name("FILENAME")
-             .required(true)
              .takes_value(true)
-             .help("Path to data to import."))
+             .help("Path to data to import (if 'corpus' or 'schedule')"))
         .arg(Arg::with_name("type")
              .short("t")
              .long("type")
              .value_name("{corpus, schedule}")
              .required(true)
              .takes_value(true)
-             .help("Type of data (either 'corpus' or 'schedule')."))
+             .help("Action to execute ('ways', 'corpus' or 'schedule')."))
         .get_matches();
     let url = matches.value_of("url").unwrap();
-    let file = matches.value_of("file").unwrap();
     let typ = matches.value_of("type").unwrap();
     let conn = Connection::connect(url, TlsMode::None).unwrap();
+    if typ == "ways" {
+        initialize_database(&conn)?;
+        make_schedule_ways(&conn)?;
+        return Ok(())
+    }
+    let file = matches.value_of("file").expect("File required for action, or invalid action");
     let file = File::open(file)?;
     let buf_reader = BufReader::new(file);
     initialize_database(&conn)?;

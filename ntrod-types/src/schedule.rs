@@ -12,7 +12,9 @@ pub enum Record {
     #[serde(rename = "JsonTimetableV1")]
     Timetable(TimetableRecord),
     #[serde(rename = "TiplocV1")]
-    Tiploc(TiplocRecord)
+    Tiploc(TiplocRecord),
+    #[serde(rename = "EOF")]
+    Eof(bool)
 }
 #[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 #[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]

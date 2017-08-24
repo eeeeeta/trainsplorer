@@ -7,6 +7,7 @@ use ntrod_types::schedule::*;
 use ntrod_types::reference::*;
 use ntrod_types::cif::*;
 use errors::*;
+use geo;
 
 pub trait DbType: Sized {
     fn table_name() -> &'static str;
@@ -31,6 +32,16 @@ pub trait InsertableDbType: DbType {
     type Id;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<Self::Id>;
 }
+pub fn geo_pt_to_postgis(pt: geo::Point<f64>) -> Point {
+    Point::new(pt.0.x, pt.0.y, Some(4326))
+}
+pub fn geo_ls_to_postgis(ls: geo::LineString<f64>) -> LineString {
+    LineString {
+        points: ls.0.into_iter().map(geo_pt_to_postgis).collect(),
+        srid: Some(4326)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Node {
     pub id: i32,
@@ -72,6 +83,7 @@ impl Node {
     pub fn insert<T: GenericConnection>(conn: &T, location: Point) -> Result<i32> {
         for row in &conn.query("SELECT id FROM nodes WHERE location = $1",
                                &[&location])? {
+            debug!("point {:?} already exists", location);
             return Ok(row.get(0));
         }
         let qry = conn.query("INSERT INTO nodes (location) VALUES ($1) RETURNING id",
@@ -82,42 +94,58 @@ impl Node {
         }
         Ok(ret.expect("Somehow, we never got an id in Node::insert..."))
     }
-    pub fn new_at_point<T: GenericConnection>(conn: &T, point: Point) -> Result<i32> {
+    pub fn new_at_point<T: GenericConnection>(conn: &T, point: Point) -> Result<(i32, bool)> {
+        use geo::algorithm::distance::Distance;
+        use geo::algorithm::split::Split;
+        use geo::algorithm::haversine_length::HaversineLength;
         let trans = conn.transaction()?;
-        let links = Link::from_select(
-            &trans,
-            "WHERE ST_Intersects(way, $1)
-             AND NOT ST_Intersects(ST_EndPoint(way), $1)
-             AND NOT ST_Intersects(ST_StartPoint(way), $1)",
-            &[&point])?;
+        let pt = geo::Point::from_postgis(&point);
+        let mut okay = false;
+        let prev_nodes = Node::from_select(&trans, "WHERE location = $1", &[&point])?;
+        if prev_nodes.len() > 0 {
+            okay = true;
+        }
         let node = Self::insert(&trans, point.clone())?;
-        for link in links {
-            debug!("splitting link {} <-> {}", link.p1, link.p2);
-            for row in &trans.query(
-                "SELECT ST_GeometryN(ST_Split($1, $2), 1),
-                        ST_GeometryN(ST_Split($1, $2), 2),
-                        CAST(ST_Length(ST_GeometryN(ST_Split($1, $2), 1)) AS REAL),
-                        CAST(ST_Length(ST_GeometryN(ST_Split($1, $2), 2)) AS REAL)",
-                &[&link.way, &point])? {
-
-                let (first, last): (LineString, LineString) = (row.get(0), row.get(1));
-                let (df, dl): (f32, f32) = (row.get(2), row.get(3));
-                trans.execute(
-                    "UPDATE links SET p2 = $1, way = $2, distance = $3 WHERE p1 = $4 AND p2 = $5",
-                    &[&node, &first, &df, &link.p1, &link.p2]
-                )?;
-                let new = Link {
-                    p1: node,
-                    p2: link.p2,
-                    distance: dl,
-                    way: last
-                };
-                debug!("new setup: {} <-> {} <-> {}", link.p1, node, link.p2);
-                new.insert(&trans)?;
+        let qry = Link::from_select(&trans, "", &[])?;
+        let mut links = vec![];
+        for link in qry {
+            let line = geo::LineString::from_postgis(&link.way);
+            if line.distance(&pt) <= 0.00000001 {
+                if line.0.first().map(|x| x == &pt).unwrap_or(false) ||
+                    line.0.last().map(|x| x == &pt).unwrap_or(false) {
+                    okay = true;
+                    continue;
+                }
+                links.push(link);
             }
         }
+        debug!("making new at point {:?}: {} links", point, links.len());
+        for link in links {
+            okay = true;
+            let line = geo::LineString::from_postgis(&link.way);
+            let vec = line.split(&pt, 0.00000001);
+            if vec.len() != 2 {
+                bail!("expected 2 results after split, got {}", vec.len());
+            }
+            let mut iter = vec.into_iter();
+            let (first, last) = (iter.next().unwrap(), iter.next().unwrap());
+            let (df, dl) = (first.haversine_length(), last.haversine_length());
+            let (first, last) = (geo_ls_to_postgis(first), geo_ls_to_postgis(last));
+            trans.execute(
+                "UPDATE links SET p2 = $1, way = $2, distance = $3 WHERE p1 = $4 AND p2 = $5",
+                &[&node, &first, &(df as f32), &link.p1, &link.p2]
+            )?;
+            let new = Link {
+                p1: node,
+                p2: link.p2,
+                distance: dl as f32,
+                way: last
+            };
+            debug!("new setup: {} <-> {} <-> {}", link.p1, node, link.p2);
+            new.insert(&trans)?;
+        }
         trans.commit()?;
-        Ok(node)
+        Ok((node, okay))
     }
 }
 #[derive(Debug, Clone)]
@@ -220,7 +248,9 @@ PRIMARY KEY(s1, s2)
 impl InsertableDbType for StationPath {
     type Id = ();
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<()> {
-        conn.execute("INSERT INTO station_paths (s1, s2, way, nodes) VALUES ($1, $2, $3, $4) ON CONFLICT DO UPDATE",
+        conn.execute("INSERT INTO station_paths (s1, s2, way, nodes)
+                      VALUES ($1, $2, $3, $4)
+                      ON CONFLICT (s1, s2) DO UPDATE SET way = $3",
                      &[&self.s1, &self.s2, &self.way, &self.nodes])?;
         Ok(())
     }
@@ -238,6 +268,60 @@ pub struct Schedule {
     pub id: i32,
 }
 impl Schedule {
+    pub fn make_ways<T: GenericConnection>(&self, conn: &T) -> Result<()> {
+        debug!("making ways for record (UID {}, start {}, stp_indicator {:?})",
+               self.uid, self.start_date, self.stp_indicator);
+        if self.ways.len() > 0 {
+            bail!("Schedule ways already exist!");
+        }
+        let locs = ScheduleLocation::from_select(conn, "WHERE id = ANY($1)", &[&self.locations])?;
+        if locs.len() != self.locations.len() {
+            bail!("Inconsistency between db locs len ({}) and my len ({})",
+                  locs.len(), self.locations.len());
+        }
+        let mut ways = vec![];
+        let mut p1 = 0;
+        'outer: loop {
+            if p1 >= locs.len() { break; }
+            if let Some(e1) = locs[p1].get_station(conn)? {
+                for p2 in p1..locs.len() {
+                    if let Some(e2) = locs[p2].get_station(conn)? {
+                        if e1.nr_ref == e2.nr_ref {
+                            continue;
+                        }
+                        let path = match super::navigate_cached(conn, &e1.nr_ref, &e2.nr_ref) {
+                            Ok(x) => x,
+                            Err(e) => {
+                                error!("failed to navigate from {} to {}: {}",
+                                       e1.nr_ref, e2.nr_ref, e);
+                                continue;
+                            }
+                        };
+                        debug!("made way from {} ({}) to {} ({})",
+                               e1.nr_ref, locs[p1].time,
+                               e2.nr_ref, locs[p2].time);
+                        let sway = ScheduleWay {
+                            p1: self.locations[p1],
+                            p2: self.locations[p2],
+                            st: locs[p1].time,
+                            et: locs[p2].time,
+                            way: path.way,
+                            id: -1,
+                            parent_id: self.id
+                        };
+                        ways.push(sway.insert_self(conn)?);
+                        p1 = p2 + 1;
+                        continue 'outer;
+                    }
+                }
+            }
+            p1 += 1;
+        }
+        conn.execute("UPDATE schedules SET ways = $1 WHERE id = $2",
+                     &[&ways, &self.id])?;
+        debug!("inserted {} ways", ways.len());
+        Ok(())
+    }
     pub fn apply_rec<T: GenericConnection>(conn: &T, rec: ScheduleRecord) -> Result<Option<i32>> {
         use self::LocationRecord::*;
         if let CreateOrDelete::Delete = rec.transaction_type {
@@ -386,6 +470,35 @@ event VARCHAR NOT NULL
     }
 }
 impl ScheduleLocation {
+    pub fn get_station<T: GenericConnection>(&self, conn: &T) -> Result<Option<Station>> {
+        Ok(if let Some(crs) = self.get_crs(conn)? {
+            let stats = Station::from_select(conn, "WHERE nr_ref = $1", &[&crs])?;
+            if stats.len() == 0 {
+                trace!("No station for CRS {}", crs);
+            }
+            stats.into_iter()
+                .nth(0)
+        }
+        else {
+            None
+        })
+    }
+    pub fn get_crs<T: GenericConnection>(&self, conn: &T) -> Result<Option<String>> {
+        let entries = CorpusEntry::from_select(conn,
+                                               "WHERE tiploc = $1 AND crs IS NOT NULL",
+                                               &[&self.tiploc])?;
+        let mut ret = None;
+        for ent in entries {
+            if ent.crs.is_some() {
+                ret = ent.crs;
+                break;
+            }
+        }
+        if ret.is_none() {
+            trace!("Could not find a CRS for TIPLOC {}", self.tiploc);
+        }
+        Ok(ret)
+    }
     pub fn insert<T: GenericConnection, U: Into<String>>(conn: &T, tiploc: String, time: NaiveTime, event: U) -> Result<i32> {
         let qry = conn.query(
             "INSERT INTO schedule_locs (tiploc, time, event)
@@ -436,7 +549,9 @@ pub struct ScheduleWay {
     pub p2: i32,
     pub st: NaiveTime,
     pub et: NaiveTime,
-    pub way: LineString
+    pub way: LineString,
+    pub id: i32,
+    pub parent_id: i32,
 }
 impl DbType for ScheduleWay {
     fn table_name() -> &'static str {
@@ -448,7 +563,10 @@ p1 INT NOT NULL,
 p2 INT NOT NULL,
 st TIME NOT NULL,
 et TIME NOT NULL,
-way geometry NOT NULL
+way geometry NOT NULL,
+id SERIAL UNIQUE,
+parent_id INT NOT NULL,
+PRIMARY KEY(p1, p2)
 "#
     }
     fn from_row(row: &Row) -> Self {
@@ -457,8 +575,32 @@ way geometry NOT NULL
             p2: row.get(1),
             st: row.get(2),
             et: row.get(3),
-            way: row.get(4)
+            way: row.get(4),
+            id: row.get(5),
+            parent_id: row.get(6),
         }
+    }
+}
+impl InsertableDbType for ScheduleWay {
+    type Id = i32;
+    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
+        for row in &conn.query(
+            "SELECT id FROM schedule_ways
+             WHERE p1 = $1 AND p2 = $2",
+            &[&self.p1, &self.p2])? {
+            return Ok(row.get(0));
+        }
+        let qry = conn.query("INSERT INTO schedule_ways
+                              (p1, p2, st, et, way, parent_id)
+                              VALUES ($1, $2, $3, $4, $5, $6)
+                              RETURNING id",
+                             &[&self.p1, &self.p2, &self.st, &self.et,
+                               &self.way, &self.parent_id])?;
+        let mut ret = None;
+        for row in &qry {
+            ret = Some(row.get(0))
+        }
+        Ok(ret.expect("No id in ScheduleWay::insert?!"))
     }
 }
 impl InsertableDbType for CorpusEntry {

@@ -6,3 +6,4 @@ access_token
 *.sql
 *.geojson
 *.kml
+.gdb_history

@@ -6,6 +6,7 @@ extern crate ntrod_types;
 extern crate chrono;
 extern crate chrono_tz;
 extern crate serde_json;
+extern crate geo;
 
 use std::collections::{HashSet, HashMap};
 use postgres::GenericConnection;
@@ -36,6 +37,7 @@ pub fn count<T: GenericConnection>(conn: &T, details: &str, args: &[&ToSql]) -> 
         .get(0))
 }
 pub fn make_stations<T: GenericConnection>(conn: &T) -> Result<()> {
+    use geo::algorithm::closest_point::ClosestPoint;
     let trans = conn.transaction()?;
     let mut areas: HashMap<String, (Polygon, Point)> = HashMap::new();
     for row in &trans.query(
@@ -54,27 +56,52 @@ pub fn make_stations<T: GenericConnection>(conn: &T) -> Result<()> {
     }
     debug!("make_stations: {} stations to process", areas.len());
     for (nr_ref, (poly, point)) in areas {
-        let node = Node::new_at_point(&trans, point.clone())?;
-        for row in &trans.query(
-            "SELECT ST_ShortestLine($1, way), ST_EndPoint(ST_ShortestLine($1, way))
-             FROM planet_osm_line
-             WHERE railway = 'rail' AND ST_Intersects(way, $2)",
-            &[&point, &poly])? {
+        let pt = geo::Point::from_postgis(&point);
+        let (node, _) = Node::new_at_point(&trans, point.clone())?;
+        let links = Link::from_select(&trans, "WHERE ST_Intersects(way, $1)", &[&poly])?;
+        let trigd = links.len() != 0;
+        for link in links {
+            debug!("making new point for station {}", nr_ref);
+            let geoway = geo::LineString::from_postgis(&link.way);
 
-            let (way, end): (LineString, Point) = (row.get(0), row.get(1));
-            let end = Node::new_at_point(&trans, end)?;
+            let geocp = geoway.closest_point(&pt).ok_or("closest_point() returned None")?;
+            let cp = types::geo_pt_to_postgis(geocp);
+
+            let (end, trigd) = Node::new_at_point(&trans, cp)?;
+            if !trigd {
+                let links = Link::from_select(&trans, "WHERE p1 = $1 OR p2 = $1", &[&end])?;
+                if links.len() != 0 {
+                    bail!("Point ({},{}) didn't get connected to anything.",
+                          geocp.lat(), geocp.lng());
+                }
+            }
+            let connection = geo::LineString(vec![pt, geocp]);
             let link = Link {
                 p1: node,
                 p2: end,
                 distance: 0.0,
-                way: way
+                way: geo_ls_to_postgis(connection)
             };
             link.insert(&trans)?;
+        }
+        if !trigd {
+            warn!("*** Station {} didn't connect to anything!", nr_ref);
         }
         Station::insert(&trans, &nr_ref, node, poly)?;
     }
     trans.commit()?;
     Ok(())
+}
+pub fn navigate_cached<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<StationPath> {
+    let paths = StationPath::from_select(conn, "WHERE s1 = $1 AND s2 = $2", &[&from, &to])?;
+    if paths.len() > 0 {
+        debug!("navigate_cached: returning memoized path from {} to {}", from, to);
+        return Ok(paths.into_iter().nth(0).unwrap());
+    }
+    let path = navigate(conn, from, to)?;
+    debug!("navigate_cached: memoizing path");
+    path.insert_self(conn)?;
+    Ok(path)
 }
 pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<StationPath> {
     // Create a transaction: we don't actually want to modify the database here.
@@ -89,7 +116,8 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
 
     trans.execute("UPDATE nodes SET distance = 0 WHERE id = $1", &[&starting_node])?;
 
-    debug!("navigate: navigating from {} to {}", starting_node, goal_node);
+    debug!("navigate: navigating from {} ({}) to {} ({})",
+           from, starting_node, to, goal_node);
 
     let mut cur = Node::from_select(&trans, "WHERE id = $1", &[&starting_node])
         ?.into_iter().nth(0)
@@ -182,7 +210,8 @@ pub fn make_nodes<T: GenericConnection>(conn: &T) -> Result<()> {
     debug!("make_nodes: making nodes from OSM data...");
     let trans = conn.transaction()?;
     let mut compl = 0;
-    for row in &trans.query("SELECT ST_StartPoint(way), ST_EndPoint(way) FROM planet_osm_line WHERE railway IS NOT NULL", &[])? {
+    for row in &trans.query("SELECT ST_StartPoint(way), ST_EndPoint(way)
+                            FROM planet_osm_line WHERE railway IS NOT NULL", &[])? {
         Node::insert(&trans, row.get(0))?;
         Node::insert(&trans, row.get(1))?;
         compl += 1;
@@ -199,7 +228,11 @@ pub fn make_links<T: GenericConnection>(conn: &T) -> Result<()> {
     let trans = conn.transaction()?;
     let mut compl = 0;
     for node in Node::from_select(&trans, "", &[])? {
-        for row in &trans.query("SELECT way, CAST(ST_Length(way) AS REAL), id FROM planet_osm_line INNER JOIN nodes ON ST_EndPoint(planet_osm_line.way) = nodes.location WHERE railway IS NOT NULL AND ST_Intersects(ST_StartPoint(way), $1)", &[&node.location])? {
+        for row in &trans.query("SELECT way, CAST(ST_Length(way::geography, false) AS REAL), id
+                                FROM planet_osm_line
+                                INNER JOIN nodes ON ST_EndPoint(planet_osm_line.way) = nodes.location
+                                WHERE railway IS NOT NULL AND ST_Intersects(ST_StartPoint(way), $1)",
+                                &[&node.location])? {
             let link = Link { p1: node.id, p2: row.get(2), way: row.get(0), distance: row.get(1) };
             link.insert(&trans)?;
         }
@@ -267,6 +300,18 @@ pub fn separate_nodes<T: GenericConnection>(conn: &T) -> Result<()> {
     }
     trans.commit()?;
     debug!("separate_nodes: separated graph into {} parts", cur_graph_part);
+    Ok(())
+}
+pub fn make_schedule_ways<T: GenericConnection>(conn: &T) -> Result<()> {
+    debug!("make_schedule_ways: getting schedules...");
+    let scheds = Schedule::from_select(conn, "WHERE cardinality(ways) = 0", &[])?;
+    debug!("make_schedule_ways: {} schedules to update", scheds.len());
+    for sched in scheds {
+        let trans = conn.transaction()?;
+        sched.make_ways(&trans)?;
+        trans.commit()?;
+    }
+    debug!("make_schedule_ways: complete!");
     Ok(())
 }
 pub fn apply_schedule_records<T: GenericConnection, R: BufRead>(conn: &T, rdr: R) -> Result<()> {
