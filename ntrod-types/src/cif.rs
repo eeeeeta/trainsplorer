@@ -27,7 +27,7 @@ pub enum TrainStatus {
     None,
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug)]
 #[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]
 pub enum StpIndicator {
     #[serde(rename = "C")]

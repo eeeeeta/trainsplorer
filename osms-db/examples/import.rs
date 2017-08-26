@@ -31,7 +31,7 @@ fn example() -> Result<()> {
         .arg(Arg::with_name("type")
              .short("t")
              .long("type")
-             .value_name("{corpus, schedule}")
+             .value_name("{ways, corpus, schedule}")
              .required(true)
              .takes_value(true)
              .help("Action to execute ('ways', 'corpus' or 'schedule')."))
@@ -50,7 +50,7 @@ fn example() -> Result<()> {
     initialize_database(&conn)?;
     match typ {
         "corpus" => import_corpus(&conn, buf_reader)?,
-        "schedule" => apply_schedule_records(&conn, buf_reader)?,
+        "schedule" => apply_schedule_records(&conn, buf_reader, Some("SW"))?,
         x => panic!("Invalid action '{}'", x)
     }
     Ok(())

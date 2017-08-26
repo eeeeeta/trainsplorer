@@ -83,7 +83,6 @@ impl Node {
     pub fn insert<T: GenericConnection>(conn: &T, location: Point) -> Result<i32> {
         for row in &conn.query("SELECT id FROM nodes WHERE location = $1",
                                &[&location])? {
-            debug!("point {:?} already exists", location);
             return Ok(row.get(0));
         }
         let qry = conn.query("INSERT INTO nodes (location) VALUES ($1) RETURNING id",
@@ -160,7 +159,7 @@ impl DbType for Station {
     }
     fn table_desc() -> &'static str {
         r#"
-nr_ref VARCHAR UNIQUE NOT NULL,
+nr_ref VARCHAR PRIMARY KEY,
 point INT NOT NULL,
 area geometry NOT NULL
 "#
@@ -194,8 +193,8 @@ impl DbType for Link {
     }
     fn table_desc() -> &'static str {
         r#"
-p1 INT NOT NULL,
-p2 INT NOT NULL,
+p1 INT NOT NULL REFERENCES nodes ON DELETE CASCADE,
+p2 INT NOT NULL REFERENCES nodes ON DELETE CASCADE,
 way geometry NOT NULL,
 distance REAL NOT NULL
 "#
@@ -221,7 +220,9 @@ pub struct StationPath {
     pub s1: String,
     pub s2: String,
     pub way: LineString,
-    pub nodes: Vec<i32>
+    pub nodes: Vec<i32>,
+    pub crossings: Vec<i32>,
+    pub id: i32
 }
 impl DbType for StationPath {
     fn table_name() -> &'static str {
@@ -229,11 +230,13 @@ impl DbType for StationPath {
     }
     fn table_desc() -> &'static str {
         r#"
-s1 VARCHAR NOT NULL,
-s2 VARCHAR NOT NULL,
+s1 VARCHAR NOT NULL REFERENCES stations ON DELETE RESTRICT,
+s2 VARCHAR NOT NULL REFERENCES stations ON DELETE RESTRICT,
 way geometry NOT NULL,
 nodes INT[] NOT NULL,
-PRIMARY KEY(s1, s2)
+crossings INT[] NOT NULL,
+id SERIAL PRIMARY KEY,
+UNIQUE(s1, s2)
 "#
     }
     fn from_row(row: &Row) -> Self {
@@ -241,75 +244,110 @@ PRIMARY KEY(s1, s2)
             s1: row.get(0),
             s2: row.get(1),
             way: row.get(2),
-            nodes: row.get(3)
+            nodes: row.get(3),
+            crossings: row.get(4),
+            id: row.get(5)
         }
     }
 }
 impl InsertableDbType for StationPath {
-    type Id = ();
-    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<()> {
-        conn.execute("INSERT INTO station_paths (s1, s2, way, nodes)
-                      VALUES ($1, $2, $3, $4)
-                      ON CONFLICT (s1, s2) DO UPDATE SET way = $3",
-                     &[&self.s1, &self.s2, &self.way, &self.nodes])?;
-        Ok(())
+    type Id = i32;
+    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
+        for row in &conn.query("SELECT id FROM station_paths
+                                WHERE s1 = $1 AND s2 = $2",
+                               &[&self.s1, &self.s2])? {
+            return Ok(row.get(0));
+        }
+        let qry = conn.query("INSERT INTO station_paths (s1, s2, way, nodes, crossings)
+                              VALUES ($1, $2, $3, $4, $5)
+                              RETURNING id",
+                             &[&self.s1, &self.s2, &self.way, &self.nodes,
+                               &self.crossings])?;
+        let mut ret = None;
+        for row in &qry {
+            ret = Some(row.get(0))
+        }
+        Ok(ret.expect("no ID in StationPath insert"))
     }
 }
 #[derive(Debug, Clone)]
 pub struct Schedule {
+    pub id: i32,
     pub uid: String,
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
     pub days: Days,
     pub stp_indicator: StpIndicator,
     pub signalling_id: Option<String>,
-    pub locations: Vec<i32>,
-    pub ways: Vec<i32>,
-    pub id: i32,
+    pub locs: Vec<ScheduleLocation>,
 }
 impl Schedule {
+    pub fn higher_schedule<T: GenericConnection>(&self, conn: &T, on_date: NaiveDate) -> Result<Option<i32>> {
+        if on_date > self.end_date && on_date < self.start_date {
+            return Ok(None);
+        }
+        let scheds = Schedule::from_select(conn, "WHERE uid = $1
+                                                  AND start_date <= $2 AND end_date >= $2",
+                                           &[&self.uid, &on_date])?;
+        let mut highest = (self.id, self.stp_indicator);
+        for sched in scheds {
+            if sched.id == self.id {
+                continue;
+            }
+            if sched.stp_indicator > highest.1 {
+                highest = (sched.id, sched.stp_indicator);
+            }
+            else if sched.stp_indicator == highest.1{
+                error!("Inconsistency: schedule #{} has a STP indicator equal to #{}",
+                       sched.id, highest.0);
+                bail!("STP indicator inconsistency");
+            }
+        }
+        Ok(if highest.0 != self.id {
+            Some(highest.0)
+        }
+        else {
+            None
+        })
+    }
     pub fn make_ways<T: GenericConnection>(&self, conn: &T) -> Result<()> {
         debug!("making ways for record (UID {}, start {}, stp_indicator {:?})",
                self.uid, self.start_date, self.stp_indicator);
-        if self.ways.len() > 0 {
-            bail!("Schedule ways already exist!");
+        let n_ways = ScheduleWay::from_select(conn, "WHERE parent_id = $1", &[&self.id])?.len();
+        if n_ways > 0 {
+            debug!("Record already has {} ways!", n_ways);
+            return Ok(());
         }
-        let locs = ScheduleLocation::from_select(conn, "WHERE id = ANY($1)", &[&self.locations])?;
-        if locs.len() != self.locations.len() {
-            bail!("Inconsistency between db locs len ({}) and my len ({})",
-                  locs.len(), self.locations.len());
-        }
-        let mut ways = vec![];
         let mut p1 = 0;
         'outer: loop {
-            if p1 >= locs.len() { break; }
-            if let Some(e1) = locs[p1].get_station(conn)? {
-                for p2 in p1..locs.len() {
-                    if let Some(e2) = locs[p2].get_station(conn)? {
+            if p1 >= self.locs.len() { break; }
+            if let Some(e1) = self.locs[p1].get_station(conn)? {
+                for p2 in p1..self.locs.len() {
+                    if let Some(e2) = self.locs[p2].get_station(conn)? {
                         if e1.nr_ref == e2.nr_ref {
                             continue;
                         }
                         let path = match super::navigate_cached(conn, &e1.nr_ref, &e2.nr_ref) {
                             Ok(x) => x,
                             Err(e) => {
-                                error!("failed to navigate from {} to {}: {}",
+                                error!("*** failed to navigate from {} to {}: {} ***",
                                        e1.nr_ref, e2.nr_ref, e);
                                 continue;
                             }
                         };
                         debug!("made way from {} ({}) to {} ({})",
-                               e1.nr_ref, locs[p1].time,
-                               e2.nr_ref, locs[p2].time);
+                               e1.nr_ref, self.locs[p1].time,
+                               e2.nr_ref, self.locs[p2].time);
                         let sway = ScheduleWay {
-                            p1: self.locations[p1],
-                            p2: self.locations[p2],
-                            st: locs[p1].time,
-                            et: locs[p2].time,
-                            way: path.way,
+                            st: self.locs[p1].time,
+                            et: self.locs[p2].time,
+                            start_date: self.start_date,
+                            end_date: self.end_date,
+                            station_path: path,
                             id: -1,
                             parent_id: self.id
                         };
-                        ways.push(sway.insert_self(conn)?);
+                        sway.insert_self(conn)?;
                         p1 = p2 + 1;
                         continue 'outer;
                     }
@@ -317,9 +355,6 @@ impl Schedule {
             }
             p1 += 1;
         }
-        conn.execute("UPDATE schedules SET ways = $1 WHERE id = $2",
-                     &[&ways, &self.id])?;
-        debug!("inserted {} ways", ways.len());
         Ok(())
     }
     pub fn apply_rec<T: GenericConnection>(conn: &T, rec: ScheduleRecord) -> Result<Option<i32>> {
@@ -356,29 +391,28 @@ impl Schedule {
             days: schedule_days_runs,
             stp_indicator,
             signalling_id,
-            locations: vec![],
-            ways: vec![],
+            locs: vec![],
             id: -1
         };
         for loc in schedule_location {
             match loc {
                 Originating { tiploc_code, departure, .. } => {
-                    sched.locations.push(
-                        ScheduleLocation::insert(conn, tiploc_code, departure, "originate")?);
+                    sched.locs.push(
+                        ScheduleLocation::new(tiploc_code, departure, "originate"));
                 },
                 Intermediate { tiploc_code, arrival, departure, .. } => {
-                    sched.locations.push(
-                        ScheduleLocation::insert(conn, tiploc_code.clone(), arrival, "arrive")?);
-                    sched.locations.push(
-                        ScheduleLocation::insert(conn, tiploc_code, departure, "depart")?);
+                    sched.locs.push(
+                        ScheduleLocation::new(tiploc_code.clone(), arrival, "arrive"));
+                    sched.locs.push(
+                        ScheduleLocation::new(tiploc_code, departure, "depart"));
                 },
                 Pass { tiploc_code, pass, .. } => {
-                    sched.locations.push(
-                        ScheduleLocation::insert(conn, tiploc_code, pass, "pass")?);
+                    sched.locs.push(
+                        ScheduleLocation::new(tiploc_code, pass, "pass"));
                 },
                 Terminating { tiploc_code, arrival, .. } => {
-                    sched.locations.push(
-                        ScheduleLocation::insert(conn, tiploc_code, arrival, "terminate")?);
+                    sched.locs.push(
+                        ScheduleLocation::new(tiploc_code, arrival, "terminate"));
                 }
             }
         }
@@ -396,16 +430,16 @@ impl InsertableDbType for Schedule {
         }
         let qry = conn.query(
             "INSERT INTO schedules
-             (uid, start_date, end_date, days, stp_indicator, signalling_id, locations, ways)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             (uid, start_date, end_date, days, stp_indicator, signalling_id, locs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
              RETURNING id",
             &[&self.uid, &self.start_date, &self.end_date, &self.days, &self.stp_indicator,
-              &self.signalling_id, &self.locations, &self.ways])?;
+              &self.signalling_id, &self.locs])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))
         }
-        Ok(ret.expect("No id in ScheduleLocation::insert?!"))
+        Ok(ret.expect("No id in Schedule::insert?!"))
     }
 }
 impl DbType for Schedule {
@@ -414,62 +448,54 @@ impl DbType for Schedule {
     }
     fn table_desc() -> &'static str {
         r#"
+id SERIAL PRIMARY KEY,
 uid VARCHAR NOT NULL,
 start_date DATE NOT NULL,
 end_date DATE NOT NULL,
 days "Days" NOT NULL,
 stp_indicator "StpIndicator" NOT NULL,
 signalling_id VARCHAR,
-locations INT[] NOT NULL,
-ways INT[] NOT NULL,
-id SERIAL UNIQUE NOT NULL,
-PRIMARY KEY(uid, start_date, stp_indicator)
-"#
-    }
-    fn from_row(row: &Row) -> Self {
-        Self {
-            uid: row.get(0),
-            start_date: row.get(1),
-            end_date: row.get(2),
-            days: row.get(3),
-            stp_indicator: row.get(4),
-            signalling_id: row.get(5),
-            locations: row.get(6),
-            ways: row.get(7),
-            id: row.get(8)
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ScheduleLocation {
-    pub id: i32,
-    pub tiploc: String,
-    pub time: NaiveTime,
-    pub event: String
-}
-impl DbType for ScheduleLocation {
-    fn table_name() -> &'static str {
-        "schedule_locs"
-    }
-    fn table_desc() -> &'static str {
-        r#"
-id SERIAL PRIMARY KEY,
-tiploc VARCHAR NOT NULL,
-time TIME NOT NULL,
-event VARCHAR NOT NULL
+locs "ScheduleLocation"[] NOT NULL,
+UNIQUE(uid, start_date, stp_indicator)
 "#
     }
     fn from_row(row: &Row) -> Self {
         Self {
             id: row.get(0),
-            tiploc: row.get(1),
-            time: row.get(2),
-            event: row.get(3)
+            uid: row.get(1),
+            start_date: row.get(2),
+            end_date: row.get(3),
+            days: row.get(4),
+            stp_indicator: row.get(5),
+            signalling_id: row.get(6),
+            locs: row.get(7),
         }
     }
 }
+
+#[derive(Debug, ToSql, FromSql, Clone)]
+pub struct ScheduleLocation {
+    pub tiploc: String,
+    pub time: NaiveTime,
+    pub event: String
+}
 impl ScheduleLocation {
+    pub fn create_type() -> &'static str {
+        r#"
+DO $$
+BEGIN
+IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ScheduleLocation') THEN
+CREATE TYPE "ScheduleLocation" AS (
+tiploc VARCHAR,
+time TIME,
+event VARCHAR
+);
+END IF;
+END$$;"#
+    }
+    pub fn new<T: Into<String>, U: Into<String>>(tiploc: T, dep: NaiveTime, event: U) -> Self {
+        Self { tiploc: tiploc.into(), time: dep, event: event.into() }
+    }
     pub fn get_station<T: GenericConnection>(&self, conn: &T) -> Result<Option<Station>> {
         Ok(if let Some(crs) = self.get_crs(conn)? {
             let stats = Station::from_select(conn, "WHERE nr_ref = $1", &[&crs])?;
@@ -499,18 +525,6 @@ impl ScheduleLocation {
         }
         Ok(ret)
     }
-    pub fn insert<T: GenericConnection, U: Into<String>>(conn: &T, tiploc: String, time: NaiveTime, event: U) -> Result<i32> {
-        let qry = conn.query(
-            "INSERT INTO schedule_locs (tiploc, time, event)
-             VALUES ($1, $2, $3)
-             RETURNING id",
-            &[&tiploc, &time, &event.into()])?;
-        let mut ret = None;
-        for row in &qry {
-            ret = Some(row.get(0))
-        }
-        Ok(ret.expect("No id in ScheduleLocation::insert?!"))
-    }
 }
 #[derive(Debug, Clone)]
 pub struct Train {
@@ -527,7 +541,7 @@ impl DbType for Train {
     fn table_desc() -> &'static str {
         r#"
 id SERIAL PRIMARY KEY,
-from_uid VARCHAR NOT NULL,
+from_id INT NOT NULL REFERENCES schedules ON DELETE CASCADE,
 date DATE NOT NULL,
 signalling_id VARCHAR NOT NULL,
 ways INT[] NOT NULL
@@ -545,13 +559,13 @@ ways INT[] NOT NULL
 }
 #[derive(Debug, Clone)]
 pub struct ScheduleWay {
-    pub p1: i32,
-    pub p2: i32,
-    pub st: NaiveTime,
-    pub et: NaiveTime,
-    pub way: LineString,
     pub id: i32,
     pub parent_id: i32,
+    pub st: NaiveTime,
+    pub et: NaiveTime,
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
+    pub station_path: i32,
 }
 impl DbType for ScheduleWay {
     fn table_name() -> &'static str {
@@ -559,43 +573,37 @@ impl DbType for ScheduleWay {
     }
     fn table_desc() -> &'static str {
         r#"
-p1 INT NOT NULL,
-p2 INT NOT NULL,
+id SERIAL PRIMARY KEY,
+parent_id INT NOT NULL REFERENCES schedules ON DELETE CASCADE,
 st TIME NOT NULL,
 et TIME NOT NULL,
-way geometry NOT NULL,
-id SERIAL UNIQUE,
-parent_id INT NOT NULL,
-PRIMARY KEY(p1, p2)
+start_date DATE NOT NULL,
+end_date DATE NOT NULL,
+station_path INT NOT NULL REFERENCES station_paths ON DELETE RESTRICT
 "#
     }
     fn from_row(row: &Row) -> Self {
         Self {
-            p1: row.get(0),
-            p2: row.get(1),
+            id: row.get(0),
+            parent_id: row.get(1),
             st: row.get(2),
             et: row.get(3),
-            way: row.get(4),
-            id: row.get(5),
-            parent_id: row.get(6),
+            start_date: row.get(4),
+            end_date: row.get(5),
+            station_path: row.get(6),
         }
     }
 }
 impl InsertableDbType for ScheduleWay {
     type Id = i32;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
-        for row in &conn.query(
-            "SELECT id FROM schedule_ways
-             WHERE p1 = $1 AND p2 = $2",
-            &[&self.p1, &self.p2])? {
-            return Ok(row.get(0));
-        }
         let qry = conn.query("INSERT INTO schedule_ways
-                              (p1, p2, st, et, way, parent_id)
+                              (st, et, station_path, parent_id, start_date, end_date)
                               VALUES ($1, $2, $3, $4, $5, $6)
                               RETURNING id",
-                             &[&self.p1, &self.p2, &self.st, &self.et,
-                               &self.way, &self.parent_id])?;
+                             &[&self.st, &self.et, &self.station_path,
+                               &self.parent_id, &self.start_date,
+                               &self.end_date])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))
@@ -640,5 +648,55 @@ nlcdesc16 VARCHAR
             nlcdesc: row.get(5),
             nlcdesc16: row.get(6),
         }
+    }
+}
+pub struct Crossing {
+    pub node_id: i32,
+    pub name: Option<String>,
+    pub other_node_ids: Vec<i32>,
+    pub area: Polygon
+}
+impl DbType for Crossing {
+    fn table_name() -> &'static str {
+        "crossings"
+    }
+    fn table_desc() -> &'static str {
+        r#"
+node_id INT PRIMARY KEY REFERENCES nodes ON DELETE RESTRICT,
+name VARCHAR,
+other_node_ids INT[] NOT NULL,
+area geometry NOT NULL
+"#
+    }
+    fn from_row(row: &Row) -> Self {
+        Self {
+            node_id: row.get(0),
+            name: row.get(1),
+            other_node_ids: row.get(2),
+            area: row.get(3)
+        }
+    }
+}
+pub struct CrossingStatus {
+    pub crossing: i32,
+    pub date: NaiveDate,
+    pub open: bool,
+    pub time_remaining: Duration,
+    pub applicable_ways: Vec<i32>
+}
+impl InsertableDbType for Crossing {
+    type Id = i32;
+    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
+        let qry = conn.query("INSERT INTO crossings
+                              (node_id, name, other_node_ids, area)
+                              VALUES ($1, $2, $3, $4)
+                              RETURNING node_id",
+                             &[&self.node_id, &self.name,
+                               &self.other_node_ids, &self.area])?;
+        let mut ret = None;
+        for row in &qry {
+            ret = Some(row.get(0))
+        }
+        Ok(ret.expect("No id in Crossing::insert?!"))
     }
 }

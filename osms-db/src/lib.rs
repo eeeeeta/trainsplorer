@@ -1,5 +1,5 @@
 #[macro_use] extern crate error_chain;
-extern crate postgres;
+#[macro_use] extern crate postgres;
 extern crate postgis;
 #[macro_use] extern crate log;
 extern crate ntrod_types;
@@ -7,10 +7,10 @@ extern crate chrono;
 extern crate chrono_tz;
 extern crate serde_json;
 extern crate geo;
+#[macro_use] extern crate postgres_derive;
 
 use std::collections::{HashSet, HashMap};
 use postgres::GenericConnection;
-use postgres::types::ToSql;
 use postgis::ewkb::{Point, LineString, Polygon};
 use ntrod_types::reference::{CorpusData, CorpusEntry};
 use ntrod_types::{cif, schedule};
@@ -25,16 +25,40 @@ pub mod errors {
         }
     }
 }
-
+pub mod util;
 pub mod types;
+pub mod setup;
 use types::*;
 use errors::*;
-
-pub fn count<T: GenericConnection>(conn: &T, details: &str, args: &[&ToSql]) -> Result<i64> {
-    Ok(conn.query(&format!("SELECT COUNT(*) {}", details), args)?.into_iter()
-        .nth(0)
-        .ok_or("Count query failed")?
-        .get(0))
+use util::*;
+pub fn make_crossings<T: GenericConnection>(conn: &T) -> Result<()> {
+    debug!("make_crossings: running...");
+    let trans = conn.transaction()?;
+    let mut processed_osm_ids = HashSet::new();
+    let mut changed = 0;
+    for row in &trans.query("SELECT osm_id, way, ST_Buffer(way::geography, 20), name FROM planet_osm_point WHERE railway = 'level_crossing'", &[])? {
+        let (osm_id, way, area, name): (i64, Point, Polygon, Option<String>)
+            = (row.get(0), row.get(1), row.get(2), row.get(3));
+        if processed_osm_ids.insert(osm_id) {
+            let (node_id, _) = Node::new_at_point(&trans, way.clone())?;
+            let mut other_node_ids = vec![];
+            for row in &trans.query("SELECT osm_id FROM planet_osm_point WHERE ST_Intersects(way, $1)",
+                                    &[&area])? {
+                let osm_id: i64 = row.get(0);
+                if processed_osm_ids.insert(osm_id) {
+                    other_node_ids.push(Node::new_at_point(&trans, way.clone())?.0);
+                }
+            }
+            let lxing = Crossing { node_id, name, other_node_ids, area };
+            lxing.insert_self(&trans)?;
+            changed += 1;
+            if (changed % 100) == 0 {
+                debug!("make_crossings: made {} crossings", changed);
+            }
+        }
+    }
+    trans.commit()?;
+    Ok(())
 }
 pub fn make_stations<T: GenericConnection>(conn: &T) -> Result<()> {
     use geo::algorithm::closest_point::ClosestPoint;
@@ -92,16 +116,15 @@ pub fn make_stations<T: GenericConnection>(conn: &T) -> Result<()> {
     trans.commit()?;
     Ok(())
 }
-pub fn navigate_cached<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<StationPath> {
+pub fn navigate_cached<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<i32> {
     let paths = StationPath::from_select(conn, "WHERE s1 = $1 AND s2 = $2", &[&from, &to])?;
     if paths.len() > 0 {
         debug!("navigate_cached: returning memoized path from {} to {}", from, to);
-        return Ok(paths.into_iter().nth(0).unwrap());
+        return Ok(paths.into_iter().nth(0).unwrap().id);
     }
     let path = navigate(conn, from, to)?;
     debug!("navigate_cached: memoizing path");
-    path.insert_self(conn)?;
-    Ok(path)
+    Ok(path.insert_self(conn)?)
 }
 pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<StationPath> {
     // Create a transaction: we don't actually want to modify the database here.
@@ -203,8 +226,13 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
     }
     let path: LineString = conn.query("SELECT ST_MakeLine(CAST($1 AS geometry[]))", &[&path])
         ?.into_iter().nth(0).unwrap().get(0);
+    debug!("navigate: finding intersecting crossings...");
+    let mut crossings = vec![];
+    for cx in Crossing::from_select(conn, "WHERE ST_Intersects(area, $1)", &[&path])? {
+        crossings.push(cx.node_id);
+    }
     debug!("navigate: completed");
-    Ok(StationPath { s1: from.to_string(), s2: to.to_string(), way: path, nodes })
+    Ok(StationPath { s1: from.to_string(), s2: to.to_string(), way: path, nodes, crossings, id: -1 })
 }
 pub fn make_nodes<T: GenericConnection>(conn: &T) -> Result<()> {
     debug!("make_nodes: making nodes from OSM data...");
@@ -304,7 +332,7 @@ pub fn separate_nodes<T: GenericConnection>(conn: &T) -> Result<()> {
 }
 pub fn make_schedule_ways<T: GenericConnection>(conn: &T) -> Result<()> {
     debug!("make_schedule_ways: getting schedules...");
-    let scheds = Schedule::from_select(conn, "WHERE cardinality(ways) = 0", &[])?;
+    let scheds = Schedule::from_select(conn, "", &[])?;
     debug!("make_schedule_ways: {} schedules to update", scheds.len());
     for sched in scheds {
         let trans = conn.transaction()?;
@@ -314,7 +342,7 @@ pub fn make_schedule_ways<T: GenericConnection>(conn: &T) -> Result<()> {
     debug!("make_schedule_ways: complete!");
     Ok(())
 }
-pub fn apply_schedule_records<T: GenericConnection, R: BufRead>(conn: &T, rdr: R) -> Result<()> {
+pub fn apply_schedule_records<T: GenericConnection, R: BufRead>(conn: &T, rdr: R, restrict_atoc: Option<&str>) -> Result<()> {
     debug!("apply_schedule_records: running...");
     let mut inserted = 0;
     let trans = conn.transaction()?;
@@ -331,6 +359,11 @@ pub fn apply_schedule_records<T: GenericConnection, R: BufRead>(conn: &T, rdr: R
         };
         match rec {
             schedule::Record::Schedule(rec) => {
+                if let Some(atc) = restrict_atoc {
+                    if !rec.atoc_code.as_ref().map(|x| x == atc).unwrap_or(false) {
+                        continue;
+                    }
+                }
                 Schedule::apply_rec(&trans, rec)?;
                 inserted += 1;
             },
@@ -365,16 +398,17 @@ pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
     debug!("initialize_database: making types...");
     conn.execute(schedule::Days::create_type(), &[])?;
     conn.execute(cif::StpIndicator::create_type(), &[])?;
+    conn.execute(ScheduleLocation::create_type(), &[])?;
     debug!("initialize_database: making tables...");
     Node::make_table(conn)?;
     Link::make_table(conn)?;
     Station::make_table(conn)?;
     StationPath::make_table(conn)?;
     Schedule::make_table(conn)?;
-    ScheduleLocation::make_table(conn)?;
     Train::make_table(conn)?;
     ScheduleWay::make_table(conn)?;
     CorpusEntry::make_table(conn)?;
+    Crossing::make_table(conn)?;
     let mut changed = false;
     let mut nodes = count(conn, "FROM nodes", &[])?;
     if nodes == 0 {
@@ -388,14 +422,21 @@ pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
         make_links(conn)?;
         links = count(conn, "FROM links", &[])?;
         changed = true;
-        debug!("initialize_database: {} links after link creation", nodes);
+        debug!("initialize_database: {} links after link creation", links);
     }
     let mut stations = count(conn, "FROM stations", &[])?;
     if stations == 0 {
         make_stations(conn)?;
         stations = count(conn, "FROM stations", &[])?;
         changed = true;
-        debug!("initialize_database: {} stations after station creation", nodes);
+        debug!("initialize_database: {} stations after station creation", stations);
+    }
+    let mut crossings = count(conn, "FROM crossings", &[])?;
+    if crossings == 0 {
+        make_crossings(conn)?;
+        crossings = count(conn, "FROM crossings", &[])?;
+        changed = true;
+        debug!("initialize_database: {} crossings after crossing creation", crossings);
     }
     if changed {
         debug!("initialize_database: changes occurred, running connectifier...");
@@ -407,7 +448,7 @@ pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
         debug!("initialize_database: running node separator...");
         separate_nodes(conn)?;
     }
-    debug!("initialize_database: database OK (nodes = {}, links = {}, stations = {})",
-           nodes, links, stations);
+    debug!("initialize_database: database OK (nodes = {}, links = {}, stations = {}, crossings = {})",
+           nodes, links, stations, crossings);
     Ok(())
 }
