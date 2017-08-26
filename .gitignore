@@ -7,3 +7,4 @@ access_token
 *.geojson
 *.kml
 .gdb_history
+.#*

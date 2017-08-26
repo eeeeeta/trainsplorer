@@ -39,8 +39,8 @@ fn example() -> Result<()> {
     let from = matches.value_of("from").unwrap();
     let to = matches.value_of("to").unwrap();
     let conn = Connection::connect(url, TlsMode::None).unwrap();
-    initialize_database(&conn)?;
-    let sp = navigate(&conn, from, to)?;
+    db::initialize_database(&conn)?;
+    let sp = osm::navigate::navigate(&conn, from, to)?;
     println!(r#"
 <?xml version="1.0" encoding="UTF-8"?>
 <gpx

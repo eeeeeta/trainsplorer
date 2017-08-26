@@ -40,17 +40,17 @@ fn example() -> Result<()> {
     let typ = matches.value_of("type").unwrap();
     let conn = Connection::connect(url, TlsMode::None).unwrap();
     if typ == "ways" {
-        initialize_database(&conn)?;
-        make_schedule_ways(&conn)?;
+        db::initialize_database(&conn)?;
+        ntrod::make_schedule_ways(&conn)?;
         return Ok(())
     }
     let file = matches.value_of("file").expect("File required for action, or invalid action");
     let file = File::open(file)?;
     let buf_reader = BufReader::new(file);
-    initialize_database(&conn)?;
+    db::initialize_database(&conn)?;
     match typ {
-        "corpus" => import_corpus(&conn, buf_reader)?,
-        "schedule" => apply_schedule_records(&conn, buf_reader, Some("SW"))?,
+        "corpus" => ntrod::import_corpus(&conn, buf_reader)?,
+        "schedule" => ntrod::apply_schedule_records(&conn, buf_reader, Some("SW"))?,
         x => panic!("Invalid action '{}'", x)
     }
     Ok(())
