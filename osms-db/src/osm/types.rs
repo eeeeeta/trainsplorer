@@ -2,7 +2,6 @@ use postgis::ewkb::{Point, LineString, Polygon};
 use db::{DbType, InsertableDbType, GenericConnection, Row};
 use errors::*;
 use util::*;
-use chrono::*;
 use geo;
 
 #[derive(Debug, Clone)]
@@ -185,6 +184,7 @@ pub struct StationPath {
     pub way: LineString,
     pub nodes: Vec<i32>,
     pub crossings: Vec<i32>,
+    pub crossing_locations: Vec<f64>,
     pub id: i32
 }
 impl DbType for StationPath {
@@ -198,8 +198,10 @@ s2 VARCHAR NOT NULL REFERENCES stations ON DELETE RESTRICT,
 way geometry NOT NULL,
 nodes INT[] NOT NULL,
 crossings INT[] NOT NULL,
+crossing_locations DOUBLE PRECISION[] NOT NULL,
 id SERIAL PRIMARY KEY,
-UNIQUE(s1, s2)
+UNIQUE(s1, s2),
+CHECK(cardinality(crossings) = cardinality(crossing_locations))
 "#
     }
     fn from_row(row: &Row) -> Self {
@@ -209,7 +211,8 @@ UNIQUE(s1, s2)
             way: row.get(2),
             nodes: row.get(3),
             crossings: row.get(4),
-            id: row.get(5)
+            crossing_locations: row.get(5),
+            id: row.get(6)
         }
     }
 }
@@ -221,11 +224,12 @@ impl InsertableDbType for StationPath {
                                &[&self.s1, &self.s2])? {
             return Ok(row.get(0));
         }
-        let qry = conn.query("INSERT INTO station_paths (s1, s2, way, nodes, crossings)
-                              VALUES ($1, $2, $3, $4, $5)
+        let qry = conn.query("INSERT INTO station_paths
+                              (s1, s2, way, nodes, crossings, crossing_locations)
+                              VALUES ($1, $2, $3, $4, $5, $6)
                               RETURNING id",
                              &[&self.s1, &self.s2, &self.way, &self.nodes,
-                               &self.crossings])?;
+                               &self.crossings, &self.crossing_locations])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))
@@ -259,13 +263,6 @@ area geometry NOT NULL
             area: row.get(3)
         }
     }
-}
-pub struct CrossingStatus {
-    pub crossing: i32,
-    pub date: NaiveDate,
-    pub open: bool,
-    pub time_remaining: Duration,
-    pub applicable_ways: Vec<i32>
 }
 impl InsertableDbType for Crossing {
     type Id = i32;

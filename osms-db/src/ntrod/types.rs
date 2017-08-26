@@ -387,3 +387,18 @@ nlcdesc16 VARCHAR
         }
     }
 }
+#[derive(Debug, Clone)]
+pub struct CrossingClosure {
+    pub st: NaiveTime,
+    pub et: NaiveTime,
+    pub schedule_way: i32,
+    pub from_uid: String
+}
+#[derive(Debug, Clone)]
+pub struct CrossingStatus {
+    pub crossing: i32,
+    pub date: NaiveDate,
+    pub open: bool,
+    pub change_at: NaiveTime,
+    pub closures: Vec<CrossingClosure>
+}

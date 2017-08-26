@@ -90,8 +90,8 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
     let mut path = vec![];
     let mut cur_node = Node::from_select(conn,
                                          "WHERE id = $1 AND graph_part = $2",
-                                         &[&goal_node, &cur.graph_part])
-        ?.into_iter().nth(0).unwrap();
+                                         &[&goal_node, &cur.graph_part])?.into_iter()
+        .nth(0).unwrap();
     loop {
         nodes.insert(0, cur_node.id);
         if cur_node.parent.is_none() {
@@ -115,9 +115,19 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
         ?.into_iter().nth(0).unwrap().get(0);
     debug!("navigate: finding intersecting crossings...");
     let mut crossings = vec![];
+    let mut crossing_locations = vec![];
     for cx in Crossing::from_select(conn, "WHERE ST_Intersects(area, $1)", &[&path])? {
         crossings.push(cx.node_id);
+        for row in &trans.query("SELECT ST_Line_Locate_Point($1, ST_Centroid($2))",
+                                &[&path, &cx.area])? {
+            let location: f64 = row.get(0);
+            crossing_locations.push(location);
+        }
     }
     debug!("navigate: completed");
-    Ok(StationPath { s1: from.to_string(), s2: to.to_string(), way: path, nodes, crossings, id: -1 })
+    Ok(StationPath {
+        s1: from.to_string(), s2: to.to_string(), way: path,
+        nodes, crossings, crossing_locations,
+        id: -1
+    })
 }

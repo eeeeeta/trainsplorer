@@ -39,6 +39,13 @@ fn example() -> Result<()> {
     let url = matches.value_of("url").unwrap();
     let typ = matches.value_of("type").unwrap();
     let conn = Connection::connect(url, TlsMode::None).unwrap();
+    if typ == "status" {
+        let file = matches.value_of("file").expect("File required for action, or invalid action");
+        let file: i32 = file.parse().unwrap();
+        db::initialize_database(&conn)?;
+        println!("{:?}", ntrod::get_crossing_status(&conn, file)?);
+        return Ok(())
+    }
     if typ == "ways" {
         db::initialize_database(&conn)?;
         ntrod::make_schedule_ways(&conn)?;
