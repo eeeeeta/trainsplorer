@@ -19,15 +19,22 @@ pub struct Schedule {
     pub locs: Vec<ScheduleLocation>,
 }
 impl Schedule {
-    pub fn higher_schedule<T: GenericConnection>(&self, conn: &T, on_date: NaiveDate) -> Result<Option<i32>> {
-        if on_date > self.end_date && on_date < self.start_date {
-            return Ok(None);
+    pub fn is_authoritative<T: GenericConnection>(&self, conn: &T, on_date: NaiveDate) -> Result<bool> {
+        if on_date > self.end_date || on_date < self.start_date {
+            warn!("Schedule #{} was asked is_authoritative() outside date range", self.id);
+            return Ok(false);
         }
         let scheds = Schedule::from_select(conn, "WHERE uid = $1
                                                   AND start_date <= $2 AND end_date >= $2",
                                            &[&self.uid, &on_date])?;
         let mut highest = (self.id, self.stp_indicator);
         for sched in scheds {
+            let trains = Train::from_select(conn, "WHERE from_id = $1
+                                                   AND date = $2",
+                                            &[&sched.id, &on_date])?;
+            if trains.len() > 0 {
+                return Ok(false);
+            }
             if sched.id == self.id {
                 continue;
             }
@@ -40,12 +47,7 @@ impl Schedule {
                 bail!("STP indicator inconsistency");
             }
         }
-        Ok(if highest.0 != self.id {
-            Some(highest.0)
-        }
-        else {
-            None
-        })
+        Ok(highest.0 != self.id)
     }
     pub fn make_ways<T: GenericConnection>(&self, conn: &T) -> Result<()> {
         debug!("making ways for record (UID {}, start {}, stp_indicator {:?})",
@@ -82,7 +84,8 @@ impl Schedule {
                             end_date: self.end_date,
                             station_path: path,
                             id: -1,
-                            parent_id: self.id
+                            parent_id: Some(self.id),
+                            train_id: None
                         };
                         sway.insert_self(conn)?;
                         p1 = p2 + 1;
@@ -266,7 +269,8 @@ END$$;"#
 #[derive(Debug, Clone)]
 pub struct Train {
     pub id: i32,
-    pub from_uid: String,
+    pub from_id: i32,
+    pub trust_id: String,
     pub date: NaiveDate,
     pub signalling_id: String,
     pub ways: Vec<i32>
@@ -279,6 +283,7 @@ impl DbType for Train {
         r#"
 id SERIAL PRIMARY KEY,
 from_id INT NOT NULL REFERENCES schedules ON DELETE CASCADE,
+trust_id VARCHAR NOT NULL UNIQUE,
 date DATE NOT NULL,
 signalling_id VARCHAR NOT NULL,
 ways INT[] NOT NULL
@@ -287,17 +292,36 @@ ways INT[] NOT NULL
     fn from_row(row: &Row) -> Self {
         Self {
             id: row.get(0),
-            from_uid: row.get(1),
-            date: row.get(2),
-            signalling_id: row.get(3),
-            ways: row.get(4)
+            from_id: row.get(1),
+            trust_id: row.get(2),
+            date: row.get(3),
+            signalling_id: row.get(4),
+            ways: row.get(5)
         }
     }
 }
+impl InsertableDbType for Train {
+    type Id = i32;
+    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
+        let qry = conn.query("INSERT INTO trains
+                              (from_id, trust_id, date, signalling_id, ways)
+                              VALUES ($1, $2, $3, $4, $5)
+                              RETURNING id",
+                             &[&self.from_id, &self.trust_id, &self.date,
+                               &self.signalling_id, &self.ways])?;
+        let mut ret = None;
+        for row in &qry {
+            ret = Some(row.get(0))
+        }
+        Ok(ret.expect("No id in Train::insert?!"))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ScheduleWay {
     pub id: i32,
-    pub parent_id: i32,
+    pub parent_id: Option<i32>,
+    pub train_id: Option<i32>,
     pub st: NaiveTime,
     pub et: NaiveTime,
     pub start_date: NaiveDate,
@@ -311,23 +335,26 @@ impl DbType for ScheduleWay {
     fn table_desc() -> &'static str {
         r#"
 id SERIAL PRIMARY KEY,
-parent_id INT NOT NULL REFERENCES schedules ON DELETE CASCADE,
+parent_id INT REFERENCES schedules ON DELETE CASCADE,
+train_id INT REFERENCES trains ON DELETE CASCADE,
 st TIME NOT NULL,
 et TIME NOT NULL,
 start_date DATE NOT NULL,
 end_date DATE NOT NULL,
-station_path INT NOT NULL REFERENCES station_paths ON DELETE RESTRICT
+station_path INT NOT NULL REFERENCES station_paths ON DELETE RESTRICT,
+CHECK((parent_id IS NULL) != (train_id IS NULL))
 "#
     }
     fn from_row(row: &Row) -> Self {
         Self {
             id: row.get(0),
             parent_id: row.get(1),
-            st: row.get(2),
-            et: row.get(3),
-            start_date: row.get(4),
-            end_date: row.get(5),
-            station_path: row.get(6),
+            train_id: row.get(2),
+            st: row.get(3),
+            et: row.get(4),
+            start_date: row.get(5),
+            end_date: row.get(6),
+            station_path: row.get(7),
         }
     }
 }
@@ -389,16 +416,17 @@ nlcdesc16 VARCHAR
 }
 #[derive(Debug, Clone)]
 pub struct CrossingClosure {
-    pub st: NaiveTime,
-    pub et: NaiveTime,
+    pub st: NaiveDateTime,
+    pub et: NaiveDateTime,
     pub schedule_way: i32,
-    pub from_uid: String
+    pub from_sched: Option<i32>,
+    pub from_train: Option<i32>
 }
 #[derive(Debug, Clone)]
 pub struct CrossingStatus {
     pub crossing: i32,
     pub date: NaiveDate,
     pub open: bool,
-    pub change_at: NaiveTime,
+    pub change_at: NaiveDateTime,
     pub closures: Vec<CrossingClosure>
 }

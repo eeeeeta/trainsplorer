@@ -4,17 +4,17 @@ use super::fns::*;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MvtHeader {
-    msg_type: String,
-    source_dev_id: String,
-    source_system_id: String,
-    original_data_source: String
+    pub msg_type: String,
+    pub source_dev_id: String,
+    pub source_system_id: String,
+    pub original_data_source: String
 }
 
 pub type Records = Vec<Record>;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Record {
-    header: MvtHeader,
-    body: MvtBody
+    pub header: MvtHeader,
+    pub body: MvtBody
 }
 #[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub enum ScheduleSource {
@@ -91,180 +91,180 @@ pub enum MvtBody {
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Activation {
-    schedule_source: ScheduleSource,
+    pub schedule_source: ScheduleSource,
     #[serde(deserialize_with = "non_empty_str_opt")]
-    train_file_address: Option<String>,
+    pub train_file_address: Option<String>,
     #[serde(deserialize_with = "from_str")]
-    schedule_end_date: NaiveDate,
+    pub schedule_end_date: NaiveDate,
     #[serde(deserialize_with = "non_empty_str")]
-    train_id: String,
+    pub train_id: String,
     #[serde(deserialize_with = "from_str")]
-    tp_origin_timestamp: NaiveDate,
+    pub tp_origin_timestamp: NaiveDate,
     #[serde(deserialize_with = "parse_ts")]
-    creation_timestamp: NaiveDateTime,
+    pub creation_timestamp: NaiveDateTime,
     #[serde(deserialize_with = "non_empty_str_opt")]
-    tp_origin_stanox: Option<String>,
+    pub tp_origin_stanox: Option<String>,
     #[serde(deserialize_with = "parse_ts")]
-    origin_dep_timestamp: NaiveDateTime,
+    pub origin_dep_timestamp: NaiveDateTime,
     #[serde(deserialize_with = "non_empty_str")]
-    train_service_code: String,
+    pub train_service_code: String,
     #[serde(deserialize_with = "non_empty_str")]
-    toc_id: String,
+    pub toc_id: String,
     #[serde(deserialize_with = "non_empty_str")]
-    d1266_record_number: String,
-    train_call_type: AutomaticOrManual,
+    pub d1266_record_number: String,
+    pub train_call_type: AutomaticOrManual,
     #[serde(deserialize_with = "non_empty_str")]
-    train_uid: String,
-    train_call_mode: CallMode,
+    pub train_uid: String,
+    pub train_call_mode: CallMode,
     #[serde(deserialize_with = "fix_buggy_schedule_type")]
-    schedule_type: StpIndicator,
+    pub schedule_type: StpIndicator,
     #[serde(deserialize_with = "non_empty_str")]
-    sched_origin_stanox: String,
+    pub sched_origin_stanox: String,
     #[serde(deserialize_with = "non_empty_str")]
-    schedule_wtt_id: String,
+    pub schedule_wtt_id: String,
     #[serde(deserialize_with = "from_str")]
-    schedule_start_date: NaiveDate
+    pub schedule_start_date: NaiveDate
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Cancellation {
     #[serde(deserialize_with = "non_empty_str")]
-    train_service_code: String,
+    pub train_service_code: String,
     #[serde(deserialize_with = "non_empty_str_opt")]
-    train_file_address: Option<String>,
+    pub train_file_address: Option<String>,
     #[serde(deserialize_with = "non_empty_str_opt")]
-    orig_loc_stanox: Option<String>,
+    pub orig_loc_stanox: Option<String>,
     #[serde(deserialize_with = "non_empty_str")]
-    toc_id: String,
+    pub toc_id: String,
     #[serde(deserialize_with = "parse_ts")]
-    dep_timestamp: NaiveDateTime,
+    pub dep_timestamp: NaiveDateTime,
     #[serde(deserialize_with = "non_empty_str")]
-    division_code: String,
+    pub division_code: String,
     #[serde(deserialize_with = "non_empty_str")]
-    loc_stanox: String,
+    pub loc_stanox: String,
     #[serde(deserialize_with = "parse_ts")]
-    canx_timestamp: NaiveDateTime,
+    pub canx_timestamp: NaiveDateTime,
     #[serde(deserialize_with = "non_empty_str")]
-    canx_reason_code: String,
+    pub canx_reason_code: String,
     #[serde(deserialize_with = "non_empty_str")]
-    train_id: String,
+    pub train_id: String,
     #[serde(deserialize_with = "parse_ts_opt")]
-    orig_loc_timestamp: Option<NaiveDateTime>,
-    canx_type: CanxType
+    pub orig_loc_timestamp: Option<NaiveDateTime>,
+    pub canx_type: CanxType
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Movement {
-    event_type: EventType,
+    pub event_type: EventType,
     #[serde(deserialize_with = "parse_ts_opt")]
-    gbtt_timestamp: Option<NaiveDateTime>,
+    pub gbtt_timestamp: Option<NaiveDateTime>,
     #[serde(deserialize_with = "non_empty_str_opt")]
-    original_loc_stanox: Option<String>,
+    pub original_loc_stanox: Option<String>,
     #[serde(deserialize_with = "parse_ts_opt")]
-    planned_timestamp: Option<NaiveDateTime>,
+    pub planned_timestamp: Option<NaiveDateTime>,
     #[serde(deserialize_with = "from_str_trimming")]
-    timetable_variation: u32,
+    pub timetable_variation: u32,
     #[serde(deserialize_with = "parse_ts_opt")]
-    original_loc_timestamp: Option<NaiveDateTime>,
+    pub original_loc_timestamp: Option<NaiveDateTime>,
     #[serde(deserialize_with = "non_empty_str_opt")]
-    current_train_id: Option<String>,
+    pub current_train_id: Option<String>,
     #[serde(deserialize_with = "from_str")]
-    delay_monitoring_point: bool,
+    pub delay_monitoring_point: bool,
     #[serde(deserialize_with = "from_str_opt_trimming")]
-    next_report_run_time: Option<u32>,
+    pub next_report_run_time: Option<u32>,
     #[serde(deserialize_with = "non_empty_str_opt")]
-    reporting_stanox: Option<String>,
+    pub reporting_stanox: Option<String>,
     #[serde(deserialize_with = "parse_ts")]
-    actual_timestamp: NaiveDateTime,
+    pub actual_timestamp: NaiveDateTime,
     #[serde(deserialize_with = "from_str")]
-    correction_ind: bool,
-    event_source: AutomaticOrManual,
+    pub correction_ind: bool,
+    pub event_source: AutomaticOrManual,
     #[serde(deserialize_with = "non_empty_str_opt")]
-    train_file_address: Option<String>,
+    pub train_file_address: Option<String>,
     #[serde(deserialize_with = "non_empty_str_opt")]
-    platform: Option<String>,
+    pub platform: Option<String>,
     #[serde(deserialize_with = "non_empty_str")]
-    division_code: String,
+    pub division_code: String,
     #[serde(deserialize_with = "from_str")]
-    train_terminated: bool,
+    pub train_terminated: bool,
     #[serde(deserialize_with = "non_empty_str")]
-    train_id: String,
+    pub train_id: String,
     #[serde(deserialize_with = "from_str")]
-    offroute_ind: bool,
-    variation_status: VariationStatus,
+    pub offroute_ind: bool,
+    pub variation_status: VariationStatus,
     #[serde(deserialize_with = "non_empty_str")]
-    train_service_code: String,
+    pub train_service_code: String,
     #[serde(deserialize_with = "non_empty_str")]
-    toc_id: String,
+    pub toc_id: String,
     #[serde(deserialize_with = "non_empty_str")]
-    loc_stanox: String,
+    pub loc_stanox: String,
     #[serde(deserialize_with = "from_str_opt")]
-    auto_expected: Option<bool>,
-    direction_ind: UpOrDown,
+    pub auto_expected: Option<bool>,
+    pub direction_ind: UpOrDown,
     #[serde(deserialize_with = "from_str_opt")]
-    route: Option<char>,
-    planned_event_type: EventType,
+    pub route: Option<char>,
+    pub planned_event_type: EventType,
     #[serde(deserialize_with = "non_empty_str_opt")]
-    next_report_stanox: Option<String>,
+    pub next_report_stanox: Option<String>,
     #[serde(deserialize_with = "from_str_opt")]
-    line_ind: Option<char>
+    pub line_ind: Option<char>
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Reinstatement {
     #[serde(deserialize_with = "non_empty_str")]
-    train_id: String,
+    pub train_id: String,
     #[serde(deserialize_with = "non_empty_str_opt")]
-    current_train_id: Option<String>,
+    pub current_train_id: Option<String>,
     #[serde(deserialize_with = "parse_ts_opt")]
-    original_loc_timestamp: Option<NaiveDateTime>,
+    pub original_loc_timestamp: Option<NaiveDateTime>,
     #[serde(deserialize_with = "parse_ts")]
-    dep_timestamp: NaiveDateTime,
+    pub dep_timestamp: NaiveDateTime,
     #[serde(deserialize_with = "non_empty_str")]
-    loc_stanox: String,
+    pub loc_stanox: String,
     #[serde(deserialize_with = "non_empty_str_opt")]
-    original_loc_stanox: Option<String>,
+    pub original_loc_stanox: Option<String>,
     #[serde(deserialize_with = "parse_ts")]
-    reinstatement_timestamp: NaiveDateTime,
+    pub reinstatement_timestamp: NaiveDateTime,
     #[serde(deserialize_with = "non_empty_str")]
-    toc_id: String,
+    pub toc_id: String,
     #[serde(deserialize_with = "non_empty_str")]
-    division_code: String,
+    pub division_code: String,
     #[serde(deserialize_with = "non_empty_str")]
-    train_service_code: String
+    pub train_service_code: String
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ChangeOfOrigin {
     #[serde(deserialize_with = "non_empty_str")]
-    train_id: String,
+    pub train_id: String,
     #[serde(deserialize_with = "parse_ts")]
-    dep_timestamp: NaiveDateTime,
+    pub dep_timestamp: NaiveDateTime,
     #[serde(deserialize_with = "non_empty_str")]
-    loc_stanox: String,
+    pub loc_stanox: String,
     #[serde(deserialize_with = "non_empty_str_opt")]
-    original_loc_stanox: Option<String>,
+    pub original_loc_stanox: Option<String>,
     #[serde(deserialize_with = "parse_ts_opt")]
-    original_loc_timestamp: Option<NaiveDateTime>,
+    pub original_loc_timestamp: Option<NaiveDateTime>,
     #[serde(deserialize_with = "non_empty_str")]
-    train_service_code: String,
+    pub train_service_code: String,
     #[serde(deserialize_with = "non_empty_str")]
-    reason_code: String,
+    pub reason_code: String,
     #[serde(deserialize_with = "non_empty_str")]
-    division_code: String,
+    pub division_code: String,
     #[serde(deserialize_with = "non_empty_str")]
-    toc_id: String,
+    pub toc_id: String,
     #[serde(deserialize_with = "parse_ts")]
-    coo_timestamp: NaiveDateTime
+    pub coo_timestamp: NaiveDateTime
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ChangeOfIdentity {
     #[serde(deserialize_with = "non_empty_str")]
-    train_id: String,
+    pub train_id: String,
     #[serde(deserialize_with = "non_empty_str_opt")]
-    current_train_id: Option<String>,
+    pub current_train_id: Option<String>,
     #[serde(deserialize_with = "non_empty_str")]
-    revised_train_id: String,
+    pub revised_train_id: String,
     #[serde(deserialize_with = "non_empty_str")]
-    train_service_code: String,
+    pub train_service_code: String,
     #[serde(deserialize_with = "parse_ts")]
-    event_timestamp: NaiveDateTime
+    pub event_timestamp: NaiveDateTime
 }

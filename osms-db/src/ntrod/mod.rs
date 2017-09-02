@@ -1,4 +1,5 @@
 pub mod types;
+pub mod live;
 use db::{GenericConnection, DbType, InsertableDbType};
 use ntrod_types::schedule;
 use ntrod_types::reference;
@@ -13,12 +14,11 @@ use chrono::*;
 pub fn get_crossing_status<T: GenericConnection>(conn: &T, cid: i32) -> Result<CrossingStatus> {
     let crossing = Crossing::from_select(conn, "WHERE node_id = $1", &[&cid])?.into_iter()
         .nth(0).ok_or("No such crossing")?;
-    let dt = Local::now().naive_utc();
-    let date = dt.date();
-    let time = dt.time();
+    let cur = Local::now().naive_utc();
     let sps = StationPath::from_select(conn, "WHERE $1 = ANY(crossings)", &[&cid])?;
     let mut station_paths = HashMap::new();
     let mut schedules = HashMap::new();
+    let mut trains = HashMap::new();
     for path in sps {
         station_paths.insert(path.id, path);
     }
@@ -27,16 +27,24 @@ pub fn get_crossing_status<T: GenericConnection>(conn: &T, cid: i32) -> Result<C
         ways.extend(ScheduleWay::from_select(conn, "WHERE station_path = $1
                                                     AND start_date <= $2 AND end_date >= $2
                                                     AND st <= $3 AND et >= $3",
-                                                    &[&id, &date, &time])?.into_iter());
+                                                    &[&id, &cur.date(), &cur.time()])?.into_iter());
     }
     let mut ways_to_remove = vec![];
     for (i, way) in ways.iter().enumerate() {
         let schedule = Schedule::from_select(conn, "WHERE id = $1", &[&way.parent_id])?;
-        let schedule = schedule.into_iter().nth(0).expect("Foreign key didn't do its job");
-        if schedule.higher_schedule(conn, date)?.is_some() {
-            ways_to_remove.insert(0, i);
+        if let Some(schedule) = schedule.into_iter().nth(0) {
+            if !schedule.is_authoritative(conn, cur.date())? {
+                ways_to_remove.insert(0, i);
+            }
+            schedules.insert(schedule.id, schedule);
+            continue;
         }
-        schedules.insert(schedule.id, schedule);
+        let train = Train::from_select(conn, "WHERE id = $1", &[&way.train_id])?;
+        if let Some(train) = train.into_iter().nth(0) {
+            trains.insert(train.id, train);
+            continue;
+        }
+        bail!("Way ID {} has no associated schedule or train. Foreign keys broke.", way.id);
     }
     for idx in ways_to_remove {
         ways.remove(idx);
@@ -48,9 +56,9 @@ pub fn get_crossing_status<T: GenericConnection>(conn: &T, cid: i32) -> Result<C
     if ways.len() == 0 {
         return Ok(CrossingStatus {
             crossing: cid,
-            date: date,
+            date: cur.date(),
             open: true,
-            change_at: end_of_day.time(),
+            change_at: end_of_day,
             closures: vec![]
         })
     }
@@ -58,19 +66,32 @@ pub fn get_crossing_status<T: GenericConnection>(conn: &T, cid: i32) -> Result<C
     let mut change_at_open = None;
     let mut change_at_closed = None;
     for way in ways {
-        let parent_sched = schedules.get(&way.parent_id).unwrap();
+        let from_sched = if let Some(ref id) = way.parent_id {
+            schedules.get(id)
+        } else { None };
+        let from_train = if let Some(ref id) = way.train_id {
+            trains.get(id)
+        } else { None };
+        assert!(from_train.is_some() != from_sched.is_some());
+
         let station_path = station_paths.get(&way.station_path).unwrap();
         let pos = station_path.crossings.iter().position(|&x| x == crossing.node_id).unwrap();
-        let dt = way.et.signed_duration_since(way.st).num_milliseconds();
-        let time_in_ms = (dt as f64 * station_path.crossing_locations[pos]).trunc() as i64;
-        let time_in = way.st.overflowing_add_signed(Duration::milliseconds(time_in_ms)).0;
+
+        let start_dt = cur.date().and_time(way.st);
+
+        let way_duration = way.et.signed_duration_since(way.st).num_milliseconds();
+        let time_elapsed_ms =
+            (way_duration as f64 * station_path.crossing_locations[pos]).trunc() as i64;
+        let crossing_dt = start_dt + Duration::milliseconds(time_elapsed_ms);
+
         let cc = CrossingClosure {
-            st: time_in.overflowing_sub_signed(Duration::minutes(1)).0,
-            et: time_in.overflowing_add_signed(Duration::minutes(1)).0,
+            st: crossing_dt - Duration::minutes(1),
+            et: crossing_dt + Duration::minutes(1),
             schedule_way: way.id,
-            from_uid: parent_sched.uid.clone()
+            from_sched: from_sched.map(|x| x.id),
+            from_train: from_train.map(|x| x.id)
         };
-        match (cc.st <= time, cc.et >= time) {
+        match (cc.st <= cur, cc.et >= cur) {
             (true, true) => {
                 if change_at_closed.map(|x| x > cc.et).unwrap_or(true) {
                     change_at_closed = Some(cc.et);
@@ -89,10 +110,10 @@ pub fn get_crossing_status<T: GenericConnection>(conn: &T, cid: i32) -> Result<C
     let change_at = if let Some(ca) = change_at_closed {
         open = false;
         ca
-    } else { change_at_open.unwrap_or(end_of_day.time()) };
+    } else { change_at_open.unwrap_or(end_of_day) };
     Ok(CrossingStatus {
         crossing: crossing.node_id,
-        date: date,
+        date: cur.date(),
         open, change_at, closures
     })
 }
