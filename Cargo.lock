@@ -2,8 +2,12 @@
 name = "osms-nrod"
 version = "0.1.0"
 dependencies = [
+ "clap 2.26.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "ntrod-types 0.1.0",
+ "osms-db 0.1.0",
+ "postgres 0.15.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "stomp 0.12.0",
 ]
