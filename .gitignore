@@ -8,3 +8,4 @@ access_token
 *.kml
 .gdb_history
 .#*
+config.toml
