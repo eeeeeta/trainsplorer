@@ -13,4 +13,5 @@ postgres = "0.15"
 clap = "2.26.0"
 
 [dependencies.stomp]
-path = "../../stomp-rs"
+git = "https://github.com/zslayton/stomp-rs"
+branch = "use-mai"
