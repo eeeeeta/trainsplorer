@@ -124,9 +124,7 @@ pub fn make_schedule_ways<T: GenericConnection>(conn: &T) -> Result<()> {
         let stmt = Schedule::prepare_select_cached(&trans, "")?;
         for sched in Schedule::from_select_iter(&trans, &stmt, &[])? {
             let sched = sched?;
-            let trans = conn.transaction()?;
             sched.make_ways(&trans)?;
-            trans.commit()?;
         }
     }
     trans.commit()?;
