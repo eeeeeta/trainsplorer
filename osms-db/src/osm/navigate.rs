@@ -77,8 +77,9 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
         }
         let next = Node::from_select(&trans,
                                      "WHERE visited = false AND graph_part = $1
-                                      ORDER BY distance ASC
-                                      LIMIT 1", &[&cur.graph_part])?;
+                                      ORDER BY
+                                      (distance + ST_Distance($2::geography, location::geography)) ASC
+                                      LIMIT 1", &[&cur.graph_part, &cur.location])?;
         for node in next {
             cur = node;
             continue 'outer;
