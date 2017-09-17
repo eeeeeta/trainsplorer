@@ -76,7 +76,7 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
             debug!("navigate: considered {} nodes ({} updated)", considered, updated);
         }
         let next = Node::from_select(&trans,
-                                     "WHERE visited = false AND graph_part = $1
+                                     "WHERE visited = false AND graph_part = $1 AND distance != Infinity
                                       ORDER BY
                                       (distance + ST_Distance($2::geography, location::geography)) ASC
                                       LIMIT 1", &[&cur.graph_part, &cur.location])?;
