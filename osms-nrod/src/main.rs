@@ -40,7 +40,7 @@ struct LoginHandler(Connection);
 impl Handler for LoginHandler {
     fn on_connected(&mut self, sess: &mut Session<Self>, frame: &Frame) {
         info!("Connection established.");
-        sess.subscription("/topic/TRAIN_MVT_ALL_TOC", on_message).start().unwrap();
+        sess.subscription("/t/meopic/TRAIN_MVT_ALL_TOC", on_message).start().unwrap();
     }
     fn on_error(&mut self, sess: &mut Session<Self>, frame: &Frame) {
         error!("Whoops: {}", frame);

@@ -60,13 +60,22 @@ fn run() -> Result<()> {
     info!("Phase 1: initialising database");
     db::initialize_database(&conn)?;
 
-    info!("Phase 2: importing corpus data");
-    ntrod::import_corpus(&conn, corpus)?;
+    if util::count(&conn, "FROM corpus_entries", &[])? == 0 {
+        info!("Phase 2: importing corpus data");
+        ntrod::import_corpus(&conn, corpus)?;
+    }
+    else {
+        info!("Skipping phase 2: corpus data exists");
+    }
 
-    info!("Phase 3: importing schedule records");
-    ntrod::apply_schedule_records(&conn, schedule,
-                                  conf.limit_schedule_toc.as_ref().map(|x| x as &str))?;
-
+    if util::count(&conn, "FROM schedules", &[])? == 0 {
+        info!("Phase 3: importing schedule records");
+        ntrod::apply_schedule_records(&conn, schedule,
+                                      conf.limit_schedule_toc.as_ref().map(|x| x as &str))?;
+    }
+    else {
+        info!("Skipping phase 3: schedule records exist");
+    }
     info!("Phase 4: making schedule ways");
     ntrod::make_schedule_ways(&conn)?;
 

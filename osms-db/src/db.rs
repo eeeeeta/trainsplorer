@@ -1,5 +1,8 @@
 pub use postgres::GenericConnection;
 pub use postgres::rows::Row;
+use postgres::rows::LazyRows;
+use postgres::stmt::Statement;
+use postgres::transaction::Transaction;
 use postgres::types::ToSql;
 use errors::*;
 use ntrod_types;
@@ -8,7 +11,23 @@ use ntrod::types::*;
 use osm::make::*;
 use osm::org::*;
 use util::*;
+use std::marker::PhantomData;
+use fallible_iterator::FallibleIterator;
+pub struct SelectIterator<'trans, 'stmt, T> {
+    inner: LazyRows<'trans, 'stmt>,
+    _ph: PhantomData<T>
+}
+impl<'a, 'b, T> Iterator for SelectIterator<'a, 'b, T> where T: DbType {
+    type Item = Result<T>;
 
+    fn next(&mut self) -> Option<Result<T>> {
+        match self.inner.next() {
+            Ok(None) => None,
+            Ok(Some(x)) => Some(Ok(T::from_row(&x))),
+            Err(e) => Some(Err(e.into()))
+        }
+    }
+}
 pub trait DbType: Sized {
     fn table_name() -> &'static str;
     fn table_desc() -> &'static str;
@@ -17,6 +36,23 @@ pub trait DbType: Sized {
         conn.execute(&format!("CREATE TABLE IF NOT EXISTS {} ({})",
                              Self::table_name(), Self::table_desc()), &[])?;
         Ok(())
+    }
+    fn prepare_select<'a, T: GenericConnection>(conn: &'a T, where_clause: &str) -> Result<Statement<'a>> {
+
+        let query = format!("SELECT * FROM {} {}", Self::table_name(), where_clause);
+        Ok(conn.prepare(&query)?)
+    }
+    fn prepare_select_cached<'a, T: GenericConnection>(conn: &'a T, where_clause: &str) -> Result<Statement<'a>> {
+
+        let query = format!("SELECT * FROM {} {}", Self::table_name(), where_clause);
+        Ok(conn.prepare_cached(&query)?)
+    }
+    fn from_select_iter<'a, 'b, 'c: 'b>(conn: &'a Transaction, stmt: &'c Statement<'b>, args: &[&ToSql]) -> Result<SelectIterator<'a, 'b, Self>> {
+        let qry = stmt.lazy_query(conn, args, 1024)?;
+        Ok(SelectIterator {
+            inner: qry,
+            _ph: PhantomData
+        })
     }
     fn from_select<T: GenericConnection>(conn: &T, where_clause: &str, args: &[&ToSql]) -> Result<Vec<Self>> {
         let query = format!("SELECT * FROM {} {}", Self::table_name(), where_clause);

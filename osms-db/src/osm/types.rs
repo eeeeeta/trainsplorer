@@ -67,17 +67,20 @@ impl Node {
             okay = true;
         }
         let node = Self::insert(&trans, point.clone())?;
-        let qry = Link::from_select(&trans, "", &[])?;
         let mut links = vec![];
-        for link in qry {
-            let line = geo::LineString::from_postgis(&link.way);
-            if line.distance(&pt) <= 0.00000001 {
-                if line.0.first().map(|x| x == &pt).unwrap_or(false) ||
-                    line.0.last().map(|x| x == &pt).unwrap_or(false) {
-                    okay = true;
-                    continue;
+        {
+            let stmt = Link::prepare_select_cached(&trans, "")?;
+            for link in Link::from_select_iter(&trans, &stmt, &[])? {
+                let link = link?;
+                let line = geo::LineString::from_postgis(&link.way);
+                if line.distance(&pt) <= 0.00000001 {
+                    if line.0.first().map(|x| x == &pt).unwrap_or(false) ||
+                        line.0.last().map(|x| x == &pt).unwrap_or(false) {
+                            okay = true;
+                            continue;
+                        }
+                    links.push(link);
                 }
-                links.push(link);
             }
         }
         debug!("making new at point {:?}: {} links", point, links.len());

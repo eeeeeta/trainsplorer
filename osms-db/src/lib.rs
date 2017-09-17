@@ -7,6 +7,7 @@ extern crate chrono;
 extern crate serde_json;
 extern crate geo;
 #[macro_use] extern crate postgres_derive;
+extern crate fallible_iterator;
 
 pub mod errors;
 pub mod util;
