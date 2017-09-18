@@ -8,6 +8,8 @@ use std::io::{Read, BufRead};
 use std::collections::HashMap;
 use self::types::*;
 use osm::types::{StationPath, Crossing};
+use std::time::Instant;
+use util::count;
 use errors::*;
 use chrono::*;
 
@@ -119,12 +121,21 @@ pub fn get_crossing_status<T: GenericConnection>(conn: &T, cid: i32) -> Result<C
 }
 pub fn make_schedule_ways<T: GenericConnection>(conn: &T) -> Result<()> {
     debug!("make_schedule_ways: starting...");
+    let ways = count(conn, "FROM schedules", &[])?;
+    debug!("make_schedule_ways: {} schedules to make ways for", ways);
+    let mut done = 0;
     let trans = conn.transaction()?;
     {
         let stmt = Schedule::prepare_select_cached(&trans, "")?;
         for sched in Schedule::from_select_iter(&trans, &stmt, &[])? {
+            let instant = Instant::now();
             let sched = sched?;
             sched.make_ways(&trans)?;
+            let now = Instant::now();
+            done += 1;
+            let dur = now.duration_since(instant);
+            let dur = dur.as_secs() as f64 + dur.subsec_nanos() as f64 * 1e-9;
+            debug!("make_schedule_ways: {} of {} schedules complete ({:.01}%) - time: {:.04}s", done, ways, (done as f64 / ways as f64) * 100.0, dur);
         }
     }
     trans.commit()?;
