@@ -13,6 +13,9 @@ use osm::org::*;
 use util::*;
 use std::marker::PhantomData;
 use fallible_iterator::FallibleIterator;
+use r2d2::Pool;
+use r2d2_postgres::PostgresConnectionManager;
+pub type DbPool = Pool<PostgresConnectionManager>;
 pub struct SelectIterator<'trans, 'stmt, T> {
     inner: LazyRows<'trans, 'stmt>,
     _ph: PhantomData<T>

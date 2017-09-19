@@ -1,10 +1,10 @@
 pub mod types;
 pub mod live;
-use db::{GenericConnection, DbType, InsertableDbType};
+use db::{GenericConnection, DbPool, DbType, InsertableDbType};
 use ntrod_types::schedule;
 use ntrod_types::reference;
 use serde_json;
-use std::io::{Read, BufRead};
+use std::io::{Read, BufRead, BufReader};
 use std::collections::HashMap;
 use self::types::*;
 use osm::types::{StationPath, Crossing};
@@ -12,6 +12,9 @@ use std::time::Instant;
 use util::count;
 use errors::*;
 use chrono::*;
+use std::thread;
+use std::sync::atomic::{Ordering, AtomicUsize};
+use std::sync::Arc;
 
 pub fn get_crossing_status<T: GenericConnection>(conn: &T, cid: i32) -> Result<CrossingStatus> {
     let crossing = Crossing::from_select(conn, "WHERE node_id = $1", &[&cid])?.into_iter()
@@ -119,33 +122,51 @@ pub fn get_crossing_status<T: GenericConnection>(conn: &T, cid: i32) -> Result<C
         open, change_at, closures
     })
 }
-pub fn make_schedule_ways<T: GenericConnection>(conn: &T) -> Result<()> {
-    debug!("make_schedule_ways: starting...");
-    let ways = count(conn, "FROM schedules", &[])?;
+pub fn make_schedule_ways(pool: DbPool, n_threads: usize) -> Result<()> {
+    debug!("make_schedule_ways: starting, using {} threads", n_threads);
+    let ways = count(&*pool.get().unwrap(), "FROM schedules WHERE processed = false", &[])?;
     debug!("make_schedule_ways: {} schedules to make ways for", ways);
-    let mut done = 0;
-    let trans = conn.transaction()?;
-    {
-        let stmt = Schedule::prepare_select_cached(&trans, "")?;
-        for sched in Schedule::from_select_iter(&trans, &stmt, &[])? {
-            let instant = Instant::now();
-            let sched = sched?;
-            sched.make_ways(&trans)?;
-            let now = Instant::now();
-            done += 1;
-            let dur = now.duration_since(instant);
-            let dur = dur.as_secs() as f64 + dur.subsec_nanos() as f64 * 1e-9;
-            debug!("make_schedule_ways: {} of {} schedules complete ({:.01}%) - time: {:.04}s", done, ways, (done as f64 / ways as f64) * 100.0, dur);
-        }
+    let done = Arc::new(AtomicUsize::new(0));
+    let mut threads = vec![];
+    for n in 0..n_threads {
+        debug!("make_schedule_ways: spawning thread {}", n);
+        let p = pool.clone();
+        let d = done.clone();
+        threads.push(thread::spawn(move || {
+            let db = p.get().unwrap();
+            loop {
+                let trans = db.transaction().unwrap();
+                let scheds = Schedule::from_select(&trans, "WHERE processed = false LIMIT 1
+                                                            FOR UPDATE SKIP LOCKED", &[])
+                    .unwrap();
+                if scheds.len() == 0 {
+                    debug!("make_schedule_ways: thread {} done", n);
+                    break;
+                }
+                for sched in scheds {
+                    let instant = Instant::now();
+                    sched.make_ways(&trans).unwrap();
+                    let now = Instant::now();
+                    let dur = now.duration_since(instant);
+                    let dur = dur.as_secs() as f64 + dur.subsec_nanos() as f64 * 1e-9;
+                    let done = d.fetch_add(1, Ordering::SeqCst) + 1;
+                    debug!("make_schedule_ways: {} of {} schedules complete ({:.01}%) - time: {:.04}s", done, ways, (done as f64 / ways as f64) * 100.0, dur);
+                }
+                trans.commit().unwrap();
+            }
+        }));
     }
-    trans.commit()?;
+    for thr in threads {
+        thr.join().unwrap();
+    }
     debug!("make_schedule_ways: complete!");
     Ok(())
 }
-pub fn apply_schedule_records<T: GenericConnection, R: BufRead>(conn: &T, rdr: R, restrict_atoc: Option<&str>) -> Result<()> {
+pub fn apply_schedule_records<T: GenericConnection, R: Read>(conn: &T, rdr: R, restrict_atoc: Option<&str>) -> Result<()> {
     debug!("apply_schedule_records: running...");
     let mut inserted = 0;
     let trans = conn.transaction()?;
+    let rdr = BufReader::new(rdr);
     for line in rdr.lines() {
         let line = line?;
         let rec: ::std::result::Result<schedule::Record, _> = serde_json::from_str(&line);

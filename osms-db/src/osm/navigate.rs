@@ -2,7 +2,32 @@ use super::types::*;
 use db::{GenericConnection, DbType, InsertableDbType};
 use errors::*;
 use postgis::ewkb::LineString;
+use std::cmp::Ordering;
+use std::collections::{HashMap, BinaryHeap};
+use ordered_float::OrderedFloat;
 
+struct LightNode {
+    parent: Option<(i32, LineString)>,
+    dist: f32
+}
+#[derive(Copy, Clone, Eq, PartialEq)]
+struct State {
+    cost: OrderedFloat<f32>,
+    id: i32
+}
+
+impl Ord for State {
+    fn cmp(&self, other: &State) -> Ordering {
+        other.cost.cmp(&self.cost)
+            .then_with(|| self.id.cmp(&other.id))
+    }
+}
+
+impl PartialOrd for State {
+    fn partial_cmp(&self, other: &State) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
 pub fn navigate_cached<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<i32> {
     let paths = StationPath::from_select(conn, "WHERE s1 = $1 AND s2 = $2", &[&from, &to])?;
     if paths.len() > 0 {
@@ -29,11 +54,18 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
     debug!("navigate: navigating from {} ({}) to {} ({})",
            from, starting_node, to, goal_node);
 
-    let mut cur = Node::from_select(&trans, "WHERE id = $1", &[&starting_node])
+    let mut heap: BinaryHeap<State> = BinaryHeap::new();
+    let mut nodes: HashMap<i32, LightNode> = HashMap::new();
+
+    let start = Node::from_select(&trans, "WHERE id = $1", &[&starting_node])
         ?.into_iter().nth(0)
         .ok_or("Starting node does not exist.")?;
+
+    nodes.insert(start.id, LightNode { dist: 0.0, parent: None});
+    heap.push(State { cost: OrderedFloat(0.0), id: start.id });
+
     let dest = Node::from_select(&trans, "WHERE id = $1 AND graph_part = $2",
-                                 &[&goal_node, &cur.graph_part])
+                                 &[&goal_node, &start.graph_part])
         ?.into_iter().nth(0)
         .ok_or(
             "Finishing node does not exist, or is not in the same graph part as the starting node."
@@ -42,75 +74,66 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
     let mut considered = 0;
     let mut updated = 0;
 
-    'outer: loop {
-        if cur.distance == ::std::f32::INFINITY {
-            error!("navigate: node {}'s distance = inf!", cur.id);
-            bail!("Current node distance = inf, something has gone seriously wrong...");
-        }
-        trace!("considering node {} with dist {} ({}c/{}u)", cur.id, cur.distance, considered, updated);
+    'outer: while let Some(State { cost, id }) = heap.pop() {
+        assert!(id != dest.id);
+        let dist = nodes.get(&id).unwrap().dist;
+        if *cost > dist { continue; }
+        assert!(*cost == dist);
 
-        let links = Link::from_select(&trans, "WHERE p1 = $1 OR p2 = $1", &[&cur.id])?;
+        trace!("considering node {} with dist {} ({}c/{}u)", id, dist, considered, updated);
+
+        let links = Link::from_select(&trans, "WHERE p1 = $1 OR p2 = $1", &[&id])?;
         for link in links {
-            let tent_dist = link.distance + cur.distance;
-            let other_end = if link.p1 == cur.id { link.p2 } else { link.p1 };
-            for row in &trans.query(
-                "UPDATE nodes
-                 SET distance = $1
-                 WHERE id = $2 AND visited = false AND distance > $1
-                 RETURNING id", &[&tent_dist, &other_end])? {
-
-                let id: i32 = row.get(0);
-                updated += 1;
-                trans.execute(
-                    "UPDATE nodes
-                     SET parent = $1, parent_geom = $2
-                     WHERE id = $3", &[&cur.id, &link.way, &id])?;
-                if id == dest.id {
+            let tent_dist = link.distance + dist;
+            let other_end = if link.p1 == id { link.p2 } else { link.p1 };
+            if {
+                if let Some(other) = nodes.get_mut(&other_end) {
+                    if other.dist > tent_dist {
+                        other.dist = tent_dist;
+                        other.parent = Some((id, link.way.clone()));
+                        heap.push(State { cost: OrderedFloat(tent_dist), id: other_end });
+                        updated += 1;
+                    }
+                    false
+                }
+                else { true }
+            } {
+                nodes.insert(other_end, LightNode {
+                    dist: tent_dist,
+                    parent: Some((id, link.way))
+                });
+                if other_end == dest.id {
                     break 'outer;
                 }
+                updated += 1;
+                heap.push(State { cost: OrderedFloat(tent_dist), id: other_end });
             }
         }
-        trans.execute("UPDATE nodes SET visited = true WHERE id = $1", &[&cur.id])?;
         considered += 1;
         if (considered % 1000) == 0 {
             debug!("navigate: considered {} nodes ({} updated)", considered, updated);
         }
-        let next = Node::from_select(&trans,
-                                     "WHERE visited = false AND graph_part = $1 AND distance != Infinity
-                                      ORDER BY
-                                      (distance + ST_Distance($2::geography, location::geography)) ASC
-                                      LIMIT 1", &[&cur.graph_part, &cur.location])?;
-        for node in next {
-            cur = node;
-            continue 'outer;
-        }
-        error!("navigate: no path found, probably an issue with the db");
-        bail!("No path found!");
     }
-    let mut nodes = vec![];
+    let mut path_nodes = vec![dest.id];
     let mut path = vec![];
-    let mut cur_node = Node::from_select(conn,
-                                         "WHERE id = $1 AND graph_part = $2",
-                                         &[&goal_node, &cur.graph_part])?.into_iter()
-        .nth(0).unwrap();
+    let mut cur_node = nodes.get(&dest.id).unwrap();
     loop {
-        nodes.insert(0, cur_node.id);
-        if cur_node.parent.is_none() {
-            break;
-        }
-        if let Some(ref geom) = cur_node.parent_geom {
+        if let Some((ref parent_id, ref geom)) = cur_node.parent {
             let geom: LineString = conn.query(
                 "SELECT
-                 CASE WHEN ST_Intersects(ST_EndPoint($1), $2)
+                 CASE WHEN ST_Intersects(ST_EndPoint($1), location)
                       THEN $1
                       ELSE ST_Reverse($1)
-                 END",
-                &[&geom, &cur_node.location])
+                 END FROM nodes WHERE id = $2",
+                &[&geom, &path_nodes.last().unwrap()])
                 ?.into_iter().nth(0).unwrap().get(0);
-            path.insert(0, geom.clone())
+            path_nodes.push(*parent_id);
+            path.insert(0, geom.clone());
+            cur_node = nodes.get(parent_id).unwrap();
         }
-        let mut vec = Node::from_select(conn, "WHERE id = $1", &[&cur_node.parent.unwrap()])?;
-        cur_node = vec.remove(0);
+        else {
+            break;
+        }
     }
     let path: LineString = conn.query("SELECT ST_MakeLine(CAST($1 AS geometry[]))", &[&path])
         ?.into_iter().nth(0).unwrap().get(0);
@@ -128,7 +151,7 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
     debug!("navigate: completed");
     Ok(StationPath {
         s1: from.to_string(), s2: to.to_string(), way: path,
-        nodes, crossings, crossing_locations,
+        nodes: path_nodes, crossings, crossing_locations,
         id: -1
     })
 }

@@ -53,8 +53,7 @@ pub fn process_activation<T: GenericConnection>(conn: &T, a: Activation) -> Resu
         from_id: auth_schedule.id,
         trust_id: a.train_id,
         date: a.origin_dep_timestamp.date(),
-        signalling_id: a.schedule_wtt_id,
-        ways: vec![]
+        signalling_id: a.schedule_wtt_id
     };
     let id = train.insert_self(conn)?;
     let mut new_ways = vec![];
@@ -63,7 +62,6 @@ pub fn process_activation<T: GenericConnection>(conn: &T, a: Activation) -> Resu
         way.train_id = Some(id);
         new_ways.push(way.insert_self(conn)?);
     }
-    conn.execute("UPDATE trains SET ways = $1 WHERE id = $2", &[&new_ways, &id])?;
     debug!("Inserted train as #{}", id);
     Ok(())
 }

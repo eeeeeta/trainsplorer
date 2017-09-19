@@ -222,14 +222,10 @@ CHECK(cardinality(crossings) = cardinality(crossing_locations))
 impl InsertableDbType for StationPath {
     type Id = i32;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
-        for row in &conn.query("SELECT id FROM station_paths
-                                WHERE s1 = $1 AND s2 = $2",
-                               &[&self.s1, &self.s2])? {
-            return Ok(row.get(0));
-        }
         let qry = conn.query("INSERT INTO station_paths
                               (s1, s2, way, nodes, crossings, crossing_locations)
                               VALUES ($1, $2, $3, $4, $5, $6)
+                              ON CONFLICT(s1, s2) DO UPDATE SET way = excluded.way
                               RETURNING id",
                              &[&self.s1, &self.s2, &self.way, &self.nodes,
                                &self.crossings, &self.crossing_locations])?;

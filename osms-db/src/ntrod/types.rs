@@ -17,6 +17,7 @@ pub struct Schedule {
     pub stp_indicator: StpIndicator,
     pub signalling_id: Option<String>,
     pub locs: Vec<ScheduleLocation>,
+    pub processed: bool
 }
 impl Schedule {
     pub fn is_authoritative<T: GenericConnection>(&self, conn: &T, on_date: NaiveDate) -> Result<bool> {
@@ -52,9 +53,9 @@ impl Schedule {
     pub fn make_ways<T: GenericConnection>(&self, conn: &T) -> Result<()> {
         debug!("making ways for record (UID {}, start {}, stp_indicator {:?})",
                self.uid, self.start_date, self.stp_indicator);
-        let n_ways = ScheduleWay::from_select(conn, "WHERE parent_id = $1", &[&self.id])?.len();
-        if n_ways > 0 {
-            debug!("Record already has {} ways!", n_ways);
+        if self.processed {
+            let n_ways = ScheduleWay::from_select(conn, "WHERE parent_id = $1", &[&self.id])?.len();
+            warn!("Already processed this record - has {} ways!", n_ways);
             return Ok(());
         }
         let mut p1 = 0;
@@ -95,6 +96,7 @@ impl Schedule {
             }
             p1 += 1;
         }
+        conn.execute("UPDATE schedules SET processed = true WHERE id = $1", &[&self.id])?;
         Ok(())
     }
     pub fn apply_rec<T: GenericConnection>(conn: &T, rec: ScheduleRecord) -> Result<Option<i32>> {
@@ -131,6 +133,7 @@ impl Schedule {
             days: schedule_days_runs,
             stp_indicator,
             signalling_id,
+            processed: false,
             locs: vec![],
             id: -1
         };
@@ -170,11 +173,11 @@ impl InsertableDbType for Schedule {
         }
         let qry = conn.query(
             "INSERT INTO schedules
-             (uid, start_date, end_date, days, stp_indicator, signalling_id, locs)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             (uid, start_date, end_date, days, stp_indicator, signalling_id, locs, processed)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING id",
             &[&self.uid, &self.start_date, &self.end_date, &self.days, &self.stp_indicator,
-              &self.signalling_id, &self.locs])?;
+              &self.signalling_id, &self.locs, &self.processed])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))
@@ -196,6 +199,7 @@ days "Days" NOT NULL,
 stp_indicator "StpIndicator" NOT NULL,
 signalling_id VARCHAR,
 locs "ScheduleLocation"[] NOT NULL,
+processed BOOL NOT NULL,
 UNIQUE(uid, start_date, stp_indicator)
 "#
     }
@@ -209,6 +213,7 @@ UNIQUE(uid, start_date, stp_indicator)
             stp_indicator: row.get(5),
             signalling_id: row.get(6),
             locs: row.get(7),
+            processed: row.get(8)
         }
     }
 }
@@ -273,7 +278,6 @@ pub struct Train {
     pub trust_id: String,
     pub date: NaiveDate,
     pub signalling_id: String,
-    pub ways: Vec<i32>
 }
 impl DbType for Train {
     fn table_name() -> &'static str {
@@ -285,8 +289,7 @@ id SERIAL PRIMARY KEY,
 from_id INT NOT NULL REFERENCES schedules ON DELETE CASCADE,
 trust_id VARCHAR NOT NULL UNIQUE,
 date DATE NOT NULL,
-signalling_id VARCHAR NOT NULL,
-ways INT[] NOT NULL
+signalling_id VARCHAR NOT NULL
 "#
     }
     fn from_row(row: &Row) -> Self {
@@ -296,7 +299,6 @@ ways INT[] NOT NULL
             trust_id: row.get(2),
             date: row.get(3),
             signalling_id: row.get(4),
-            ways: row.get(5)
         }
     }
 }
@@ -304,11 +306,11 @@ impl InsertableDbType for Train {
     type Id = i32;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
         let qry = conn.query("INSERT INTO trains
-                              (from_id, trust_id, date, signalling_id, ways)
-                              VALUES ($1, $2, $3, $4, $5)
+                              (from_id, trust_id, date, signalling_id)
+                              VALUES ($1, $2, $3, $4)
                               RETURNING id",
                              &[&self.from_id, &self.trust_id, &self.date,
-                               &self.signalling_id, &self.ways])?;
+                               &self.signalling_id])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))
@@ -364,6 +366,7 @@ impl InsertableDbType for ScheduleWay {
         let qry = conn.query("INSERT INTO schedule_ways
                               (st, et, station_path, parent_id, start_date, end_date)
                               VALUES ($1, $2, $3, $4, $5, $6)
+                              ON CONFLICT(id) DO UPDATE SET station_path = excluded.station_path
                               RETURNING id",
                              &[&self.st, &self.et, &self.station_path,
                                &self.parent_id, &self.start_date,
@@ -372,7 +375,7 @@ impl InsertableDbType for ScheduleWay {
         for row in &qry {
             ret = Some(row.get(0))
         }
-        Ok(ret.expect("No id in ScheduleWay::insert?!"))
+        Ok(ret.expect("no ID in ScheduleWay insert"))
     }
 }
 impl InsertableDbType for CorpusEntry {
