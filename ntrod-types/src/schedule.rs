@@ -34,6 +34,18 @@ pub struct Days {
     pub sun: bool
 }
 impl Days {
+    pub fn value_for_iso_weekday(&self, wd: u32) -> Option<bool> {
+        match wd {
+            1 => Some(self.mon),
+            2 => Some(self.tue),
+            3 => Some(self.wed),
+            4 => Some(self.thu),
+            5 => Some(self.fri),
+            6 => Some(self.sat),
+            7 => Some(self.sun),
+            _ => None
+        }
+    }
     pub fn create_type() -> &'static str {
 r#"
 DO $$

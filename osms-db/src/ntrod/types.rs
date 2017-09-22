@@ -28,8 +28,8 @@ impl Schedule {
         let scheds = Schedule::from_select(conn, "WHERE uid = $1
                                                   AND start_date <= $2 AND end_date >= $2",
                                            &[&self.uid, &on_date])?;
-        let mut highest = (self.id, self.stp_indicator);
-        for sched in scheds {
+        let mut highest = (0, StpIndicator::Cancellation);
+        for sched in scheds.into_iter().chain(Some(self.clone())) {
             let trains = Train::from_select(conn, "WHERE from_id = $1
                                                    AND date = $2",
                                             &[&sched.id, &on_date])?;
@@ -37,6 +37,9 @@ impl Schedule {
                 return Ok(false);
             }
             if sched.id == self.id {
+                continue;
+            }
+            if !sched.days.value_for_iso_weekday(on_date.weekday().number_from_monday()).unwrap() {
                 continue;
             }
             if sched.stp_indicator > highest.1 {
