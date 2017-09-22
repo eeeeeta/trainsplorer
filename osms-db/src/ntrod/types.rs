@@ -43,6 +43,8 @@ impl Schedule {
                 continue;
             }
             if sched.stp_indicator > highest.1 {
+                debug!("Schedule #{} ({:?}) supersedes schedule #{} ({:?})",
+                       sched.id, sched.stp_indicator, highest.0, highest.1);
                 highest = (sched.id, sched.stp_indicator);
             }
             else if sched.stp_indicator == highest.1 && !sched.stp_indicator.is_cancellation() {
