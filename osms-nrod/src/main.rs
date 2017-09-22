@@ -4,20 +4,33 @@ extern crate osms_db;
 extern crate ntrod_types;
 extern crate postgres;
 #[macro_use] extern crate log;
-extern crate clap;
-extern crate env_logger;
+extern crate toml;
+extern crate fern;
+#[macro_use] extern crate serde_derive;
 
 use stomp::handler::Handler;
 use stomp::session::Session;
 use stomp::frame::Frame;
 use stomp::subscription::AckOrNack;
 use stomp::connection::*;
+use std::env;
+use std::fs::File;
+use std::io::Read;
 
 use ntrod_types::movements::Records;
 use postgres::{Connection, TlsMode};
-use clap::{Arg, App};
 
-fn on_message(hdl: &mut LoginHandler, sess: &mut Session<LoginHandler>, fr: &Frame) -> AckOrNack {
+#[derive(Deserialize)]
+pub struct Config {
+    database_url: String,
+    username: String,
+    password: String,
+    #[serde(default)]
+    nrod_url: Option<String>,
+    #[serde(default)]
+    nrod_port: Option<u16>
+}
+fn on_message(hdl: &mut LoginHandler, _: &mut Session<LoginHandler>, fr: &Frame) -> AckOrNack {
     let st = String::from_utf8_lossy(&fr.body);
     let recs: Result<Records, _> = serde_json::from_str(&st);
     match recs {
@@ -38,46 +51,45 @@ fn on_message(hdl: &mut LoginHandler, sess: &mut Session<LoginHandler>, fr: &Fra
 }
 struct LoginHandler(Connection);
 impl Handler for LoginHandler {
-    fn on_connected(&mut self, sess: &mut Session<Self>, frame: &Frame) {
+    fn on_connected(&mut self, sess: &mut Session<Self>, _: &Frame) {
         info!("Connection established.");
         sess.subscription("/topic/TRAIN_MVT_ALL_TOC", on_message).start().unwrap();
     }
-    fn on_error(&mut self, sess: &mut Session<Self>, frame: &Frame) {
+    fn on_error(&mut self, _: &mut Session<Self>, frame: &Frame) {
         error!("Whoops: {}", frame);
     }
-    fn on_disconnected(&mut self, sess: &mut Session<Self>) {
+    fn on_disconnected(&mut self, _: &mut Session<Self>) {
         warn!("Disconnected.")
     }
 }
 fn main() {
-    env_logger::init().unwrap();
-    let matches = App::new("osms-nrod")
-        .author("eta <http://theta.eu.org>")
-        .about("Receives data from the NTROD feeds and shoves it into the database.")
-        .arg(Arg::with_name("url")
-             .short("l")
-             .value_name("postgresql://USER@IP/DBNAME")
-             .required(true)
-             .takes_value(true)
-             .help("Sets the database URL to use."))
-        .arg(Arg::with_name("user")
-             .short("u")
-             .required(true)
-             .takes_value(true)
-             .help("Login username."))
-        .arg(Arg::with_name("pwd")
-             .short("p")
-             .required(true)
-             .takes_value(true)
-             .help("Login password."))
-        .get_matches();
-    let url = matches.value_of("url").unwrap();
-    let user = matches.value_of("user").unwrap();
-    let pwd = matches.value_of("pwd").unwrap();
-    let conn = Connection::connect(url, TlsMode::None).unwrap();
+    fern::Dispatch::new()
+        .format(|out, msg, record| {
+            out.finish(format_args!("[{} {}] {}",
+                                    record.target(),
+                                    record.level(),
+                                    msg))
+        })
+        .level(log::LogLevelFilter::Info)
+        .level_for("osms_db", log::LogLevelFilter::Debug)
+        .level_for("osms_nrod", log::LogLevelFilter::Debug)
+        .chain(std::io::stdout())
+        .apply()
+        .unwrap();
+    info!("osms-nrod starting");
+    let args = env::args().skip(1).collect::<Vec<_>>();
+    let path = args.get(0).map(|x| x as &str).unwrap_or("config.toml");
+    info!("Loading config from file {}...", path);
+    let mut file = File::open(path).unwrap();
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).unwrap();
+    info!("Parsing config...");
+    let conf: Config = toml::de::from_str(&contents).unwrap();
+    let conn = Connection::connect(conf.database_url, TlsMode::None).unwrap();
     let mut cli = stomp::client::<LoginHandler>();
-    cli.session("54.247.175.93", 61618, LoginHandler(conn))
-        .with(Credentials(user, pwd))
+    let nrod_url = conf.nrod_url.as_ref().map(|x| x as &str).unwrap_or("54.247.175.93");
+    cli.session(nrod_url, conf.nrod_port.unwrap_or(61618), LoginHandler(conn))
+        .with(Credentials(&conf.username, &conf.password))
         .with(HeartBeat(5_000, 2_000))
         .start();
     info!("Running client...");

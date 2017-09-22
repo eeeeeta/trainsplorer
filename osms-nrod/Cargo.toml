@@ -4,14 +4,21 @@ name = "osms-nrod"
 version = "0.1.0"
 
 [dependencies]
-env_logger = "0.4.3"
-serde_json = "1.0.2"
-ntrod-types = { path = "../ntrod-types" }
-osms-db = { path = "../osms-db" }
+clap = "2.26.0"
+fern = "0.4"
 log = "0.3.8"
 postgres = "0.15"
-clap = "2.26.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+serde = "1.0"
+toml = "0.4"
+
+[dependencies.ntrod-types]
+path = "../ntrod-types"
+
+[dependencies.osms-db]
+path = "../osms-db"
 
 [dependencies.stomp]
-git = "https://github.com/zslayton/stomp-rs"
 branch = "use-mai"
+git = "https://github.com/zslayton/stomp-rs"
