@@ -29,7 +29,7 @@ impl Schedule {
         let scheds = Schedule::from_select(conn, "WHERE uid = $1
                                                   AND start_date <= $2 AND end_date >= $2",
                                            &[&self.uid, &on_date])?;
-        let mut highest = (0, StpIndicator::Cancellation);
+        let mut highest = (0, StpIndicator::None);
         for sched in scheds.into_iter().chain(Some(self.clone())) {
             let trains = Train::from_select(conn, "WHERE from_id = $1
                                                    AND date = $2",

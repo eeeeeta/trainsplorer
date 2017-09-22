@@ -30,16 +30,16 @@ pub enum TrainStatus {
 #[derive(Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, is_enum_variant)]
 #[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]
 pub enum StpIndicator {
-    #[serde(rename = "C")]
-    Cancellation,
-    #[serde(rename = "N")]
-    NewSchedule,
-    #[serde(rename = "O")]
-    Overlay,
+    #[serde(rename = "")]
+    None,
     #[serde(rename = "P")]
     Permanent,
-    #[serde(rename = "")]
-    None
+    #[serde(rename = "O")]
+    Overlay,
+    #[serde(rename = "N")]
+    NewSchedule,
+    #[serde(rename = "C")]
+    Cancellation
 }
 impl StpIndicator {
     pub fn create_type() -> &'static str {
