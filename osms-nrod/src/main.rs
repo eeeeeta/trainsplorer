@@ -18,6 +18,7 @@ use stomp::connection::*;
 use std::env;
 use std::fs::File;
 use std::io::Read;
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::thread;
 
@@ -31,6 +32,10 @@ pub struct Config {
     metrics_url: String,
     username: String,
     password: String,
+    #[serde(default)]
+    log_level_general: Option<String>,
+    #[serde(default)]
+    log_level: HashMap<String, String>,
     #[serde(default)]
     nrod_url: Option<String>,
     #[serde(default)]
@@ -99,30 +104,38 @@ impl Handler for LoginHandler {
     }
 }
 fn main() {
-    fern::Dispatch::new()
+    println!("osms-nrod starting");
+    let args = env::args().skip(1).collect::<Vec<_>>();
+    let path = args.get(0).map(|x| x as &str).unwrap_or("config.toml");
+    println!("Loading config from file {}...", path);
+    let mut file = File::open(path).unwrap();
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).unwrap();
+    println!("Parsing config...");
+    let conf: Config = toml::de::from_str(&contents).unwrap();
+    let log_level_g: log::LogLevelFilter = conf.log_level_general
+        .as_ref()
+        .map(|x| x as &str)
+        .unwrap_or("INFO")
+        .parse()
+        .unwrap();
+    println!("General log level: {}", log_level_g);
+    let mut logger = fern::Dispatch::new()
         .format(|out, msg, record| {
             out.finish(format_args!("[{} {}] {}",
                                     record.target(),
                                     record.level(),
                                     msg))
         })
-        .level(log::LogLevelFilter::Info)
-        .level_for("osms_db", log::LogLevelFilter::Debug)
-        .level_for("tic", log::LogLevelFilter::Debug)
-        .level_for("tiny_http", log::LogLevelFilter::Debug)
-        .level_for("osms_nrod", log::LogLevelFilter::Debug)
+        .level(log_level_g);
+    for (k, v) in conf.log_level.iter() {
+        println!("Log level for {} is {}", k, v);
+        logger = logger.level_for(k.clone(), v.parse().unwrap());
+    }
+    logger
         .chain(std::io::stdout())
         .apply()
         .unwrap();
-    info!("osms-nrod starting");
-    let args = env::args().skip(1).collect::<Vec<_>>();
-    let path = args.get(0).map(|x| x as &str).unwrap_or("config.toml");
-    info!("Loading config from file {}...", path);
-    let mut file = File::open(path).unwrap();
-    let mut contents = String::new();
-    file.read_to_string(&mut contents).unwrap();
-    info!("Parsing config...");
-    let conf: Config = toml::de::from_str(&contents).unwrap();
     info!("Initializing metrics...");
     let mut recv = Receiver::configure()
         .service(true)
