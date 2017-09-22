@@ -42,7 +42,7 @@ impl Schedule {
             if sched.stp_indicator > highest.1 {
                 highest = (sched.id, sched.stp_indicator);
             }
-            else if sched.stp_indicator == highest.1 {
+            else if sched.stp_indicator == highest.1 && !sched.stp_indicator.is_cancellation() {
                 error!("Inconsistency: schedule #{} has a STP indicator equal to #{}",
                        sched.id, highest.0);
                 bail!("STP indicator inconsistency");

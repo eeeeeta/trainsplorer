@@ -3,7 +3,7 @@ use super::fns::*;
 use super::cif::*;
 use chrono_tz::Tz;
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, is_enum_variant)]
 pub enum Record {
     #[serde(rename = "JsonScheduleV1")]
     Schedule(ScheduleRecord),
@@ -16,7 +16,7 @@ pub enum Record {
     #[serde(rename = "EOF")]
     Eof(bool)
 }
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, is_enum_variant)]
 #[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]
 pub enum CreateOrDelete {
     Create,
@@ -52,14 +52,14 @@ END IF;
 END$$;"#
     }
 }
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, SmartDefault)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, SmartDefault, is_enum_variant)]
 #[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]
 pub enum YesOrNo {
     #[default]
     Y,
     N
 }
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, is_enum_variant)]
 #[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]
 pub enum RecordIdentity {
     #[serde(rename = "LO")]
@@ -70,7 +70,7 @@ pub enum RecordIdentity {
     Terminating
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, is_enum_variant)]
 #[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]
 pub enum AssociationType {
     #[serde(rename = "JJ")]
@@ -82,7 +82,7 @@ pub enum AssociationType {
     #[serde(rename = "  ")]
     None
 }
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, is_enum_variant)]
 #[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]
 pub enum DateIndicator {
     #[serde(rename = "S")]
@@ -225,7 +225,7 @@ pub enum TerminatingLocation {
 }
 
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, is_enum_variant)]
 #[serde(untagged)]
 pub enum LocationRecord {
     Originating {

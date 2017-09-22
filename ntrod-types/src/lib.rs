@@ -3,6 +3,7 @@ extern crate serde;
 extern crate chrono;
 extern crate chrono_tz;
 #[macro_use] extern crate smart_default;
+#[macro_use] extern crate derive_is_enum_variant;
 #[cfg(test)] extern crate serde_json;
 #[cfg(feature = "postgres-traits")]
 #[macro_use] extern crate postgres_derive;

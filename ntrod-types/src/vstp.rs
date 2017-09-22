@@ -3,7 +3,7 @@ use super::cif::*;
 use super::fns::*;
 use chrono::*;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, is_enum_variant)]
 pub enum Record {
     #[serde(rename = "VSTPCIFMsgV1")]
     V1(VstpMessage)

@@ -16,28 +16,28 @@ pub struct Record {
     pub header: MvtHeader,
     pub body: MvtBody
 }
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, is_enum_variant)]
 pub enum ScheduleSource {
     #[serde(rename = "C")]
     CifItps,
     #[serde(rename = "V")]
     VstpTops
 }
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, is_enum_variant)]
 pub enum AutomaticOrManual {
     #[serde(rename = "AUTOMATIC")]
     Automatic,
     #[serde(rename = "MANUAL")]
     Manual
 }
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, is_enum_variant)]
 pub enum CallMode {
     #[serde(rename = "NORMAL")]
     Normal,
     #[serde(rename = "OVERNIGHT")]
     Overnight
 }
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, is_enum_variant)]
 pub enum EventType {
     #[serde(rename = "ARRIVAL")]
     Arrival,
@@ -47,7 +47,7 @@ pub enum EventType {
     Destination
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, is_enum_variant)]
 pub enum CanxType {
     #[serde(rename = "ON CALL")]
     OnActivation,
@@ -59,7 +59,7 @@ pub enum CanxType {
     OffRoute
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, is_enum_variant)]
 pub enum VariationStatus {
     #[serde(rename = "ON TIME")]
     OnTime,
@@ -70,7 +70,7 @@ pub enum VariationStatus {
     #[serde(rename = "OFF ROUTE")]
     OffRoute
 }
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, is_enum_variant)]
 pub enum UpOrDown {
     #[serde(rename = "UP")]
     Up,
@@ -79,7 +79,7 @@ pub enum UpOrDown {
     #[serde(rename = "")]
     None
 }
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, is_enum_variant)]
 #[serde(untagged)]
 pub enum MvtBody {
     Activation(Activation),
