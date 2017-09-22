@@ -25,6 +25,7 @@ impl Schedule {
             warn!("Schedule #{} was asked is_authoritative() outside date range", self.id);
             return Ok(false);
         }
+        debug!("Checking authoritativeness of schedule #{} on {}", self.id, on_date);
         let scheds = Schedule::from_select(conn, "WHERE uid = $1
                                                   AND start_date <= $2 AND end_date >= $2",
                                            &[&self.uid, &on_date])?;
@@ -34,10 +35,8 @@ impl Schedule {
                                                    AND date = $2",
                                             &[&sched.id, &on_date])?;
             if trains.len() > 0 {
+                debug!("Schedule #{} is superseded by a pre-existing train", self.id);
                 return Ok(false);
-            }
-            if sched.id == self.id {
-                continue;
             }
             if !sched.days.value_for_iso_weekday(on_date.weekday().number_from_monday()).unwrap() {
                 continue;
