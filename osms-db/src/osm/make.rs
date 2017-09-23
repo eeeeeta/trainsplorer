@@ -147,7 +147,7 @@ pub fn make_links(pool: &DbPool, n_threads: usize) -> Result<()> {
                         let link = Link { p1: node.id, p2: row.get(2), way: row.get(0), distance: row.get(1) };
                         links.push(link);
                     }
-                    trans.execute("LOCK links IN ROW EXCLUSIVE MODE", &[]).unwrap();
+                    trans.execute("LOCK TABLE links IN ACCESS EXCLUSIVE MODE", &[]).unwrap();
                     for link in links {
                         link.insert(&trans).unwrap();
                     }
