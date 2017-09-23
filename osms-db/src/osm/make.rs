@@ -9,7 +9,7 @@ use std::thread;
 use std::sync::atomic::{Ordering, AtomicUsize};
 use std::sync::Arc;
 use std::time::Instant;
-
+use std::sync::mpsc::channel;
 
 pub fn make_crossings<T: GenericConnection>(conn: &T) -> Result<()> {
     debug!("make_crossings: running...");
@@ -120,10 +120,21 @@ pub fn make_links(pool: &DbPool, n_threads: usize) -> Result<()> {
     debug!("make_links: {} nodes to make links for", todo);
     let done = Arc::new(AtomicUsize::new(0));
     let mut threads = vec![];
+    let p = pool.clone();
+    let (tx, rx) = channel::<Option<Link>>();
+    let endthr = thread::spawn(move || {
+        let db = p.get().unwrap();
+        debug!("make_links: spawning inserter thread");
+        while let Some(link) = rx.recv().unwrap() {
+            link.insert(&*db).unwrap();
+        }
+        debug!("make_links: inserter thread done");
+    });
     for n in 0..n_threads {
         debug!("make_links: spawning thread {}", n);
         let p = pool.clone();
         let d = done.clone();
+        let tx = tx.clone();
         threads.push(thread::spawn(move || {
             let db = p.get().unwrap();
             loop {
@@ -137,7 +148,6 @@ pub fn make_links(pool: &DbPool, n_threads: usize) -> Result<()> {
                 }
                 for node in nodes {
                     let instant = Instant::now();
-                    let mut links = vec![];
                     for row in &trans.query(
                         "SELECT way, CAST(ST_Length(way::geography, false) AS REAL), id
                          FROM planet_osm_line
@@ -145,11 +155,7 @@ pub fn make_links(pool: &DbPool, n_threads: usize) -> Result<()> {
                          WHERE railway IS NOT NULL AND ST_Intersects(ST_StartPoint(way), $1)",
                         &[&node.location]).unwrap() {
                         let link = Link { p1: node.id, p2: row.get(2), way: row.get(0), distance: row.get(1) };
-                        links.push(link);
-                    }
-                    trans.execute("LOCK TABLE links IN ACCESS EXCLUSIVE MODE", &[]).unwrap();
-                    for link in links {
-                        link.insert(&trans).unwrap();
+                        tx.send(Some(link)).unwrap();
                     }
                     trans.execute("UPDATE nodes SET processed = true WHERE id = $1", &[&node.id])
                         .unwrap();
@@ -166,6 +172,8 @@ pub fn make_links(pool: &DbPool, n_threads: usize) -> Result<()> {
     for thr in threads {
         thr.join().unwrap();
     }
+    tx.send(None).unwrap();
+    endthr.join().unwrap();
     debug!("make_links: complete!");
     Ok(())
 }
