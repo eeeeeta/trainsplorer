@@ -12,7 +12,8 @@ pub struct Node {
     pub parent: Option<i32>,
     pub visited: bool,
     pub graph_part: i32,
-    pub parent_geom: Option<LineString>
+    pub parent_geom: Option<LineString>,
+    pub processed: bool,
 }
 impl DbType for Node {
     fn table_name() -> &'static str {
@@ -26,7 +27,8 @@ distance REAL NOT NULL DEFAULT 'Infinity',
 parent INT,
 visited BOOL NOT NULL DEFAULT false,
 graph_part INT NOT NULL DEFAULT 0,
-parent_geom geometry
+parent_geom geometry,
+processed BOOL NOT NULL DEFAULT false
 "#
     }
     fn from_row(row: &Row) -> Self {
@@ -37,7 +39,8 @@ parent_geom geometry
             parent: row.get(3),
             visited: row.get(4),
             graph_part: row.get(5),
-            parent_geom: row.get(6)
+            parent_geom: row.get(6),
+            processed: row.get(7)
         }
     }
 }

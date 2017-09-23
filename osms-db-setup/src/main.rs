@@ -64,11 +64,12 @@ fn run() -> Result<()> {
     let manager = PostgresConnectionManager::new(conf.database_url, TlsMode::None)
         .chain_err(|| "couldn't connect to postgres")?;
     let pool = r2d2::Pool::new(r2c, manager).chain_err(|| "couldn't make db pool")?;
+
+    info!("Phase 1: initialising database");
+    db::initialize_database(&pool, conf.threads)?;
+
     {
         let conn = pool.get().unwrap();
-        info!("Phase 1: initialising database");
-        db::initialize_database(&*conn)?;
-
         if util::count(&*conn, "FROM corpus_entries", &[])? == 0 {
             info!("Phase 2: importing corpus data");
             ntrod::import_corpus(&*conn, corpus)?;
@@ -87,7 +88,7 @@ fn run() -> Result<()> {
         }
     }
     info!("Phase 4: making schedule ways");
-    ntrod::make_schedule_ways(pool, conf.threads)?;
+    ntrod::make_schedule_ways(&pool, conf.threads)?;
 
     info!("Complete!");
     Ok(())

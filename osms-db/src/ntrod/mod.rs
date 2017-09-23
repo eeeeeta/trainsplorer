@@ -122,7 +122,7 @@ pub fn get_crossing_status<T: GenericConnection>(conn: &T, cid: i32) -> Result<C
         open, change_at, closures
     })
 }
-pub fn make_schedule_ways(pool: DbPool, n_threads: usize) -> Result<()> {
+pub fn make_schedule_ways(pool: &DbPool, n_threads: usize) -> Result<()> {
     debug!("make_schedule_ways: starting, using {} threads", n_threads);
     let ways = count(&*pool.get().unwrap(), "FROM schedules WHERE processed = false", &[])?;
     debug!("make_schedule_ways: {} schedules to make ways for", ways);

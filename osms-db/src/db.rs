@@ -71,7 +71,8 @@ pub trait InsertableDbType: DbType {
     type Id;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<Self::Id>;
 }
-pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
+pub fn initialize_database(pool: &DbPool, n_threads: usize) -> Result<()> {
+    let conn = &*pool.get().unwrap();
     debug!("initialize_database: making types...");
     conn.execute(ntrod_types::schedule::Days::create_type(), &[])?;
     conn.execute(ntrod_types::cif::StpIndicator::create_type(), &[])?;
@@ -95,8 +96,8 @@ pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
         debug!("initialize_database: {} nodes after node creation", nodes);
     }
     let mut links = count(conn, "FROM links", &[])?;
-    if links == 0 {
-        make_links(conn)?;
+    if count(conn, "FROM nodes WHERE processed = false", &[])? > 0 {
+        make_links(pool, n_threads)?;
         links = count(conn, "FROM links", &[])?;
         changed = true;
         debug!("initialize_database: {} links after link creation", links);

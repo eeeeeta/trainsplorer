@@ -1,10 +1,15 @@
 use super::types::*;
-use db::{GenericConnection, DbType, InsertableDbType};
+use db::{GenericConnection, DbPool, DbType, InsertableDbType};
 use postgis::ewkb::{Point, Polygon};
 use geo;
 use util::*;
 use errors::*;
 use std::collections::{HashMap, HashSet};
+use std::thread;
+use std::sync::atomic::{Ordering, AtomicUsize};
+use std::sync::Arc;
+use std::time::Instant;
+
 
 pub fn make_crossings<T: GenericConnection>(conn: &T) -> Result<()> {
     debug!("make_crossings: running...");
@@ -109,25 +114,58 @@ pub fn make_nodes<T: GenericConnection>(conn: &T) -> Result<()> {
     debug!("make_nodes: complete!");
     Ok(())
 }
-pub fn make_links<T: GenericConnection>(conn: &T) -> Result<()> {
+pub fn make_links(pool: &DbPool, n_threads: usize) -> Result<()> {
     debug!("make_links: making links from OSM data...");
-    let trans = conn.transaction()?;
-    let mut compl = 0;
-    for node in Node::from_select(&trans, "", &[])? {
-        for row in &trans.query("SELECT way, CAST(ST_Length(way::geography, false) AS REAL), id
-                                FROM planet_osm_line
-                                INNER JOIN nodes ON ST_EndPoint(planet_osm_line.way) = nodes.location
-                                WHERE railway IS NOT NULL AND ST_Intersects(ST_StartPoint(way), $1)",
-                                &[&node.location])? {
-            let link = Link { p1: node.id, p2: row.get(2), way: row.get(0), distance: row.get(1) };
-            link.insert(&trans)?;
-        }
-        compl += 1;
-        if (compl % 1000) == 0 {
-            debug!("make_links: completed {} rows", compl);
-        }
+    let todo = count(&*pool.get().unwrap(), "FROM nodes WHERE processed = false", &[])?;
+    debug!("make_links: {} nodes to make links for", todo);
+    let done = Arc::new(AtomicUsize::new(0));
+    let mut threads = vec![];
+    for n in 0..n_threads {
+        debug!("make_links: spawning thread {}", n);
+        let p = pool.clone();
+        let d = done.clone();
+        threads.push(thread::spawn(move || {
+            let db = p.get().unwrap();
+            loop {
+                let trans = db.transaction().unwrap();
+                let nodes = Node::from_select(&trans, "WHERE processed = false LIMIT 1
+                                                       FOR UPDATE SKIP LOCKED", &[])
+                    .unwrap();
+                if nodes.len() == 0 {
+                    debug!("make_links: thread {} done", n);
+                    break;
+                }
+                for node in nodes {
+                    let instant = Instant::now();
+                    let mut links = vec![];
+                    for row in &trans.query(
+                        "SELECT way, CAST(ST_Length(way::geography, false) AS REAL), id
+                         FROM planet_osm_line
+                         INNER JOIN nodes ON ST_EndPoint(planet_osm_line.way) = nodes.location
+                         WHERE railway IS NOT NULL AND ST_Intersects(ST_StartPoint(way), $1)",
+                        &[&node.location]).unwrap() {
+                        let link = Link { p1: node.id, p2: row.get(2), way: row.get(0), distance: row.get(1) };
+                        links.push(link);
+                    }
+                    trans.execute("LOCK links IN ROW EXCLUSIVE MODE", &[]).unwrap();
+                    for link in links {
+                        link.insert(&trans).unwrap();
+                    }
+                    trans.execute("UPDATE nodes SET processed = true WHERE id = $1", &[&node.id])
+                        .unwrap();
+                    let now = Instant::now();
+                    let dur = now.duration_since(instant);
+                    let dur = dur.as_secs() as f64 + dur.subsec_nanos() as f64 * 1e-9;
+                    let done = d.fetch_add(1, Ordering::SeqCst) + 1;
+                    debug!("make_links: {} of {} nodes complete ({:.01}%) - time: {:.04}s", done, todo, (done as f64 / todo as f64) * 100.0, dur);
+                }
+                trans.commit().unwrap();
+            }
+        }));
     }
-    trans.commit()?;
+    for thr in threads {
+        thr.join().unwrap();
+    }
     debug!("make_links: complete!");
     Ok(())
 }
