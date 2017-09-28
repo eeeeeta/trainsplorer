@@ -1,12 +1,13 @@
-extern crate postgres;
 #[macro_use] extern crate error_chain;
 extern crate osms_db;
+extern crate r2d2;
+extern crate r2d2_postgres;
 extern crate clap;
 extern crate env_logger;
 
 use osms_db::*;
 use osms_db::errors::*;
-use postgres::{Connection, TlsMode};
+use r2d2_postgres::{TlsMode, PostgresConnectionManager};
 use clap::{Arg, App};
 fn example() -> Result<()> {
     env_logger::init().unwrap();
@@ -38,9 +39,12 @@ fn example() -> Result<()> {
     let url = matches.value_of("url").unwrap();
     let from = matches.value_of("from").unwrap();
     let to = matches.value_of("to").unwrap();
-    let conn = Connection::connect(url, TlsMode::None).unwrap();
-    db::initialize_database(&conn)?;
-    let sp = osm::navigate::navigate(&conn, from, to)?;
+    let r2c = r2d2::Config::default();
+    let manager = PostgresConnectionManager::new(url, TlsMode::None)
+        .unwrap();
+    let pool = r2d2::Pool::new(r2c, manager).unwrap();;
+    db::initialize_database(&pool, 4)?;
+    let sp = osm::navigate::navigate(&*pool.get().unwrap(), from, to)?;
     println!(r#"
 <?xml version="1.0" encoding="UTF-8"?>
 <gpx

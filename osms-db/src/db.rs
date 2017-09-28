@@ -104,22 +104,17 @@ pub fn initialize_database(pool: &DbPool, n_threads: usize) -> Result<()> {
     }
     let mut stations = count(conn, "FROM stations", &[])?;
     if stations == 0 {
-        make_stations(conn)?;
+        make_stations(pool, n_threads)?;
         stations = count(conn, "FROM stations", &[])?;
         changed = true;
         debug!("initialize_database: {} stations after station creation", stations);
     }
     let mut crossings = count(conn, "FROM crossings", &[])?;
     if crossings == 0 {
-        make_crossings(conn)?;
+        make_crossings(pool, n_threads)?;
         crossings = count(conn, "FROM crossings", &[])?;
         changed = true;
         debug!("initialize_database: {} crossings after crossing creation", crossings);
-    }
-    if changed {
-        debug!("initialize_database: changes occurred, running connectifier...");
-        the_great_connectifier(conn)?;
-        debug!("initialize_database: {} nodes, {} links after connectification", nodes, links);
     }
     let unclassified = count(conn, "FROM nodes WHERE graph_part = 0", &[])?;
     if unclassified != 0 || changed {

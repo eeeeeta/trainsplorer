@@ -117,7 +117,13 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
     let mut path_nodes = vec![dest.id];
     let mut path = vec![];
     let mut cur_node = nodes.get(&dest.id).unwrap();
+    let mut crossings = vec![];
     loop {
+        let node = Node::from_select(conn, "WHERE id = $1", &[&path_nodes.last().unwrap()])?;
+        if let Some(id) = node[0].parent_crossing {
+            debug!("navigate: found intersecting crossing #{}", id);
+            crossings.push(id);
+        }
         if let Some((ref parent_id, ref geom)) = cur_node.parent {
             let geom: LineString = conn.query(
                 "SELECT
@@ -138,10 +144,8 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
     let path: LineString = conn.query("SELECT ST_MakeLine(CAST($1 AS geometry[]))", &[&path])
         ?.into_iter().nth(0).unwrap().get(0);
     debug!("navigate: finding intersecting crossings...");
-    let mut crossings = vec![];
     let mut crossing_locations = vec![];
-    for cx in Crossing::from_select(conn, "WHERE ST_Intersects(area, $1)", &[&path])? {
-        crossings.push(cx.node_id);
+    for cx in Crossing::from_select(conn, "WHERE id = ANY($1)", &[&crossings])? {
         for row in &trans.query("SELECT ST_Line_Locate_Point($1, ST_Centroid($2))",
                                 &[&path, &cx.area])? {
             let location: f64 = row.get(0);

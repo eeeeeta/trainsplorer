@@ -1,8 +1,6 @@
 use postgis::ewkb::{Point, LineString, Polygon};
 use db::{DbType, InsertableDbType, GenericConnection, Row};
 use errors::*;
-use util::*;
-use geo;
 
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -14,6 +12,7 @@ pub struct Node {
     pub graph_part: i32,
     pub parent_geom: Option<LineString>,
     pub processed: bool,
+    pub parent_crossing: Option<i32>
 }
 impl DbType for Node {
     fn table_name() -> &'static str {
@@ -28,7 +27,8 @@ parent INT,
 visited BOOL NOT NULL DEFAULT false,
 graph_part INT NOT NULL DEFAULT 0,
 parent_geom geometry,
-processed BOOL NOT NULL DEFAULT false
+processed BOOL NOT NULL DEFAULT false,
+parent_crossing INT REFERENCES crossings ON DELETE RESTRICT
 "#
     }
     fn from_row(row: &Row) -> Self {
@@ -40,7 +40,8 @@ processed BOOL NOT NULL DEFAULT false
             visited: row.get(4),
             graph_part: row.get(5),
             parent_geom: row.get(6),
-            processed: row.get(7)
+            processed: row.get(7),
+            parent_crossing: row.get(8)
         }
     }
 }
@@ -57,62 +58,6 @@ impl Node {
             ret = Some(row.get(0))
         }
         Ok(ret.expect("Somehow, we never got an id in Node::insert..."))
-    }
-    pub fn new_at_point<T: GenericConnection>(conn: &T, point: Point) -> Result<(i32, bool)> {
-        use geo::algorithm::distance::Distance;
-        use geo::algorithm::split::Split;
-        use geo::algorithm::haversine_length::HaversineLength;
-        let trans = conn.transaction()?;
-        let pt = geo::Point::from_postgis(&point);
-        let mut okay = false;
-        let prev_nodes = Node::from_select(&trans, "WHERE location = $1", &[&point])?;
-        if prev_nodes.len() > 0 {
-            okay = true;
-        }
-        let node = Self::insert(&trans, point.clone())?;
-        let mut links = vec![];
-        {
-            let stmt = Link::prepare_select_cached(&trans, "")?;
-            for link in Link::from_select_iter(&trans, &stmt, &[])? {
-                let link = link?;
-                let line = geo::LineString::from_postgis(&link.way);
-                if line.distance(&pt) <= 0.00000001 {
-                    if line.0.first().map(|x| x == &pt).unwrap_or(false) ||
-                        line.0.last().map(|x| x == &pt).unwrap_or(false) {
-                            okay = true;
-                            continue;
-                        }
-                    links.push(link);
-                }
-            }
-        }
-        debug!("making new at point {:?}: {} links", point, links.len());
-        for link in links {
-            okay = true;
-            let line = geo::LineString::from_postgis(&link.way);
-            let vec = line.split(&pt, 0.00000001);
-            if vec.len() != 2 {
-                bail!("expected 2 results after split, got {}", vec.len());
-            }
-            let mut iter = vec.into_iter();
-            let (first, last) = (iter.next().unwrap(), iter.next().unwrap());
-            let (df, dl) = (first.haversine_length(), last.haversine_length());
-            let (first, last) = (geo_ls_to_postgis(first), geo_ls_to_postgis(last));
-            trans.execute(
-                "UPDATE links SET p2 = $1, way = $2, distance = $3 WHERE p1 = $4 AND p2 = $5",
-                &[&node, &first, &(df as f32), &link.p1, &link.p2]
-            )?;
-            let new = Link {
-                p1: node,
-                p2: link.p2,
-                distance: dl as f32,
-                way: last
-            };
-            debug!("new setup: {} <-> {} <-> {}", link.p1, node, link.p2);
-            new.insert(&trans)?;
-        }
-        trans.commit()?;
-        Ok((node, okay))
     }
 }
 #[derive(Debug, Clone)]
@@ -240,9 +185,8 @@ impl InsertableDbType for StationPath {
     }
 }
 pub struct Crossing {
-    pub node_id: i32,
+    pub id: i32,
     pub name: Option<String>,
-    pub other_node_ids: Vec<i32>,
     pub area: Polygon
 }
 impl DbType for Crossing {
@@ -251,30 +195,26 @@ impl DbType for Crossing {
     }
     fn table_desc() -> &'static str {
         r#"
-node_id INT PRIMARY KEY REFERENCES nodes ON DELETE RESTRICT,
+id SERIAL PRIMARY KEY,
 name VARCHAR,
-other_node_ids INT[] NOT NULL,
 area geometry NOT NULL
 "#
     }
     fn from_row(row: &Row) -> Self {
         Self {
-            node_id: row.get(0),
+            id: row.get(0),
             name: row.get(1),
-            other_node_ids: row.get(2),
-            area: row.get(3)
+            area: row.get(2)
         }
     }
 }
-impl InsertableDbType for Crossing {
-    type Id = i32;
-    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
+impl Crossing {
+    pub fn insert<T: GenericConnection>(conn: &T, name: Option<String>, area: Polygon) -> Result<i32> {
         let qry = conn.query("INSERT INTO crossings
-                              (node_id, name, other_node_ids, area)
-                              VALUES ($1, $2, $3, $4)
-                              RETURNING node_id",
-                             &[&self.node_id, &self.name,
-                               &self.other_node_ids, &self.area])?;
+                              (name, area)
+                              VALUES ($1, $2)
+                              RETURNING id",
+                             &[&name, &area])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))

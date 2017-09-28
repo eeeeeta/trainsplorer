@@ -80,7 +80,7 @@ pub fn get_crossing_status<T: GenericConnection>(conn: &T, cid: i32) -> Result<C
         assert!(from_train.is_some() != from_sched.is_some());
 
         let station_path = station_paths.get(&way.station_path).unwrap();
-        let pos = station_path.crossings.iter().position(|&x| x == crossing.node_id).unwrap();
+        let pos = station_path.crossings.iter().position(|&x| x == crossing.id).unwrap();
 
         let start_dt = cur.date().and_time(way.st);
 
@@ -117,7 +117,7 @@ pub fn get_crossing_status<T: GenericConnection>(conn: &T, cid: i32) -> Result<C
         ca
     } else { change_at_open.unwrap_or(end_of_day) };
     Ok(CrossingStatus {
-        crossing: crossing.node_id,
+        crossing: crossing.id,
         date: cur.date(),
         open, change_at, closures
     })

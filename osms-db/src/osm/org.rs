@@ -3,25 +3,6 @@ use db::{GenericConnection, DbType};
 use errors::*;
 use std::collections::HashSet;
 
-pub fn the_great_connectifier<T: GenericConnection>(conn: &T) -> Result<()> {
-    debug!("the_great_connectifier: running...");
-    let trans = conn.transaction()?;
-    let mut compl = 0;
-    {
-        let stmt = Node::prepare_select_cached(&trans, "")?;
-        for n1 in Node::from_select_iter(&trans, &stmt, &[])? {
-            let n1 = n1?;
-            let _ = Node::new_at_point(&trans, n1.location);
-            compl += 1;
-            if (compl % 1000) == 0 {
-                debug!("the_great_connectifier: completed {} rows", compl);
-            }
-        }
-    }
-    trans.commit()?;
-    debug!("the_great_connectifier: complete!");
-    Ok(())
-}
 pub fn separate_nodes<T: GenericConnection>(conn: &T) -> Result<()> {
     debug!("separate_nodes: running...");
     let trans = conn.transaction()?;

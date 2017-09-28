@@ -23,6 +23,8 @@ pub struct Config {
     schedule_data: String,
     threads: usize,
     #[serde(default)]
+    db_only: bool,
+    #[serde(default)]
     limit_schedule_toc: Option<String>
 }
 fn run() -> Result<()> {
@@ -68,6 +70,10 @@ fn run() -> Result<()> {
     info!("Phase 1: initialising database");
     db::initialize_database(&pool, conf.threads)?;
 
+    if conf.db_only {
+        info!("Database-only initialization specified; aborting!");
+        return Ok(());
+    }
     {
         let conn = pool.get().unwrap();
         if util::count(&*conn, "FROM corpus_entries", &[])? == 0 {
@@ -77,7 +83,6 @@ fn run() -> Result<()> {
         else {
             info!("Skipping phase 2: corpus data exists");
         }
-
         if util::count(&*conn, "FROM schedules", &[])? == 0 {
             info!("Phase 3: importing schedule records");
             ntrod::apply_schedule_records(&*conn, schedule,
