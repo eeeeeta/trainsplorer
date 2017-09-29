@@ -34,7 +34,23 @@ fn split_links<A, B, T>(conn: &T, links_points: A, on_make: B, todo: Option<usiz
         let link = Link::from_select(&trans, "WHERE p1 = $1 AND p2 = $2", &[&p1, &p2])?.into_iter()
             .nth(0).unwrap();
         let geoway = geo::LineString::from_postgis(&link.way);
-
+        for p in points.iter() {
+            if p == geoway.0.first().unwrap(){
+                warn!("split_links: point {:?} (#{}) is the start point", p, p1);
+                on_make(&trans, *p, p1)?;
+            }
+            else if p == geoway.0.last().unwrap() {
+                warn!("split_links: point {:?} (#{}) is the end point", p, p1);
+                on_make(&trans, *p, p2)?;
+            }
+        }
+        points.retain(|p| {
+            p != geoway.0.first().unwrap() && p != geoway.0.last().unwrap()
+        });
+        if points.len() == 0 {
+            warn!("split_links: no points left");
+            continue;
+        }
         // make sure the points are in order of their incidence along the line
         points.sort_by(|p1, p2| {
             let p1_split = geoway.split(&p1, 0.00000001);
