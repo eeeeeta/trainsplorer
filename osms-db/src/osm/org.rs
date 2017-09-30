@@ -2,12 +2,19 @@ use super::types::*;
 use db::{GenericConnection, DbType};
 use errors::*;
 use std::collections::HashSet;
+use util::*;
+use std::time::Instant;
 
 pub fn separate_nodes<T: GenericConnection>(conn: &T) -> Result<()> {
     debug!("separate_nodes: running...");
     let trans = conn.transaction()?;
+    let todo = count(&trans, "FROM nodes WHERE graph_part = 0", &[])?;
+    let mut done = 0;
+    debug!("separate_nodes: {} nodes to separate", todo);
     let mut cur_graph_part = 1;
     loop {
+        let instant = Instant::now();
+
         let vec = Node::from_select(&trans, "WHERE graph_part = 0 LIMIT 1", &[])?;
         if vec.len() == 0 {
             break;
@@ -36,10 +43,13 @@ pub fn separate_nodes<T: GenericConnection>(conn: &T) -> Result<()> {
             trans.execute("UPDATE nodes SET graph_part = $1 WHERE id = ANY($2)",
                           &[&cur_graph_part, &part_of_this])?;
         }
-        if nodes_touched > 10 {
-            debug!("separate_nodes: finished processing graph part {}", cur_graph_part);
-        }
         cur_graph_part += 1;
+        done += nodes_touched;
+        let now = Instant::now();
+        let dur = now.duration_since(instant);
+        let dur = dur.as_secs() as f64 + dur.subsec_nanos() as f64 * 1e-9;
+        debug!("separate_nodes: done part {} ({} nodes) - {} of {} nodes touched ({:.01}%) - time: {:.04}s",
+               cur_graph_part, nodes_touched, done, todo, (done as f64 / todo as f64) * 100.0, dur);
     }
     trans.commit()?;
     debug!("separate_nodes: separated graph into {} parts", cur_graph_part);
