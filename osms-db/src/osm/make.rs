@@ -38,7 +38,7 @@ fn split_links<A, B, T>(conn: &T, links_points: A, on_make: B, todo: Option<usiz
             warn!("split_links: link {} <-> {} has no points!", p1, p2);
             continue;
         }
-        for p in points.iter() {
+        for p in points.iter_mut() {
             if p == geoway.0.first().unwrap() {
                 warn!("split_links: point {:?} (#{}) is the start point", p, p1);
                 on_make(&trans, *p, p1)?;
@@ -51,14 +51,16 @@ fn split_links<A, B, T>(conn: &T, links_points: A, on_make: B, todo: Option<usiz
             }
             let spl = geoway.split(&p, 0.00000001);
             if spl.len() != 2 {
-                error!("split_links: point {:?} splits into {} piece(s), not 2!", p, spl.len());
+                warn!("split_links: point {:?} splits into {} piece(s), not 2!", p, spl.len());
                 debug!("split_links: way={:?}", geoway);
                 debug!("split_links: split={:?}", spl);
-                bail!("Point splits into {} pieces, not 2", spl.len());
+                p.0.x = 0.0;
+                p.0.y = 0.0;
+                continue;
             }
         }
         points.retain(|p| {
-            p != geoway.0.first().unwrap() && p != geoway.0.last().unwrap()
+            p.0.x != 0.0 && p.0.y != 0.0 && p != geoway.0.first().unwrap() && p != geoway.0.last().unwrap()
         });
         if points.len() == 0 {
             warn!("split_links: no points left");
