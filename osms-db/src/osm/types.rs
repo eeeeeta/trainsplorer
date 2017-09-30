@@ -46,18 +46,21 @@ parent_crossing INT REFERENCES crossings ON DELETE RESTRICT
     }
 }
 impl Node {
-    pub fn insert<T: GenericConnection>(conn: &T, location: Point) -> Result<i32> {
+    pub fn insert_processed<T: GenericConnection>(conn: &T, location: Point, prc: bool) -> Result<i32> {
         for row in &conn.query("SELECT id FROM nodes WHERE location = $1",
                                &[&location])? {
             return Ok(row.get(0));
         }
-        let qry = conn.query("INSERT INTO nodes (location) VALUES ($1) RETURNING id",
-                             &[&location])?;
+        let qry = conn.query("INSERT INTO nodes (location, processed) VALUES ($1, $2) RETURNING id",
+                             &[&location, &prc])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))
         }
         Ok(ret.expect("Somehow, we never got an id in Node::insert..."))
+    }
+    pub fn insert<T: GenericConnection>(conn: &T, location: Point) -> Result<i32> {
+        Self::insert_processed(conn, location, false)
     }
 }
 #[derive(Debug, Clone)]

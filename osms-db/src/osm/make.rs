@@ -79,7 +79,7 @@ fn split_links<A, B, T>(conn: &T, links_points: A, on_make: B, todo: Option<usiz
 
         let mut prev = (p1, geoway.0[0]);
         for (i, point) in points.into_iter().enumerate() {
-            let n2 = Node::insert(&trans, geo_pt_to_postgis(point.clone()))?;
+            let n2 = Node::insert_processed(&trans, geo_pt_to_postgis(point.clone()), true)?;
             on_make(&trans, point, n2)?;
             let way = geoway.split(&prev.1, 0.00000001)
                 .into_iter().nth(1).unwrap();
@@ -285,7 +285,7 @@ pub fn make_stations(pool: &DbPool, n_threads: usize) -> Result<()> {
                         let instant = Instant::now();
 
                         let pt = geo::Point::from_postgis(&point);
-                        let station = Node::insert(&*db, point)
+                        let station = Node::insert_processed(&*db, point, true)
                             .unwrap();
                         let links = Link::from_select(&*db, "WHERE ST_Intersects(way, $1)", &[&poly])
                             .unwrap();
@@ -334,6 +334,7 @@ pub fn make_stations(pool: &DbPool, n_threads: usize) -> Result<()> {
         }
         Ok(())
     };
+    let todo = links_points.len();
     split_links(&*conn, Arc::try_unwrap(links_points).unwrap(), on_make, Some(todo))?;
     Ok(())
 }
