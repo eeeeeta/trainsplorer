@@ -78,6 +78,7 @@ pub fn initialize_database(pool: &DbPool, n_threads: usize) -> Result<()> {
     conn.execute(ntrod_types::cif::StpIndicator::create_type(), &[])?;
     conn.execute(ScheduleLocation::create_type(), &[])?;
     debug!("initialize_database: making tables...");
+    Crossing::make_table(conn)?;
     Node::make_table(conn)?;
     Link::make_table(conn)?;
     Station::make_table(conn)?;
@@ -85,7 +86,6 @@ pub fn initialize_database(pool: &DbPool, n_threads: usize) -> Result<()> {
     Schedule::make_table(conn)?;
     Train::make_table(conn)?;
     ScheduleWay::make_table(conn)?;
-    Crossing::make_table(conn)?;
     ntrod_types::reference::CorpusEntry::make_table(conn)?;
     let mut changed = false;
     let mut nodes = count(conn, "FROM nodes", &[])?;
