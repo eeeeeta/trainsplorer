@@ -40,8 +40,15 @@ fn split_links<A, B, T>(conn: &T, links_points: A, on_make: B, todo: Option<usiz
                 on_make(&trans, *p, p1)?;
             }
             else if p == geoway.0.last().unwrap() {
-                warn!("split_links: point {:?} (#{}) is the end point", p, p1);
+                warn!("split_links: point {:?} (#{}) is the end point", p, p2);
                 on_make(&trans, *p, p2)?;
+            }
+            let spl = geoway.split(&p, 0.00000001);
+            if spl.len() != 2 {
+                error!("split_links: point {:?} splits into {} piece(s), not 2!", p, spl.len());
+                debug!("split_links: way={:?}", geoway);
+                debug!("split_links: split={:?}", spl);
+                bail!("Point splits into {} pieces, not 2", spl.len());
             }
         }
         points.retain(|p| {
