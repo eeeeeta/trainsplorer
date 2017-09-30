@@ -344,7 +344,7 @@ pub fn make_nodes<T: GenericConnection>(conn: &T) -> Result<()> {
     let trans = conn.transaction()?;
     let mut compl = 0;
     for row in &trans.query("SELECT ST_StartPoint(way), ST_EndPoint(way)
-                            FROM planet_osm_line WHERE railway IS NOT NULL", &[])? {
+                            FROM planet_osm_line WHERE railway = 'rail'", &[])? {
         Node::insert(&trans, row.get(0))?;
         Node::insert(&trans, row.get(1))?;
         compl += 1;
@@ -404,7 +404,7 @@ pub fn make_links(pool: &DbPool, n_threads: usize) -> Result<()> {
                         "SELECT way, CAST(ST_Length(way::geography, false) AS REAL), id
                          FROM planet_osm_line
                          INNER JOIN nodes ON ST_EndPoint(planet_osm_line.way) = nodes.location
-                         WHERE railway IS NOT NULL AND ST_Intersects(ST_StartPoint(way), $1)",
+                         WHERE railway = 'rail' AND ST_Intersects(ST_StartPoint(way), $1)",
                         &[&node.location]).unwrap() {
                         let link = Link { p1: node.id, p2: row.get(2), way: row.get(0), distance: row.get(1) };
                         tx.send(Some(link)).unwrap();
