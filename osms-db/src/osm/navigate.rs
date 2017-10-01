@@ -3,7 +3,7 @@ use db::{GenericConnection, DbType, InsertableDbType};
 use errors::*;
 use postgis::ewkb::LineString;
 use std::cmp::Ordering;
-use std::collections::{HashMap, BinaryHeap};
+use std::collections::{HashMap, HashSet, BinaryHeap};
 use ordered_float::OrderedFloat;
 
 struct LightNode {
@@ -117,12 +117,12 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
     let mut path_nodes = vec![dest.id];
     let mut path = vec![];
     let mut cur_node = nodes.get(&dest.id).unwrap();
-    let mut crossings = vec![];
+    let mut crossings = HashSet::new();
     loop {
         let node = Node::from_select(conn, "WHERE id = $1", &[&path_nodes.last().unwrap()])?;
         if let Some(id) = node[0].parent_crossing {
-            debug!("navigate: found intersecting crossing #{}", id);
-            crossings.push(id);
+            trace!("navigate: found intersecting crossing #{}", id);
+            crossings.insert(id);
         }
         if let Some((ref parent_id, ref geom)) = cur_node.parent {
             let geom: LineString = conn.query(
@@ -141,6 +141,7 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
             break;
         }
     }
+    let crossings = crossings.into_iter().collect::<Vec<_>>();
     let path: LineString = conn.query("SELECT ST_MakeLine(CAST($1 AS geometry[]))", &[&path])
         ?.into_iter().nth(0).unwrap().get(0);
     debug!("navigate: finding intersecting crossings...");
