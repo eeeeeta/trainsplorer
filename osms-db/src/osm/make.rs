@@ -16,8 +16,8 @@ use chashmap::CHashMap;
 use ordered_float::OrderedFloat;
 
 fn split_links<A, B, T>(conn: &T, links_points: A, on_make: B, todo: Option<usize>) -> Result<()>
-    where A: IntoIterator<Item=((i32, i32), Vec<geo::Point<f64>>)>,
-          B: Fn(&Transaction, geo::Point<f64>, i32) -> Result<()>,
+    where A: IntoIterator<Item=((i64, i64), Vec<geo::Point<f64>>)>,
+          B: Fn(&Transaction, geo::Point<f64>, i64) -> Result<()>,
           T: GenericConnection
 {
 
@@ -212,7 +212,7 @@ pub fn make_crossings(pool: &DbPool, n_threads: usize) -> Result<()> {
         thr.join().unwrap();
     }
     debug!("make_crossings: starting phase 2: splitting up links");
-    let on_make = |trans: &Transaction, point: geo::Point<f64>, id: i32| -> Result<()> {
+    let on_make = |trans: &Transaction, point: geo::Point<f64>, id: i64| -> Result<()> {
         let key = (OrderedFloat(point.0.x), OrderedFloat(point.0.y));
         let crossing = points_crossings.get(&key).unwrap();
         trans.execute("UPDATE nodes SET parent_crossing = $1 WHERE id = $2", &[&*crossing, &id])?;
@@ -249,7 +249,7 @@ pub fn make_stations(pool: &DbPool, n_threads: usize) -> Result<()> {
     for (nr_ref, (poly, point)) in areas {
         worker.push((nr_ref, (poly, point)));
     }
-    let (tx, rx) = channel::<Option<(String, i32, Polygon)>>();
+    let (tx, rx) = channel::<Option<(String, i64, Polygon)>>();
     let p = pool.clone();
     debug!("make_stations: starting phase 1: figuring out station points");
     let endthr = thread::spawn(move || {
@@ -319,7 +319,7 @@ pub fn make_stations(pool: &DbPool, n_threads: usize) -> Result<()> {
     tx.send(None).unwrap();
     endthr.join().unwrap();
     debug!("make_stations: starting phase 2: splitting up links");
-    let on_make = |trans: &Transaction, point: geo::Point<f64>, id: i32| -> Result<()> {
+    let on_make = |trans: &Transaction, point: geo::Point<f64>, id: i64| -> Result<()> {
         let key = (OrderedFloat(point.0.x), OrderedFloat(point.0.y));
         let stations = point_stations.get(&key).unwrap();
         for station in stations.iter() {

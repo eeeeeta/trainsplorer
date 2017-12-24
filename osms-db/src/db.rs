@@ -8,7 +8,6 @@ use errors::*;
 use ntrod_types;
 use osm::types::*;
 use ntrod::types::*;
-use osm::make::*;
 use osm::org::*;
 use util::*;
 use std::marker::PhantomData;
@@ -34,10 +33,16 @@ impl<'a, 'b, T> Iterator for SelectIterator<'a, 'b, T> where T: DbType {
 pub trait DbType: Sized {
     fn table_name() -> &'static str;
     fn table_desc() -> &'static str;
+    fn indexes() -> Vec<&'static str> {
+        vec![]
+    }
     fn from_row(row: &Row) -> Self;
     fn make_table<T: GenericConnection>(conn: &T) -> Result<()> {
         conn.execute(&format!("CREATE TABLE IF NOT EXISTS {} ({})",
-                             Self::table_name(), Self::table_desc()), &[])?;
+                              Self::table_name(), Self::table_desc()), &[])?;
+        for index in Self::indexes() {
+            conn.execute(&format!("CREATE INDEX IF NOT EXISTS {}", index), &[])?;
+        }
         Ok(())
     }
     fn prepare_select<'a, T: GenericConnection>(conn: &'a T, where_clause: &str) -> Result<Statement<'a>> {
@@ -87,6 +92,7 @@ pub fn initialize_database(pool: &DbPool, n_threads: usize) -> Result<()> {
     Train::make_table(conn)?;
     ScheduleWay::make_table(conn)?;
     ntrod_types::reference::CorpusEntry::make_table(conn)?;
+    /*
     let mut changed = false;
     let mut nodes = count(conn, "FROM nodes", &[])?;
     if nodes == 0 {
@@ -101,6 +107,10 @@ pub fn initialize_database(pool: &DbPool, n_threads: usize) -> Result<()> {
         links = count(conn, "FROM links", &[])?;
         changed = true;
         debug!("initialize_database: {} links after link creation", links);
+    }
+    if changed {
+        debug!("initialize_database: running node separator...");
+        separate_nodes(conn)?;
     }
     let mut stations = count(conn, "FROM stations", &[])?;
     if stations == 0 {
@@ -122,6 +132,6 @@ pub fn initialize_database(pool: &DbPool, n_threads: usize) -> Result<()> {
         separate_nodes(conn)?;
     }
     debug!("initialize_database: database OK (nodes = {}, links = {}, stations = {}, crossings = {})",
-           nodes, links, stations, crossings);
+           nodes, links, stations, crossings);*/
     Ok(())
 }

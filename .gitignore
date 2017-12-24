@@ -10,3 +10,4 @@ access_token
 .#*
 config.toml
 Rocket.toml
+Cargo.lock

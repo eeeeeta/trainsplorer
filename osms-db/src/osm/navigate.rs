@@ -7,13 +7,13 @@ use std::collections::{HashMap, HashSet, BinaryHeap};
 use ordered_float::OrderedFloat;
 
 struct LightNode {
-    parent: Option<(i32, LineString)>,
+    parent: Option<(i64, LineString)>,
     dist: f32
 }
 #[derive(Copy, Clone, Eq, PartialEq)]
 struct State {
     cost: OrderedFloat<f32>,
-    id: i32
+    id: i64
 }
 
 impl Ord for State {
@@ -55,7 +55,7 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
            from, starting_node, to, goal_node);
 
     let mut heap: BinaryHeap<State> = BinaryHeap::new();
-    let mut nodes: HashMap<i32, LightNode> = HashMap::new();
+    let mut nodes: HashMap<i64, LightNode> = HashMap::new();
 
     let start = Node::from_select(&trans, "WHERE id = $1", &[&starting_node])
         ?.into_iter().nth(0)

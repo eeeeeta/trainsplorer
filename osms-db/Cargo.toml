@@ -4,17 +4,18 @@ name = "osms-db"
 version = "0.1.0"
 
 [dependencies]
+chashmap = "2.2"
 chrono = "0.4.0"
+crossbeam = "0.3"
 error-chain = "0.10.0"
 fallible-iterator = "0.1"
 log = "0.3.8"
+ordered-float = "0.5"
+osmpbfreader = "0.11.1"
 postgres-derive = "0.3.1"
 r2d2 = "0.7.4"
 r2d2_postgres = "0.13.0"
 serde_json = "1.0.2"
-ordered-float = "0.5"
-crossbeam = "0.3"
-chashmap = "2.2"
 
 [dependencies.geo]
 git = "https://github.com/eeeeeta/rust-geo"

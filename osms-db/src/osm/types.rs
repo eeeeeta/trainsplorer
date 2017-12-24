@@ -4,15 +4,12 @@ use errors::*;
 
 #[derive(Debug, Clone)]
 pub struct Node {
-    pub id: i32,
+    pub id: i64,
     pub location: Point,
-    pub distance: f32,
-    pub parent: Option<i32>,
-    pub visited: bool,
     pub graph_part: i32,
-    pub parent_geom: Option<LineString>,
     pub processed: bool,
-    pub parent_crossing: Option<i32>
+    pub parent_crossing: Option<i32>,
+    pub orig_osm_id: Option<i64>
 }
 impl DbType for Node {
     fn table_name() -> &'static str {
@@ -20,53 +17,65 @@ impl DbType for Node {
     }
     fn table_desc() -> &'static str {
         r#"
-id SERIAL PRIMARY KEY,
+id BIGSERIAL PRIMARY KEY,
 location geometry NOT NULL,
-distance REAL NOT NULL DEFAULT 'Infinity',
-parent INT,
-visited BOOL NOT NULL DEFAULT false,
 graph_part INT NOT NULL DEFAULT 0,
-parent_geom geometry,
 processed BOOL NOT NULL DEFAULT false,
-parent_crossing INT REFERENCES crossings ON DELETE RESTRICT
+parent_crossing INT REFERENCES crossings ON DELETE RESTRICT,
+orig_osm_id BIGINT
 "#
+    }
+    fn indexes() -> Vec<&'static str> {
+        vec![
+            "nodes_id ON nodes (id)",
+            "nodes_location ON nodes (location)",
+            "nodes_orig_osm_id ON nodes (orig_osm_id)"
+        ]
     }
     fn from_row(row: &Row) -> Self {
         Self {
             id: row.get(0),
             location: row.get(1),
-            distance: row.get(2),
-            parent: row.get(3),
-            visited: row.get(4),
-            graph_part: row.get(5),
-            parent_geom: row.get(6),
-            processed: row.get(7),
-            parent_crossing: row.get(8)
+            graph_part: row.get(2),
+            processed: row.get(3),
+            parent_crossing: row.get(4),
+            orig_osm_id: row.get(5),
         }
     }
 }
 impl Node {
-    pub fn insert_processed<T: GenericConnection>(conn: &T, location: Point, prc: bool) -> Result<i32> {
+    fn _insert<T: GenericConnection>(conn: &T, location: Point, prc: bool, orig: Option<i64>) -> Result<i64> {
         for row in &conn.query("SELECT id FROM nodes WHERE location = $1",
                                &[&location])? {
             return Ok(row.get(0));
         }
-        let qry = conn.query("INSERT INTO nodes (location, processed) VALUES ($1, $2) RETURNING id",
-                             &[&location, &prc])?;
+        let qry = if let Some(o) = orig {
+            conn.query("INSERT INTO nodes (location, processed, orig_osm_id) VALUES ($1, $2, $3) RETURNING id",
+                       &[&location, &prc, &o])?
+        } else {
+            conn.query("INSERT INTO nodes (location, processed) VALUES ($1, $2) RETURNING id",
+                       &[&location, &prc])?
+        };
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))
         }
         Ok(ret.expect("Somehow, we never got an id in Node::insert..."))
     }
-    pub fn insert<T: GenericConnection>(conn: &T, location: Point) -> Result<i32> {
+    pub fn insert_from_osm<T: GenericConnection>(conn: &T, loc: Point, orig: i64) -> Result<i64> {
+        Self::_insert(conn, loc, false, Some(orig))
+    }
+    pub fn insert_processed<T: GenericConnection>(conn: &T, loc: Point, prc: bool) -> Result<i64> {
+        Self::_insert(conn, loc, prc, None)
+    }
+    pub fn insert<T: GenericConnection>(conn: &T, location: Point) -> Result<i64> {
         Self::insert_processed(conn, location, false)
     }
 }
 #[derive(Debug, Clone)]
 pub struct Station {
     pub nr_ref: String,
-    pub point: i32,
+    pub point: i64,
     pub area: Polygon
 }
 impl DbType for Station {
@@ -76,7 +85,7 @@ impl DbType for Station {
     fn table_desc() -> &'static str {
         r#"
 nr_ref VARCHAR PRIMARY KEY,
-point INT NOT NULL,
+point BIGINT NOT NULL REFERENCES nodes ON DELETE CASCADE,
 area geometry NOT NULL
 "#
     }
@@ -89,7 +98,7 @@ area geometry NOT NULL
     }
 }
 impl Station {
-    pub fn insert<T: GenericConnection>(conn: &T, nr_ref: &str, point: i32, area: Polygon) -> Result<()> {
+    pub fn insert<T: GenericConnection>(conn: &T, nr_ref: &str, point: i64, area: Polygon) -> Result<()> {
         conn.execute("INSERT INTO stations (nr_ref, point, area) VALUES ($1, $2, $3)",
                      &[&nr_ref, &point, &area])?;
         Ok(())
@@ -98,8 +107,8 @@ impl Station {
 }
 #[derive(Debug, Clone)]
 pub struct Link {
-    pub p1: i32,
-    pub p2: i32,
+    pub p1: i64,
+    pub p2: i64,
     pub way: LineString,
     pub distance: f32
 }
@@ -107,12 +116,19 @@ impl DbType for Link {
     fn table_name() -> &'static str {
         "links"
     }
+    fn indexes() -> Vec<&'static str> {
+        vec![
+            "links_p1 ON links (p1)",
+            "links_p2 ON links (p2)"
+        ]
+    }
     fn table_desc() -> &'static str {
         r#"
-p1 INT NOT NULL REFERENCES nodes ON DELETE CASCADE,
-p2 INT NOT NULL REFERENCES nodes ON DELETE CASCADE,
+p1 BIGINT NOT NULL REFERENCES nodes ON DELETE CASCADE,
+p2 BIGINT NOT NULL REFERENCES nodes ON DELETE CASCADE,
 way geometry NOT NULL,
-distance REAL NOT NULL
+distance REAL NOT NULL,
+UNIQUE(p1, p2)
 "#
     }
     fn from_row(row: &Row) -> Self {
@@ -126,7 +142,8 @@ distance REAL NOT NULL
 }
 impl Link {
     pub fn insert<T: GenericConnection>(&self, conn: &T) -> Result<()> {
-        conn.execute("INSERT INTO links (p1, p2, way, distance) VALUES ($1, $2, $3, $4)",
+        conn.execute("INSERT INTO links (p1, p2, way, distance) VALUES ($1, $2, $3, $4)
+                      ON CONFLICT DO NOTHING",
                      &[&self.p1, &self.p2, &self.way, &self.distance])?;
         Ok(())
     }
@@ -136,7 +153,7 @@ pub struct StationPath {
     pub s1: String,
     pub s2: String,
     pub way: LineString,
-    pub nodes: Vec<i32>,
+    pub nodes: Vec<i64>,
     pub crossings: Vec<i32>,
     pub crossing_locations: Vec<f64>,
     pub id: i32
@@ -150,7 +167,7 @@ impl DbType for StationPath {
 s1 VARCHAR NOT NULL REFERENCES stations ON DELETE RESTRICT,
 s2 VARCHAR NOT NULL REFERENCES stations ON DELETE RESTRICT,
 way geometry NOT NULL,
-nodes INT[] NOT NULL,
+nodes BIGINT[] NOT NULL,
 crossings INT[] NOT NULL,
 crossing_locations DOUBLE PRECISION[] NOT NULL,
 id SERIAL PRIMARY KEY,

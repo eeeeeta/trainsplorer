@@ -13,6 +13,7 @@ extern crate fallible_iterator;
 extern crate ordered_float;
 extern crate chashmap;
 extern crate crossbeam;
+extern crate osmpbfreader;
 
 pub mod errors;
 pub mod util;
