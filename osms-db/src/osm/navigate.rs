@@ -49,8 +49,6 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
     let goal_node = Station::from_select(&trans, "WHERE nr_ref = $1", &[&to])?.into_iter()
         .nth(0).ok_or("Finishing station does not exist.")?.point;
 
-    trans.execute("UPDATE nodes SET distance = 0 WHERE id = $1", &[&starting_node])?;
-
     debug!("navigate: navigating from {} ({}) to {} ({})",
            from, starting_node, to, goal_node);
 
