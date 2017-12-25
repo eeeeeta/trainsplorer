@@ -104,40 +104,25 @@ fn run() -> Result<()> {
         .chain_err(|| "couldn't connect to postgres")?;
     let pool = r2d2::Pool::new(r2c, manager).chain_err(|| "couldn't make db pool")?;
 
-    let mut objs = None;
+    let mut ctx = make::ImportContext::new(&mut map, &pool, conf.threads);
     if conf.always_count {
         info!("Counting objects in map file...");
-        objs = Some(make::count(&mut map)?);
+        make::count(&mut ctx)?;
     }
     info!("Phase 1: initialising database");
 
+    db::initialize_database(&*pool.get().unwrap())?;
+    make::nodes(&mut ctx)?;
+    make::links(&mut ctx)?;
+    make::stations(&mut ctx)?;
+    make::crossings(&mut ctx)?;
+    make::separate_nodes(&mut ctx)?;
+    if conf.db_only {
+        info!("Database-only initialization specified; aborting!");
+        return Ok(());
+    }
     {
         let conn = pool.get().unwrap();
-        db::initialize_database(&pool, conf.threads)?;
-        if util::count(&*conn, "FROM nodes", &[])? == 0 {
-            info!("Phase 1.1: making nodes");
-            objs = Some(make::nodes(&*conn, &mut map, objs)?);
-        }
-        if util::count(&*conn, "FROM links", &[])? == 0 {
-            info!("Phase 1.2: making links");
-            objs = Some(make::links(&pool, conf.threads, &mut map, objs)?);
-        }
-        if util::count(&*conn, "FROM stations", &[])? == 0 {
-            info!("Phase 1.3: making stations");
-            make::stations(&*conn, &mut map, objs)?;
-        }
-        if util::count(&*conn, "FROM crossings", &[])? == 0 {
-            info!("Phase 1.4: making crossings");
-            osm::make::make_crossings(&pool, conf.threads)?;
-        }
-        if util::count(&*conn, "FROM nodes WHERE graph_part = 0", &[])? != 0 {
-            info!("Phase 1.5: separating nodes");
-            make::separate_nodes(&*conn)?;
-        }
-        if conf.db_only {
-            info!("Database-only initialization specified; aborting!");
-            return Ok(());
-        }
         if util::count(&*conn, "FROM corpus_entries", &[])? == 0 {
             info!("Phase 2: importing corpus data");
             ntrod::import_corpus(&*conn, corpus)?;

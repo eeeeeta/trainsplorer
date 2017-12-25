@@ -8,8 +8,6 @@ use errors::*;
 use ntrod_types;
 use osm::types::*;
 use ntrod::types::*;
-use osm::org::*;
-use util::*;
 use std::marker::PhantomData;
 use fallible_iterator::FallibleIterator;
 use r2d2::Pool;
@@ -76,8 +74,7 @@ pub trait InsertableDbType: DbType {
     type Id;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<Self::Id>;
 }
-pub fn initialize_database(pool: &DbPool, n_threads: usize) -> Result<()> {
-    let conn = &*pool.get().unwrap();
+pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
     debug!("initialize_database: making types...");
     conn.execute(ntrod_types::schedule::Days::create_type(), &[])?;
     conn.execute(ntrod_types::cif::StpIndicator::create_type(), &[])?;
@@ -92,46 +89,5 @@ pub fn initialize_database(pool: &DbPool, n_threads: usize) -> Result<()> {
     Train::make_table(conn)?;
     ScheduleWay::make_table(conn)?;
     ntrod_types::reference::CorpusEntry::make_table(conn)?;
-    /*
-    let mut changed = false;
-    let mut nodes = count(conn, "FROM nodes", &[])?;
-    if nodes == 0 {
-        make_nodes(conn)?;
-        nodes = count(conn, "FROM nodes", &[])?;
-        changed = true;
-        debug!("initialize_database: {} nodes after node creation", nodes);
-    }
-    let mut links = count(conn, "FROM links", &[])?;
-    if count(conn, "FROM nodes WHERE processed = false", &[])? > 0 {
-        make_links(pool, n_threads)?;
-        links = count(conn, "FROM links", &[])?;
-        changed = true;
-        debug!("initialize_database: {} links after link creation", links);
-    }
-    if changed {
-        debug!("initialize_database: running node separator...");
-        separate_nodes(conn)?;
-    }
-    let mut stations = count(conn, "FROM stations", &[])?;
-    if stations == 0 {
-        make_stations(pool, n_threads)?;
-        stations = count(conn, "FROM stations", &[])?;
-        changed = true;
-        debug!("initialize_database: {} stations after station creation", stations);
-    }
-    let mut crossings = count(conn, "FROM crossings", &[])?;
-    if crossings == 0 {
-        make_crossings(pool, n_threads)?;
-        crossings = count(conn, "FROM crossings", &[])?;
-        changed = true;
-        debug!("initialize_database: {} crossings after crossing creation", crossings);
-    }
-    let unclassified = count(conn, "FROM nodes WHERE graph_part = 0", &[])?;
-    if unclassified != 0 || changed {
-        debug!("initialize_database: running node separator...");
-        separate_nodes(conn)?;
-    }
-    debug!("initialize_database: database OK (nodes = {}, links = {}, stations = {}, crossings = {})",
-           nodes, links, stations, crossings);*/
     Ok(())
 }

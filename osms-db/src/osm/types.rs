@@ -7,9 +7,9 @@ pub struct Node {
     pub id: i64,
     pub location: Point,
     pub graph_part: i32,
-    pub processed: bool,
     pub parent_crossing: Option<i32>,
-    pub orig_osm_id: Option<i64>
+    pub orig_osm_id: Option<i64>,
+    pub osm_was_crossing: bool
 }
 impl DbType for Node {
     fn table_name() -> &'static str {
@@ -20,9 +20,9 @@ impl DbType for Node {
 id BIGSERIAL PRIMARY KEY,
 location geometry NOT NULL,
 graph_part INT NOT NULL DEFAULT 0,
-processed BOOL NOT NULL DEFAULT false,
 parent_crossing INT REFERENCES crossings ON DELETE RESTRICT,
-orig_osm_id BIGINT
+orig_osm_id BIGINT,
+osm_was_crossing BOOL NOT NULL DEFAULT false
 "#
     }
     fn indexes() -> Vec<&'static str> {
@@ -37,39 +37,39 @@ orig_osm_id BIGINT
             id: row.get(0),
             location: row.get(1),
             graph_part: row.get(2),
-            processed: row.get(3),
-            parent_crossing: row.get(4),
-            orig_osm_id: row.get(5),
+            parent_crossing: row.get(3),
+            orig_osm_id: row.get(4),
+            osm_was_crossing: row.get(5),
         }
     }
 }
-impl Node {
-    fn _insert<T: GenericConnection>(conn: &T, location: Point, prc: bool, orig: Option<i64>) -> Result<i64> {
-        for row in &conn.query("SELECT id FROM nodes WHERE location = $1",
-                               &[&location])? {
-            return Ok(row.get(0));
-        }
-        let qry = if let Some(o) = orig {
-            conn.query("INSERT INTO nodes (location, processed, orig_osm_id) VALUES ($1, $2, $3) RETURNING id",
-                       &[&location, &prc, &o])?
-        } else {
-            conn.query("INSERT INTO nodes (location, processed) VALUES ($1, $2) RETURNING id",
-                       &[&location, &prc])?
-        };
+impl InsertableDbType for Node {
+    type Id = i64;
+    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i64> {
+        let qry = conn.query("INSERT INTO nodes
+                              (location, graph_part, parent_crossing, orig_osm_id, osm_was_crossing)
+                              VALUES ($1, $2, $3, $4, $5)
+                              RETURNING id",
+                             &[&self.location, &self.graph_part, &self.parent_crossing,
+                               &self.orig_osm_id, &self.osm_was_crossing])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))
         }
-        Ok(ret.expect("Somehow, we never got an id in Node::insert..."))
+        Ok(ret.expect("no ID in Node insert"))
     }
-    pub fn insert_from_osm<T: GenericConnection>(conn: &T, loc: Point, orig: i64) -> Result<i64> {
-        Self::_insert(conn, loc, false, Some(orig))
-    }
-    pub fn insert_processed<T: GenericConnection>(conn: &T, loc: Point, prc: bool) -> Result<i64> {
-        Self::_insert(conn, loc, prc, None)
-    }
+}
+impl Node {
     pub fn insert<T: GenericConnection>(conn: &T, location: Point) -> Result<i64> {
-        Self::insert_processed(conn, location, false)
+        let node = Node {
+            id: -1,
+            location,
+            graph_part: 0,
+            parent_crossing: None,
+            orig_osm_id: None,
+            osm_was_crossing: false
+        };
+        node.insert_self(conn)
     }
 }
 #[derive(Debug, Clone)]

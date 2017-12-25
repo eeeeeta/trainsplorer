@@ -1,8 +1,8 @@
 use osmpbfreader::{OsmPbfReader};
+use osmpbfreader::reader::ParIter;
 use osmpbfreader::objects::{OsmObj};
 use super::errors::*;
 use indicatif::{ProgressStyle, ProgressBar};
-use postgres::GenericConnection;
 use std::io::{Read, Seek};
 use geo::*;
 use std::collections::HashSet;
@@ -15,6 +15,64 @@ use osms_db::osm::types::*;
 use crossbeam::sync::chase_lev;
 use std::collections::HashMap;
 
+pub struct ImportContext<'a, R: 'a> {
+    objs: Option<u64>,
+    pool: &'a DbPool,
+    n_threads: usize,
+    reader: &'a mut OsmPbfReader<R>
+}
+impl<'a, R> ImportContext<'a, R> where R: Read + Seek {
+    pub fn new(rdr: &'a mut OsmPbfReader<R>, pool: &'a DbPool, n_threads: usize) -> Self {
+        ImportContext {
+            objs: None,
+            pool, n_threads,
+            reader: rdr
+        }
+    }
+    fn par_iter<'b>(&'b mut self) -> Result<ParIter<'b, R>> {
+        self.reader.rewind()?;
+        Ok(self.reader.par_iter())
+    }
+    fn make_bar(&self) -> ProgressBar {
+        let bar = ProgressBar::new_spinner();
+        if let Some(o) = self.objs {
+            bar.set_length(o);
+            bar.set_style(ProgressStyle::default_bar()
+                          .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+                          .progress_chars("##-"));
+        }
+        else {
+            bar.set_style(ProgressStyle::default_bar()
+                          .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/??? {msg}")
+                          .progress_chars("##-"));
+
+        }
+        bar
+    }
+    fn make_custom_bar(&self, len: u64) -> ProgressBar {
+        let ret = ProgressBar::new_spinner();
+        ret.set_length(len);
+        ret.set_style(ProgressStyle::default_bar()
+                      .template("[{elapsed_precise}] {bar:40.red/yellow} {pos:>7}/{len:7} {msg}")
+                      .progress_chars("##-"));
+        ret
+    }
+    fn get_pool(&self) -> &::r2d2::Pool<::r2d2_postgres::PostgresConnectionManager> {
+        self.pool
+    }
+    fn get_conn(&self) -> ::r2d2::PooledConnection<::r2d2_postgres::PostgresConnectionManager> {
+        self.pool.get().unwrap()
+    }
+    fn n_threads(&self) -> usize {
+        self.n_threads
+    }
+    fn update_objs(&mut self, objs: u64) {
+        self.objs = Some(objs);
+    }
+    fn count(&self, query: &str) -> Result<i64> {
+        Ok(util::count(&*self.get_conn(), query, &[])?)
+    }
+}
 pub fn geo_pt_to_postgis(pt: Point<f64>) -> PgPoint {
     PgPoint::new(pt.0.x, pt.0.y, Some(4326))
 }
@@ -24,70 +82,117 @@ pub fn geo_ls_to_postgis(ls: LineString<f64>) -> PgLineString {
         srid: Some(4326)
     }
 }
-pub fn make_bar(objs: Option<u64>) -> ProgressBar {
-    let bar = ProgressBar::new_spinner();
-    if let Some(o) = objs {
-        bar.set_length(o);
-        bar.set_style(ProgressStyle::default_bar()
-                      .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
-                      .progress_chars("##-"));
-    }
-    else {
-        bar.set_style(ProgressStyle::default_bar()
-                      .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/??? {msg}")
-                      .progress_chars("##-"));
-
-    }
-    bar
-}
-pub fn count<R: Read + Seek>(rdr: &mut OsmPbfReader<R>) -> Result<u64> {
-    let bar = ProgressBar::new_spinner();
-    bar.set_message("Beginning object count: rewinding file");
-    rdr.rewind()?;
+pub fn count<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
+    let bar = ctx.make_bar();
     bar.set_message("Beginning object count: iterating");
     let mut objs: u64 = 0;
-    for _ in rdr.par_iter() {
+    for _ in ctx.par_iter()? {
         objs += 1;
         bar.set_message(&format!("{} objects counted so far", objs));
     }
+    ctx.update_objs(objs);
     bar.finish();
     debug!("{} objects in map file", objs);
-    Ok(objs)
+    Ok(())
 }
-pub fn nodes<T: GenericConnection, R: Read + Seek>(conn: &T, rdr: &mut OsmPbfReader<R>, objs: Option<u64>) -> Result<u64> {
+pub fn crossings<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
+    use geo::algorithm::boundingbox::BoundingBox;
+
+    if ctx.count("FROM crossings")? != 0 { return Ok(()) };
+    info!("Phase 1.4: making crossings");
+    let todo = ctx.count("FROM nodes WHERE osm_was_crossing = true")?;
+    let bar = ctx.make_custom_bar(todo as _);
+    bar.set_message("Processing crossing nodes");
+
+    let conn = ctx.get_conn();
     let trans = conn.transaction()?;
-    let bar = make_bar(objs);
-    bar.set_message("Beginning node import: rewinding file");
-    rdr.rewind()?;
-    bar.set_message("Beginning node import: iterating");
+    let mut done = Vec::new();
+    let mut skipped = 0;
+
+    for nd in Node::from_select(&trans, "WHERE osm_was_crossing = true", &[])? {
+        bar.inc(1);
+        if done.contains(&nd.id) {
+            skipped += 1;
+            continue;
+        }
+        bar.set_message(&format!("Processing node #{} (done = {}, skipped = {})", nd.id, done.len(), skipped));
+        let mut nodes = vec![nd.id];
+        let mut mp = MultiPoint(vec![Point::from_postgis(&nd.location)]);
+        done.push(nd.id);
+        for other_nd in Node::from_select(&trans, "WHERE osm_was_crossing = true
+                                                   AND ST_Distance(location::geography, $1::geography) < 35",
+                                          &[&nd.location])? {
+            if !done.contains(&other_nd.id) {
+                done.push(other_nd.id);
+                nodes.push(other_nd.id);
+                mp.0.push(Point::from_postgis(&nd.location));
+            }
+        }
+        let bbox = mp.bbox().ok_or("couldn't find bounding box")?;
+        let ls = geo_ls_to_postgis(LineString(vec![
+            Point::new(bbox.xmin, bbox.ymin),
+            Point::new(bbox.xmin, bbox.ymax),
+            Point::new(bbox.xmax, bbox.ymax),
+            Point::new(bbox.xmax, bbox.ymin),
+        ]));
+        let poly = PgPolygon {
+            rings: vec![ls],
+            srid: Some(4326)
+        };
+        let cx = Crossing::insert(&trans, None, poly)?;
+        for nd in nodes {
+            trans.execute("UPDATE nodes SET parent_crossing = $1 WHERE id = $2", &[&cx, &nd])?;
+        }
+    }
+    trans.commit()?;
+    Ok(())
+}
+pub fn nodes<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
+    if ctx.count("FROM nodes")? != 0 { return Ok(()) };
+    info!("Phase 1.1: making nodes");
+    let conn = ctx.get_conn();
+    let trans = conn.transaction()?;
+    let bar = ctx.make_bar();
+    bar.set_message("Beginning node import");
     let mut objs = 0;
-    for obj in rdr.par_iter() {
+    for obj in ctx.par_iter()? {
         bar.inc(1);
         if let OsmObj::Node(nd) = obj? {
             bar.set_message(&format!("Processing node #{}", nd.id.0));
             let lat = nd.decimicro_lat as f64 / 10_000_000.0;
             let lon = nd.decimicro_lon as f64 / 10_000_000.0;
             let pt = PgPoint::new(lon, lat, Some(4326));
-            Node::insert_from_osm(&trans, pt, nd.id.0)?;
+            let osm_was_crossing = nd.tags.contains("railway", "level_crossing");
+            let node = Node {
+                id: -1,
+                location: pt,
+                graph_part: 0,
+                parent_crossing: None,
+                orig_osm_id: Some(nd.id.0),
+                osm_was_crossing
+            };
+            node.insert_self(&trans)?;
         }
         objs += 1;
     }
+    ctx.update_objs(objs);
     trans.commit()?;
-    Ok(objs)
+    Ok(())
 }
-pub fn links<R: Read + Seek>(pool: &DbPool, n_threads: usize, rdr: &mut OsmPbfReader<R>, objs: Option<u64>) -> Result<u64> {
+pub fn links<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     use geo::algorithm::haversine_length::HaversineLength;
     use self::chase_lev::Steal;
 
-    let bar = make_bar(objs);
-    bar.set_message("Beginning link import: rewinding file");
-    rdr.rewind()?;
-    bar.set_message("Beginning link import: iterating");
+    if ctx.count("FROM links")? != 0 { return Ok(()) };
+    info!("Phase 1.2: making links");
+
+    let bar = ctx.make_bar();
+    bar.set_message("Beginning link import");
     let (worker, stealer) = chase_lev::deque();
 
     let mut objs = 0;
     let mut ways = 0;
-    for obj in rdr.par_iter() {
+    for obj in ctx.par_iter()? {
         bar.inc(1);
         if let OsmObj::Way(way) = obj? {
             if way.tags.contains("railway", "rail") {
@@ -99,10 +204,12 @@ pub fn links<R: Read + Seek>(pool: &DbPool, n_threads: usize, rdr: &mut OsmPbfRe
         objs += 1;
     }
     bar.finish();
-    let bar = make_bar(Some(ways));
-    bar.set_message(&format!("Processing ways using {} threads...", n_threads));
+    ctx.update_objs(objs);
+    let bar = ctx.make_custom_bar(ways);
+    let pool = ctx.get_pool();
+    bar.set_message(&format!("Processing ways using {} threads...", ctx.n_threads()));
     ::crossbeam::scope(|scope| {
-        for n in 0..n_threads {
+        for n in 0..ctx.n_threads() {
             debug!("links: spawning thread {}", n);
             scope.spawn(|| {
                 'outer: loop {
@@ -160,21 +267,23 @@ pub fn links<R: Read + Seek>(pool: &DbPool, n_threads: usize, rdr: &mut OsmPbfRe
             });
         }
     });
-    Ok(objs)
+    Ok(())
 }
-pub fn stations<T: GenericConnection, R: Read + Seek>(conn: &T, rdr: &mut OsmPbfReader<R>, objs: Option<u64>) -> Result<u64> {
+pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     use geo::algorithm::haversine_destination::HaversineDestination;
     use geo::algorithm::haversine_length::HaversineLength;
     use geo::algorithm::centroid::Centroid;
 
+    if ctx.count("FROM stations")? != 0 { return Ok(()) };
+    info!("Phase 1.3: making stations");
+
+    let conn = ctx.get_conn();
     let trans = conn.transaction()?;
-    let bar = make_bar(objs);
-    bar.set_message("Beginning station import: rewinding file");
-    rdr.rewind()?;
-    bar.set_message("Beginning station import: iterating");
+    let bar = ctx.make_bar();
+    bar.set_message("Beginning station import");
     let mut objs = 0;
     let mut polys = HashMap::new();
-    'outer: for obj in rdr.par_iter() {
+    'outer: for obj in ctx.par_iter()? {
         bar.inc(1);
         let obj = obj?;
         if obj.tags().contains("railway", "station") && obj.tags().get("ref").is_some() {
@@ -219,8 +328,9 @@ pub fn stations<T: GenericConnection, R: Read + Seek>(conn: &T, rdr: &mut OsmPbf
         }
         objs += 1;
     }
+    ctx.update_objs(objs);
     bar.finish();
-    let bar = make_bar(Some(polys.len() as _));
+    let bar = ctx.make_custom_bar(polys.len() as _);
     bar.set_message("Making stations");
     for (nr_ref, poly) in polys {
         bar.set_message(&format!("Processing station {}", nr_ref));
@@ -229,7 +339,7 @@ pub fn stations<T: GenericConnection, R: Read + Seek>(conn: &T, rdr: &mut OsmPbf
             rings: vec![geo_ls_to_postgis(poly.exterior.clone())],
             srid: Some(4326)
         };
-        let nd = Node::insert_processed(&trans, geo_pt_to_postgis(centroid), true)?;
+        let nd = Node::insert(&trans, geo_pt_to_postgis(centroid))?;
         Station::insert(&trans, &nr_ref, nd, pgpoly.clone())?;
         for pt in Node::from_select(&trans, "WHERE ST_Intersects(location, $1)", &[&pgpoly])? {
             let geopt = Point::from_postgis(&pt.location);
@@ -246,12 +356,16 @@ pub fn stations<T: GenericConnection, R: Read + Seek>(conn: &T, rdr: &mut OsmPbf
         bar.inc(1);
     }
     trans.commit()?;
-    Ok(objs)
+    Ok(())
 }
-pub fn separate_nodes<T: GenericConnection>(conn: &T) -> Result<()> {
+pub fn separate_nodes<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
+    let todo = ctx.count("FROM nodes WHERE graph_part = 0")?;
+    if todo == 0 { return Ok(()) };
+    info!("Phase 1.5: separating nodes");
+
+    let conn = ctx.get_conn();
     let trans = conn.transaction()?;
-    let todo = util::count(&trans, "FROM nodes WHERE graph_part = 0", &[])?;
-    let bar = make_bar(Some(todo as _));
+    let bar = ctx.make_custom_bar(todo as _);
     let mut cur_graph_part = 1;
     let mut total = 0;
     loop {
