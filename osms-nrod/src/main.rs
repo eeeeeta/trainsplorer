@@ -12,6 +12,7 @@ extern crate tokio_core;
 #[macro_use] extern crate failure;
 
 use stomp::session::{SessionEvent, Session};
+use stomp::header::Header;
 use stomp::session_builder::SessionBuilder;
 use stomp::subscription::AckOrNack;
 use stomp::connection::*;
@@ -64,6 +65,7 @@ impl Future for NtrodProcessor {
         if let Async::Ready(_) = tm {
             info!("Reconnecting...");
             self.sess.reconnect();
+            self.timeout = None;
         }
 
         if let Async::Ready(ev) = self.sess.poll()? {
@@ -73,7 +75,9 @@ impl Future for NtrodProcessor {
                     info!("Connected to NTROD!");
                     self.timeout = None;
                     self.timeout_ms = 1000;
-                    self.sess.subscription("/topic/TRAIN_MVT_ALL_TOC").start();
+                    self.sess.subscription("/topic/TRAIN_MVT_ALL_TOC")
+                        .with(Header::new("activemq.subscriptionName", "osms-nrod"))
+                        .start();
                 },
                 ErrorFrame(fr) => {
                     error!("Error frame, reconnecting: {:?}", fr);
@@ -104,6 +108,7 @@ impl Future for NtrodProcessor {
                 },
                 Disconnected(reason) => {
                     error!("disconnected: {:?}", reason);
+                    error!("reconnecting in {} ms", self.timeout_ms);
                     let mut tm = Timeout::new(Duration::from_millis(self.timeout_ms), &self.hdl)?;
                     tm.poll()?;
                     self.timeout = Some(tm);
@@ -192,6 +197,7 @@ fn main() {
     let nrod_url = conf.nrod_url.as_ref().map(|x| x as &str).unwrap_or("54.247.175.93");
     let sess = SessionBuilder::new(nrod_url, conf.nrod_port.unwrap_or(61618))
         .with(Credentials(&conf.username, &conf.password))
+        .with(Header::new("client-id", "eta@theta.eu.org"))
         .with(HeartBeat(5_000, 2_000))
         .start(hdl.clone())
         .unwrap();
