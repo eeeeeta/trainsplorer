@@ -4,6 +4,7 @@ name = "osms-nrod"
 version = "0.1.0"
 
 [dependencies]
+cadence = "0.12.2"
 clap = "2.26.0"
 failure = "0.1.1"
 failure_derive = "0.1"
