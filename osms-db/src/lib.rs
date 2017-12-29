@@ -1,5 +1,6 @@
-#[macro_use] extern crate error_chain;
 #[macro_use] extern crate postgres;
+extern crate failure;
+#[macro_use] extern crate failure_derive;
 extern crate r2d2;
 extern crate r2d2_postgres;
 extern crate postgis;
@@ -15,8 +16,8 @@ extern crate chashmap;
 extern crate crossbeam;
 extern crate osmpbfreader;
 
+#[macro_use] pub mod util;
 pub mod errors;
-pub mod util;
 pub mod db;
 pub mod osm;
 pub mod ntrod;

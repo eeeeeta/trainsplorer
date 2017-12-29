@@ -6,6 +6,8 @@ version = "0.1.0"
 [dependencies]
 crossbeam = "0.3.0"
 error-chain = "0.10.0"
+failure = "0.1.1"
+failure_derive = "0.1.1"
 fern = "0.4.2"
 flate2 = "0.2.20"
 indicatif = "0.7.0"

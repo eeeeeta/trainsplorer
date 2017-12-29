@@ -4,7 +4,7 @@ extern crate toml;
 extern crate r2d2;
 extern crate r2d2_postgres;
 extern crate flate2;
-#[macro_use] extern crate error_chain;
+#[macro_use] extern crate failure;
 #[macro_use] extern crate log;
 #[macro_use] extern crate serde_derive;
 extern crate osmpbfreader;
@@ -22,22 +22,9 @@ use postgres::tls::native_tls::NativeTls;
 use osms_db::*;
 use flate2::bufread::GzDecoder;
 use osmpbfreader::OsmPbfReader;
+use failure::{Error, ResultExt, err_msg};
 
-pub mod errors {
-    #![allow(unused_doc_comment)]
-    error_chain! {
-        links {
-            OsmsDb(::osms_db::errors::Error, ::osms_db::errors::ErrorKind);
-        }
-        foreign_links {
-            Pbf(::osmpbfreader::Error);
-            Postgres(::postgres::error::Error);
-        }
-    }
-}
 pub mod make;
-
-use errors::*;
 
 #[derive(Deserialize)]
 pub struct Config {
@@ -54,7 +41,7 @@ pub struct Config {
     #[serde(default)]
     limit_schedule_toc: Option<String>
 }
-fn run() -> Result<()> {
+fn run() -> Result<(), Error> {
     fern::Dispatch::new()
         .format(|out, msg, record| {
             out.finish(format_args!("[{} {}] {}",
@@ -73,36 +60,36 @@ fn run() -> Result<()> {
     let path = args.get(0).map(|x| x as &str).unwrap_or("config.toml");
     info!("Loading config from file {}...", path);
     let mut file = File::open(path)
-        .chain_err(|| "couldn't open config file")?;
+        .context(err_msg("couldn't open config file"))?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)
-        .chain_err(|| "error reading from config file")?;
+        .context(err_msg("error reading from config file"))?;
     info!("Parsing config...");
     let conf: Config = toml::de::from_str(&contents)
-        .chain_err(|| "invalid config")?;
+        .context(err_msg("invalid config"))?;
 
     info!("Opening data files...");
     let corpus = BufReader::new(File::open(conf.corpus_data)
-        .chain_err(|| "couldn't open corpus data file")?);
+        .context(err_msg("couldn't open corpus data file"))?);
     let schedule = BufReader::new(File::open(conf.schedule_data)
-                                  .chain_err(|| "couldn't open schedule data file")?);
+                                  .context(err_msg("couldn't open schedule data file"))?);
     let schedule = GzDecoder::new(schedule)
-        .chain_err(|| "couldn't start gunzipping schedule data file")?;
+        .context(err_msg("couldn't start gunzipping schedule data file"))?;
     let mut map = OsmPbfReader::new(BufReader::new(File::open(conf.map_data)
-                                               .chain_err(|| "couldn't open map data file")?));
+                                               .context(err_msg("couldn't open map data file"))?));
     info!("Connecting to Postgres...");
     let r2c = r2d2::Config::default();
     let tls = if conf.require_tls {
         let tls = NativeTls::new()
-            .chain_err(|| "couldn't initialize tls")?;
+            .context(err_msg("couldn't initialize tls"))?;
         TlsMode::Require(Box::new(tls))
     }
     else {
         TlsMode::None
     };
     let manager = PostgresConnectionManager::new(conf.database_url, tls)
-        .chain_err(|| "couldn't connect to postgres")?;
-    let pool = r2d2::Pool::new(r2c, manager).chain_err(|| "couldn't make db pool")?;
+        .context(err_msg("couldn't connect to postgres"))?;
+    let pool = r2d2::Pool::new(r2c, manager).context(err_msg("couldn't make db pool"))?;
 
     let mut ctx = make::ImportContext::new(&mut map, &pool, conf.threads);
     if conf.always_count {
@@ -145,4 +132,11 @@ fn run() -> Result<()> {
     info!("Complete!");
     Ok(())
 }
-quick_main!(run);
+fn main() {
+    if let Err(e) = run() {
+        error!("ERROR: {}", e);
+        for c in e.causes() {
+            error!("Cause: {}", c);
+        }
+    }
+}

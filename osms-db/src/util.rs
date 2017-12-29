@@ -8,7 +8,7 @@ use postgis::ewkb::{Point, LineString};
 pub fn count<T: GenericConnection>(conn: &T, details: &str, args: &[&ToSql]) -> Result<i64> {
     Ok(conn.query(&format!("SELECT COUNT(*) {}", details), args)?.into_iter()
        .nth(0)
-       .ok_or("Count query failed")?
+       .ok_or(OsmsError::ExtraterrestrialActivity)?
        .get(0))
 }
 pub fn geo_pt_to_postgis(pt: geo::Point<f64>) -> Point {
@@ -18,5 +18,17 @@ pub fn geo_ls_to_postgis(ls: geo::LineString<f64>) -> LineString {
     LineString {
         points: ls.0.into_iter().map(geo_pt_to_postgis).collect(),
         srid: Some(4326)
+    }
+}
+#[macro_export]
+macro_rules! impl_from_for_error {
+    ($error:ident, $($orig:ident => $var:ident),*) => {
+        $(
+            impl From<$orig> for $error {
+                fn from(err: $orig) -> $error {
+                    $error::$var(err)
+                }
+            }
+        )*
     }
 }

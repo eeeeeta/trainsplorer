@@ -1,5 +1,3 @@
-pub mod types;
-pub mod live;
 use db::{GenericConnection, DbPool, DbType, InsertableDbType};
 use ntrod_types::schedule;
 use ntrod_types::reference;
@@ -16,9 +14,11 @@ use std::thread;
 use std::sync::atomic::{Ordering, AtomicUsize};
 use std::sync::Arc;
 
+pub mod types;
+
 pub fn get_crossing_status<T: GenericConnection>(conn: &T, cid: i32) -> Result<CrossingStatus> {
     let crossing = Crossing::from_select(conn, "WHERE node_id = $1", &[&cid])?.into_iter()
-        .nth(0).ok_or("No such crossing")?;
+        .nth(0).ok_or(OsmsError::CrossingNotFound(cid))?;
     let cur = Local::now().naive_utc();
     let sps = StationPath::from_select(conn, "WHERE $1 = ANY(crossings)", &[&cid])?;
     let mut station_paths = HashMap::new();
@@ -49,7 +49,8 @@ pub fn get_crossing_status<T: GenericConnection>(conn: &T, cid: i32) -> Result<C
             trains.insert(train.id, train);
             continue;
         }
-        bail!("Way ID {} has no associated schedule or train. Foreign keys broke.", way.id);
+        error!("Way ID {} has no associated schedule or train. Foreign keys broke.", way.id);
+        return Err(OsmsError::DatabaseInconsistency("way has no sched or train"));
     }
     for idx in ways_to_remove {
         ways.remove(idx);

@@ -44,10 +44,10 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
     let trans = conn.transaction()?;
 
     let starting_node = Station::from_select(&trans, "WHERE nr_ref = $1", &[&from])?.into_iter()
-        .nth(0).ok_or("Starting station does not exist.")?.point;
+        .nth(0).ok_or(OsmsError::StationNotFound(from.into()))?.point;
 
     let goal_node = Station::from_select(&trans, "WHERE nr_ref = $1", &[&to])?.into_iter()
-        .nth(0).ok_or("Finishing station does not exist.")?.point;
+        .nth(0).ok_or(OsmsError::StationNotFound(to.into()))?.point;
 
     debug!("navigate: navigating from {} ({}) to {} ({})",
            from, starting_node, to, goal_node);
@@ -57,7 +57,7 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
 
     let start = Node::from_select(&trans, "WHERE id = $1", &[&starting_node])
         ?.into_iter().nth(0)
-        .ok_or("Starting node does not exist.")?;
+        .ok_or(OsmsError::DatabaseInconsistency("station's node doesn't exist"))?;
 
     nodes.insert(start.id, LightNode { dist: 0.0, parent: None});
     heap.push(State { cost: OrderedFloat(0.0), id: start.id });
@@ -65,9 +65,10 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
     let dest = Node::from_select(&trans, "WHERE id = $1 AND graph_part = $2",
                                  &[&goal_node, &start.graph_part])
         ?.into_iter().nth(0)
-        .ok_or(
-            "Finishing node does not exist, or is not in the same graph part as the starting node."
-        )?;
+        .ok_or(OsmsError::IncorrectGraphPart {
+            from: from.into(),
+            to: to.into()
+        })?;
 
     let mut considered = 0;
     let mut updated = 0;

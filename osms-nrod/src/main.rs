@@ -7,29 +7,30 @@ extern crate postgres;
 extern crate toml;
 extern crate fern;
 #[macro_use] extern crate serde_derive;
-#[macro_use] extern crate enum_display_derive;
-extern crate tic;
+extern crate futures;
+extern crate tokio_core;
+#[macro_use] extern crate failure;
 
-use stomp::handler::Handler;
-use stomp::session::Session;
-use stomp::frame::Frame;
+use stomp::session::{SessionEvent, Session};
+use stomp::session_builder::SessionBuilder;
 use stomp::subscription::AckOrNack;
 use stomp::connection::*;
 use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::collections::HashMap;
-use std::fmt::Display;
-use std::thread;
+use tokio_core::reactor::{Timeout, Handle, Core};
+use std::time::Duration;
+use futures::*;
 
-use ntrod_types::movements::{MvtBody, Records};
+use ntrod_types::movements::{Records};
 use postgres::{Connection, TlsMode};
-use tic::{Interest, Receiver, Sample, Clocksource, Sender};
+
+mod live;
 
 #[derive(Deserialize)]
 pub struct Config {
     database_url: String,
-    metrics_url: String,
     username: String,
     password: String,
     #[serde(default)]
@@ -41,56 +42,102 @@ pub struct Config {
     #[serde(default)]
     nrod_port: Option<u16>
 }
-#[derive(Clone, PartialEq, Eq, Hash, Display)]
-pub enum Metric {
-    GotMessage,
-    DidMessage,
-    ParseError,
-    GotActivation,
-    DidActivation,
-    GotCancellation,
-    DidCancellation,
-    GotMovement,
-    DidMovement,
-    Other
+pub struct NtrodProcessor {
+    sess: Session,
+    conn: Connection,
+    hdl: Handle,
+    timeout: Option<Timeout>,
+    timeout_ms: u64
 }
+impl Future for NtrodProcessor {
+    type Item = ();
+    type Error = ::failure::Error;
+
+    fn poll(&mut self) -> Poll<(), Self::Error> {
+        use self::SessionEvent::*;
+
+        let tm = self.timeout
+            .as_mut()
+            .map(|t| t.poll())
+            .unwrap_or(Ok(Async::NotReady))?;
+
+        if let Async::Ready(_) = tm {
+            info!("Reconnecting...");
+            self.sess.reconnect();
+        }
+
+        if let Async::Ready(ev) = self.sess.poll()? {
+            let ev = ev.unwrap();
+            match ev {
+                Connected => {
+                    info!("Connected to NTROD!");
+                    self.timeout = None;
+                    self.timeout_ms = 1000;
+                    self.sess.subscription("/topic/TRAIN_MVT_ALL_TOC").start();
+                },
+                ErrorFrame(fr) => {
+                    error!("Error frame, reconnecting: {:?}", fr);
+                    self.sess.reconnect();
+                },
+                Message { destination, frame, .. } => {
+                    if destination == "/topic/TRAIN_MVT_ALL_TOC" {
+                        let st = String::from_utf8_lossy(&frame.body);
+                        let recs: Result<Records, _> = serde_json::from_str(&st);
+                        match recs {
+                            Ok(r) => {
+                                for record in r {
+                                    match live::process_ntrod_event(&self.conn, record) {
+                                        Err(e) => {
+                                            error!("Error processing: {}", e);
+                                        },
+                                        _ => {
+                                        }
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                error!("### PARSE ERROR ###\nerr: {}\ndata: {}", e, &st);
+                            }
+                        }
+                    }
+                    self.sess.acknowledge_frame(&frame, AckOrNack::Ack);
+                },
+                Disconnected(reason) => {
+                    error!("disconnected: {:?}", reason);
+                    let mut tm = Timeout::new(Duration::from_millis(self.timeout_ms), &self.hdl)?;
+                    tm.poll()?;
+                    self.timeout = Some(tm);
+                    self.timeout_ms *= 2;
+                },
+                _ => {}
+            }
+        }
+        Ok(Async::NotReady)
+    }
+}
+/*
 fn on_message(hdl: &mut LoginHandler, _: &mut Session<LoginHandler>, fr: &Frame) -> AckOrNack {
-    let start = hdl.1.counter();
-    hdl.2.send(Sample::new(start, start, Metric::GotMessage)).unwrap();
     let st = String::from_utf8_lossy(&fr.body);
     let recs: Result<Records, _> = serde_json::from_str(&st);
     match recs {
         Ok(r) => {
             for record in r {
-                let metric_type = match record.body {
-                    MvtBody::Activation(..) => (Metric::GotActivation, Metric::DidActivation),
-                    MvtBody::Cancellation(..) => (Metric::GotCancellation, Metric::DidCancellation),
-                    MvtBody::Movement(..) => (Metric::GotMovement, Metric::DidMovement),
-                    _ => (Metric::Other, Metric::Other)
-                };
-                hdl.2.send(Sample::new(start, start, metric_type.0)).unwrap();
-                match osms_db::ntrod::live::process_ntrod_event(&hdl.0, record) {
+                match live::process_ntrod_event(&hdl.0, record) {
                     Err(e) => {
                         error!("Error processing: {}", e);
                     },
                     _ => {
-                        let stop = hdl.1.counter();
-                        hdl.2.send(Sample::new(start, stop, metric_type.1)).unwrap();
                     }
                 }
             }
-            let stop = hdl.1.counter();
-            hdl.2.send(Sample::new(start, stop, Metric::DidMessage)).unwrap();
         },
         Err(e) => {
-            let stop = hdl.1.counter();
-            hdl.2.send(Sample::new(start, stop, Metric::ParseError)).unwrap();
             error!("### PARSE ERROR ###\nerr: {}\ndata: {}", e, &st);
         }
     }
     AckOrNack::Ack
 }
-struct LoginHandler(Connection, Clocksource, Sender<Metric>);
+struct LoginHandler(Connection);
 impl Handler for LoginHandler {
     fn on_connected(&mut self, sess: &mut Session<Self>, _: &Frame) {
         info!("Connection established.");
@@ -103,6 +150,7 @@ impl Handler for LoginHandler {
         warn!("Disconnected.")
     }
 }
+*/
 fn main() {
     println!("osms-nrod starting");
     let args = env::args().skip(1).collect::<Vec<_>>();
@@ -136,35 +184,17 @@ fn main() {
         .chain(std::io::stdout())
         .apply()
         .unwrap();
-    info!("Initializing metrics...");
-    let mut recv = Receiver::configure()
-        .service(true)
-        .http_listen(conf.metrics_url.clone())
-        .build();
-
-    recv.add_interest(Interest::Count(Metric::GotMessage));
-    recv.add_interest(Interest::Count(Metric::DidMessage));
-    recv.add_interest(Interest::Count(Metric::ParseError));
-    recv.add_interest(Interest::Count(Metric::GotActivation));
-    recv.add_interest(Interest::Count(Metric::DidActivation));
-    recv.add_interest(Interest::Count(Metric::GotCancellation));
-    recv.add_interest(Interest::Count(Metric::DidCancellation));
-    recv.add_interest(Interest::Count(Metric::GotMovement));
-    recv.add_interest(Interest::Count(Metric::DidMovement));
-
-    let sender = recv.get_sender();
-    let clk = recv.get_clocksource();
-
-    thread::spawn(move || { recv.run(); });
-
     info!("Connecting to database...");
     let conn = Connection::connect(conf.database_url, TlsMode::None).unwrap();
-    let mut cli = stomp::client::<LoginHandler>();
+    info!("Running client...");
+    let mut core = Core::new().unwrap();
+    let hdl = core.handle();
     let nrod_url = conf.nrod_url.as_ref().map(|x| x as &str).unwrap_or("54.247.175.93");
-    cli.session(nrod_url, conf.nrod_port.unwrap_or(61618), LoginHandler(conn, clk, sender))
+    let sess = SessionBuilder::new(nrod_url, conf.nrod_port.unwrap_or(61618))
         .with(Credentials(&conf.username, &conf.password))
         .with(HeartBeat(5_000, 2_000))
-        .start();
-    info!("Running client...");
-    cli.run()
+        .start(hdl.clone())
+        .unwrap();
+    let p = NtrodProcessor { conn, sess, hdl, timeout: None, timeout_ms: 1000 };
+    core.run(p).unwrap();
 }

@@ -1,7 +1,6 @@
 use osmpbfreader::{OsmPbfReader};
 use osmpbfreader::reader::ParIter;
 use osmpbfreader::objects::{OsmObj};
-use super::errors::*;
 use indicatif::{ProgressStyle, ProgressBar};
 use std::io::{Read, Seek};
 use geo::*;
@@ -13,7 +12,10 @@ use osms_db::db::*;
 use osms_db::util;
 use osms_db::osm::types::*;
 use crossbeam::sync::chase_lev;
+use failure::Error;
 use std::collections::HashMap;
+
+type Result<T> = ::std::result::Result<T, Error>;
 
 pub struct ImportContext<'a, R: 'a> {
     objs: Option<u64>,
@@ -128,7 +130,7 @@ pub fn crossings<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
                 mp.0.push(Point::from_postgis(&nd.location));
             }
         }
-        let bbox = mp.bbox().ok_or("couldn't find bounding box")?;
+        let bbox = mp.bbox().ok_or(format_err!("couldn't find bounding box"))?;
         let ls = geo_ls_to_postgis(LineString(vec![
             Point::new(bbox.xmin, bbox.ymin),
             Point::new(bbox.xmin, bbox.ymax),
@@ -334,7 +336,7 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     bar.set_message("Making stations");
     for (nr_ref, poly) in polys {
         bar.set_message(&format!("Processing station {}", nr_ref));
-        let centroid = poly.centroid().ok_or("Station has no centroid")?;
+        let centroid = poly.centroid().ok_or(format_err!("Station has no centroid"))?;
         let pgpoly = PgPolygon {
             rings: vec![geo_ls_to_postgis(poly.exterior.clone())],
             srid: Some(4326)
