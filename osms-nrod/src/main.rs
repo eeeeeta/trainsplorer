@@ -244,7 +244,7 @@ fn main() {
     info!("Running client...");
     let mut core = Core::new().unwrap();
     let hdl = core.handle();
-    let nrod_url = conf.nrod_url.as_ref().map(|x| x as &str).unwrap_or("54.247.175.93");
+    let nrod_url = conf.nrod_url.as_ref().map(|x| x as &str).unwrap_or("datafeeds.networkrail.co.uk");
     let sess = SessionBuilder::new(nrod_url, conf.nrod_port.unwrap_or(61618))
         .with(Credentials(&conf.username, &conf.password))
         .with(Header::new("client-id", "eta@theta.eu.org"))
