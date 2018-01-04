@@ -119,7 +119,7 @@ impl Future for NtrodProcessor {
 
         if let Async::Ready(_) = tm {
             info!("Reconnecting...");
-            self.sess.reconnect();
+            self.sess.reconnect().unwrap();
             self.timeout = None;
         }
 
@@ -136,7 +136,7 @@ impl Future for NtrodProcessor {
                 },
                 ErrorFrame(fr) => {
                     error!("Error frame, reconnecting: {:?}", fr);
-                    self.sess.reconnect();
+                    self.sess.reconnect().unwrap();
                 },
                 Message { destination, frame, .. } => {
                     if destination == "/topic/TRAIN_MVT_ALL_TOC" {
