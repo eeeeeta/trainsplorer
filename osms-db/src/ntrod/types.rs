@@ -276,6 +276,11 @@ date DATE NOT NULL,
 signalling_id VARCHAR NOT NULL
 "#
     }
+    fn indexes() -> Vec<&'static str> {
+        vec![
+            "trains_trust_id ON trains (trust_id)"
+        ]
+    }
     fn from_row(row: &Row) -> Self {
         Self {
             id: row.get(0),
@@ -446,6 +451,12 @@ end_date DATE NOT NULL,
 station_path INT NOT NULL REFERENCES station_paths ON DELETE RESTRICT,
 CHECK((parent_id IS NULL) != (train_id IS NULL))
 "#
+    }
+    fn indexes() -> Vec<&'static str> {
+        vec![
+            "schedule_ways_parent_id ON schedule_ways (parent_id)",
+            "schedule_ways_train_id ON schedule_ways (train_id)"
+        ]
     }
     fn from_row(row: &Row) -> Self {
         Self {
