@@ -75,6 +75,8 @@ pub trait InsertableDbType: DbType {
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<Self::Id>;
 }
 pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
+    debug!("initialize_database: enabling PostGIS...");
+    conn.execute("CREATE EXTENSION IF NOT EXISTS postgis", &[])?;
     debug!("initialize_database: making types...");
     conn.execute(ntrod_types::schedule::Days::create_type(), &[])?;
     conn.execute(ntrod_types::cif::StpIndicator::create_type(), &[])?;
@@ -88,6 +90,9 @@ pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
     Schedule::make_table(conn)?;
     Train::make_table(conn)?;
     ScheduleWay::make_table(conn)?;
+    ScheduleFile::make_table(conn)?;
+    NaptanEntry::make_table(conn)?;
+    TiplocEntry::make_table(conn)?;
     ntrod_types::reference::CorpusEntry::make_table(conn)?;
     Ok(())
 }

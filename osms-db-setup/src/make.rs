@@ -1,6 +1,6 @@
 use osmpbfreader::{OsmPbfReader};
 use osmpbfreader::reader::ParIter;
-use osmpbfreader::objects::{OsmObj};
+use osmpbfreader::objects::{OsmObj, OsmId};
 use indicatif::{ProgressStyle, ProgressBar};
 use std::io::{Read, Seek};
 use geo::*;
@@ -11,6 +11,7 @@ use postgis::ewkb::Polygon as PgPolygon;
 use osms_db::db::*;
 use osms_db::util;
 use osms_db::osm::types::*;
+use osms_db::ntrod::types::{TiplocEntry, NaptanEntry};
 use crossbeam::sync::chase_lev;
 use failure::Error;
 use std::collections::HashMap;
@@ -145,6 +146,76 @@ pub fn crossings<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
         for nd in nodes {
             trans.execute("UPDATE nodes SET parent_crossing = $1 WHERE id = $2", &[&cx, &nd])?;
         }
+    }
+    trans.commit()?;
+    Ok(())
+}
+#[derive(Deserialize)]
+pub struct TiplocCsv {
+    #[serde(rename = "TIPLOC")]
+    tiploc: String,
+    #[serde(rename = "NAME")]
+    name: String,
+    #[serde(rename = "EASTING")]
+    easting: u32,
+    #[serde(rename = "NORTHING")]
+    northing: u32
+}
+#[derive(Deserialize)]
+pub struct NaptanCsv {
+    #[serde(rename = "AtcoCode")]
+    atcocode: String,
+    #[serde(rename = "TiplocCode")]
+    tiploccode: String,
+    #[serde(rename = "CrsCode")]
+    crscode: String,
+    #[serde(rename = "StationName")]
+    stationname: String,
+    #[serde(rename = "Easting")]
+    easting: u32,
+    #[serde(rename = "Northing")]
+    northing: u32
+}
+pub fn tiploc_entries<R: Read, T: GenericConnection>(conn: &T, file: R) -> Result<()> {
+    let trans = conn.transaction()?;
+    info!("Importing tiploc entries...");
+    let mut rdr = ::csv::Reader::from_reader(file);
+    for result in rdr.deserialize() {
+        let rec: TiplocCsv = result?;
+        let mut pgp: Option<PgPoint> = None;
+        for row in &trans.query("SELECT ST_Transform(ST_SetSRID(ST_MakePoint($1, $2), 27700), 4326)", &[&(rec.easting as f64), &(rec.northing as f64)])? {
+            pgp = Some(row.get(0));
+        }
+        let pgp = pgp.ok_or(format_err!("couldn't transform point"))?;
+        let npt = TiplocEntry {
+            tiploc: rec.tiploc,
+            name: rec.name,
+            loc: pgp
+        };
+        npt.insert_self(&trans)?;
+    }
+    trans.commit()?;
+    Ok(())
+}
+pub fn naptan_entries<R: Read, T: GenericConnection>(conn: &T, file: R) -> Result<()> {
+    let trans = conn.transaction()?;
+    info!("Importing naptan entries...");
+    let mut rdr = ::csv::Reader::from_reader(file);
+    for result in rdr.deserialize() {
+        let rec: NaptanCsv = result?;
+        let mut pgp: Option<PgPoint> = None;
+        for row in &trans.query("SELECT ST_Transform(ST_SetSRID(ST_MakePoint($1, $2), 27700), 4326)", &[&(rec.easting as f64), &(rec.northing as f64)])? {
+            pgp = Some(row.get(0));
+        }
+        let pgp = pgp.ok_or(format_err!("couldn't transform point"))?;
+        let npt = NaptanEntry {
+            atco: rec.atcocode,
+            tiploc: rec.tiploccode,
+            crs: rec.crscode,
+            name: rec.stationname,
+            loc: pgp
+        };
+        npt.insert_self(&trans)?;
     }
     trans.commit()?;
     Ok(())
@@ -288,54 +359,153 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     'outer: for obj in ctx.par_iter()? {
         bar.inc(1);
         let obj = obj?;
-        if obj.tags().contains("railway", "station") && obj.tags().get("ref").is_some() {
-            match obj {
-                OsmObj::Way(way) => {
-                    bar.set_message(&format!("Processing way #{} ({} polys thus far)",
-                                             way.id.0, polys.len()));
-                    if way.is_closed() {
-                        let mut nodes = vec![];
-                        for nd in way.nodes.iter() {
-                            let pt = Node::from_select(&trans, "WHERE orig_osm_id = $1", &[&nd.0])?.into_iter()
-                                .nth(0);
-                            let pt = match pt {
-                                Some(n) => n,
-                                None => {
-                                    debug!("stations: way #{} contained invalid point #{}",
-                                           way.id.0, nd.0);
-                                    continue 'outer;
-                                }
-                            };
-                            nodes.push(Point::from_postgis(&pt.location));
-                        }
-                        let poly = Polygon { exterior: LineString(nodes), interiors: vec![] };
-                        polys.insert(way.tags.get("ref").unwrap().clone(), poly);
-                    }
-                },
+        if obj.tags().contains("railway", "station") {
+            let mut tiplocs: HashSet<String> = HashSet::new();
+            let mut this_polys = vec![];
+            if let Some(crs) = obj.tags().get("ref") {
+                for row in &trans.query("SELECT tiploc FROM corpus_entries WHERE crs = $1 AND tiploc IS NOT NULL", &[&crs])? {
+                    tiplocs.insert(row.get(0));
+                }
+            }
+            if let Some(crs) = obj.tags().get("ref:crs") {
+                for row in &trans.query("SELECT tiploc FROM corpus_entries WHERE crs = $1 AND tiploc IS NOT NULL", &[&crs])? {
+                    tiplocs.insert(row.get(0));
+                }
+            }
+            if let Some(tiploc) = obj.tags().get("ref:tiploc") {
+                for row in &trans.query("SELECT tiploc FROM corpus_entries WHERE tiploc = $1 AND tiploc IS NOT NULL", &[&tiploc])? {
+                    tiplocs.insert(row.get(0));
+                }
+            }
+            if let Some(stanox) = obj.tags().get("ref:stanox") {
+                for row in &trans.query("SELECT tiploc FROM corpus_entries WHERE stanox = $1 AND tiploc IS NOT NULL", &[&stanox])? {
+                    tiplocs.insert(row.get(0));
+                }
+            }
+            if tiplocs.len() == 0 {
+                continue 'outer;
+            }
+            bar.set_message(&format!("Processing TIPLOCs {:?} ({} polys thus far)",
+                                     tiplocs, polys.len()));
+            let (mut way, mut node) = match obj {
+                OsmObj::Way(w) => (Some(w), None),
                 OsmObj::Node(nd) => {
-                    bar.set_message(&format!("Processing node #{} ({} polys thus far)",
-                                             nd.id.0, polys.len()));
-                    let mut nodes = vec![];
                     let lat = nd.decimicro_lat as f64 / 10_000_000.0;
                     let lon = nd.decimicro_lon as f64 / 10_000_000.0;
                     let pt = Point::new(lon, lat);
-                    for bearing in 0..361 {
-                        nodes.push(pt.haversine_destination(bearing as _, 50.0));
+                    (None, Some(pt))
+                },
+                OsmObj::Relation(rel) => {
+                    let mut node = None;
+                    for rf in rel.refs.iter() {
+                        let rf = match rf.member {
+                            OsmId::Node(id) => id.0,
+                            _ => continue
+                        };
+                        if let Some(pt) = Node::from_select(&trans, "WHERE orig_osm_id = $1", &[&rf])?.into_iter().nth(0) {
+                            node = Some(Point::from_postgis(&pt.location));
+                            break;
+                        }
+                    }
+                    if let Some(node) = node {
+                        (None, Some(node))
+                    }
+                    else {
+                        continue 'outer;
+                    }
+                },
+            };
+            if let Some(way) = way {
+                if way.is_closed() {
+                    let mut nodes = vec![];
+                    for nd in way.nodes.iter() {
+                        let pt = Node::from_select(&trans, "WHERE orig_osm_id = $1", &[&nd.0])?.into_iter()
+                            .nth(0);
+                        let pt = match pt {
+                            Some(n) => n,
+                            None => {
+                                debug!("stations: way #{} contained invalid point #{}",
+                                       way.id.0, nd.0);
+                                continue 'outer;
+                            }
+                        };
+                        nodes.push(Point::from_postgis(&pt.location));
                     }
                     let poly = Polygon { exterior: LineString(nodes), interiors: vec![] };
-                    polys.insert(nd.tags.get("ref").unwrap().clone(), poly);
-                },
-                _ => {}
+                    node = poly.centroid();
+                    this_polys.push(poly);
+                }
+            }
+            if let Some(pt) = node {
+                let mut nodes = vec![];
+                for bearing in 0..360 {
+                    nodes.push(pt.haversine_destination(bearing as _, 50.0));
+                }
+                let nd = nodes[0];
+                nodes.push(nd);
+                let poly = Polygon { exterior: LineString(nodes), interiors: vec![] };
+                this_polys.push(poly);
+            }
+            if this_polys.len() == 0 {
+                continue 'outer;
+            }
+            for loc in tiplocs {
+                for poly in this_polys.clone() {
+                    polys.entry(loc.clone()).or_insert(vec![]).push(poly);
+                }
             }
         }
         objs += 1;
     }
     ctx.update_objs(objs);
     bar.finish();
+    bar.set_message("Processing NAPTAN entries...");
+    for ent in NaptanEntry::from_select(&trans, "", &[])? {
+        let pt = Point::from_postgis(&ent.loc);
+        let mut nodes = vec![];
+        for bearing in 0..360 {
+            nodes.push(pt.haversine_destination(bearing as _, 50.0));
+        }
+        let nd = nodes[0];
+        nodes.push(nd);
+        let poly = Polygon { exterior: LineString(nodes), interiors: vec![] };
+        polys.entry(ent.tiploc).or_insert(vec![]).push(poly);
+    }
+    bar.set_message("Processing TIPLOC entries...");
+    for ent in TiplocEntry::from_select(&trans, "", &[])? {
+        let pt = Point::from_postgis(&ent.loc);
+        let mut nodes = vec![];
+        for bearing in 0..360 {
+            nodes.push(pt.haversine_destination(bearing as _, 50.0));
+        }
+        let nd = nodes[0];
+        nodes.push(nd);
+        let poly = Polygon { exterior: LineString(nodes), interiors: vec![] };
+        polys.entry(ent.tiploc).or_insert(vec![]).push(poly);
+    }
     let bar = ctx.make_custom_bar(polys.len() as _);
     bar.set_message("Making stations");
-    for (nr_ref, poly) in polys {
-        bar.set_message(&format!("Processing station {}", nr_ref));
+    let mut fb = 0;
+    for (nr_ref, polys) in polys {
+        let mut poly = polys.last().unwrap();
+        for pway in polys.iter() {
+            if pway.exterior.0.first() != pway.exterior.0.last() {
+                warn!("Polygon for TIPLOC {} isn't closed", nr_ref);
+                fb += 1;
+                continue;
+            }
+            let pgpoly = PgPolygon {
+                rings: vec![geo_ls_to_postgis(pway.exterior.clone())],
+                srid: Some(4326)
+            };
+            let nodes = Node::from_select(&trans, "WHERE ST_Intersects(location, $1)", &[&pgpoly])?;
+            if nodes.len() == 0 {
+                fb += 1;
+                continue;
+            }
+            poly = pway;
+        }
+        bar.set_message(&format!("Processing TIPLOC {} ({} fallbacks)", nr_ref, fb));
         let centroid = poly.centroid().ok_or(format_err!("Station has no centroid"))?;
         let pgpoly = PgPolygon {
             rings: vec![geo_ls_to_postgis(poly.exterior.clone())],

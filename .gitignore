@@ -1,4 +1,4 @@
-/target/
+target/
 **/*.rs.bk
 *.pbf
 *.gpx
@@ -11,3 +11,4 @@ access_token
 config.toml
 Rocket.toml
 Cargo.lock
+*.swp

@@ -1,5 +1,6 @@
 use db::{DbType, InsertableDbType, GenericConnection, Row};
 use osm::types::Station;
+use postgis::ewkb::Point;
 use ntrod_types::schedule::*;
 use ntrod_types::reference::*;
 use ntrod_types::cif::*;
@@ -246,33 +247,12 @@ END$$;"#
         Self { tiploc: tiploc.into(), time: dep, event: event.into() }
     }
     pub fn get_station<T: GenericConnection>(&self, conn: &T) -> Result<Option<Station>> {
-        Ok(if let Some(crs) = self.get_crs(conn)? {
-            let stats = Station::from_select(conn, "WHERE nr_ref = $1", &[&crs])?;
-            if stats.len() == 0 {
-                trace!("No station for CRS {}", crs);
-            }
-            stats.into_iter()
-                .nth(0)
+        let stats = Station::from_select(conn, "WHERE nr_ref = $1", &[&self.tiploc])?;
+        if stats.len() == 0 {
+            warn!("No station for TIPLOC {}", self.tiploc);
         }
-        else {
-            None
-        })
-    }
-    pub fn get_crs<T: GenericConnection>(&self, conn: &T) -> Result<Option<String>> {
-        let entries = CorpusEntry::from_select(conn,
-                                               "WHERE tiploc = $1 AND crs IS NOT NULL",
-                                               &[&self.tiploc])?;
-        let mut ret = None;
-        for ent in entries {
-            if ent.crs.is_some() {
-                ret = ent.crs;
-                break;
-            }
-        }
-        if ret.is_none() {
-            trace!("Could not find a CRS for TIPLOC {}", self.tiploc);
-        }
-        Ok(ret)
+        Ok(stats.into_iter()
+           .nth(0))
     }
 }
 #[derive(Debug, Clone)]
@@ -320,6 +300,122 @@ impl InsertableDbType for Train {
             ret = Some(row.get(0))
         }
         Ok(ret.expect("No id in Train::insert?!"))
+    }
+}
+#[derive(Debug, Clone)]
+pub struct TiplocEntry {
+    pub tiploc: String,
+    pub name: String,
+    pub loc: Point
+}
+impl DbType for TiplocEntry {
+    fn table_name() -> &'static str {
+        "tiploc_entries"
+    }
+    fn table_desc() -> &'static str {
+        r#"
+tiploc VARCHAR PRIMARY KEY,
+name VARCHAR NOT NULL,
+loc geometry NOT NULL
+"#
+    }
+    fn from_row(row: &Row) -> Self {
+        Self {
+            tiploc: row.get(0),
+            name: row.get(1),
+            loc: row.get(2)
+        }
+    }
+}
+impl InsertableDbType for TiplocEntry {
+    type Id = ();
+    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<()> {
+        conn.execute("INSERT INTO tiploc_entries
+                      (tiploc, name, loc)
+                      VALUES ($1, $2, $3)",
+                     &[&self.tiploc, &self.name, &self.loc])?;
+        Ok(())
+    }
+}
+#[derive(Debug, Clone)]
+pub struct NaptanEntry {
+    pub atco: String,
+    pub tiploc: String,
+    pub crs: String,
+    pub name: String,
+    pub loc: Point
+}
+impl DbType for NaptanEntry {
+    fn table_name() -> &'static str {
+        "naptan_entries"
+    }
+    fn table_desc() -> &'static str {
+        r#"
+atco VARCHAR UNIQUE NOT NULL,
+tiploc VARCHAR PRIMARY KEY,
+crs VARCHAR NOT NULL,
+name VARCHAR NOT NULL,
+loc geometry NOT NULL
+"#
+    }
+    fn from_row(row: &Row) -> Self {
+        Self {
+            atco: row.get(0),
+            tiploc: row.get(1),
+            crs: row.get(2),
+            name: row.get(3),
+            loc: row.get(4)
+        }
+    }
+}
+impl InsertableDbType for NaptanEntry {
+    type Id = ();
+    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<()> {
+        conn.execute("INSERT INTO naptan_entries
+                      (atco, tiploc, crs, name, loc)
+                      VALUES ($1, $2, $3, $4, $5)",
+                     &[&self.atco, &self.tiploc, &self.crs, &self.name, &self.loc])?;
+        Ok(())
+    }
+}
+
+
+#[derive(Debug, Clone)]
+pub struct ScheduleFile {
+    pub id: i32,
+    pub timestamp: i64,
+    pub metatype: String,
+    pub metaseq: i32,
+}
+impl DbType for ScheduleFile {
+    fn table_name() -> &'static str {
+        "schedule_files"
+    }
+    fn table_desc() -> &'static str {
+        r#"
+id SERIAL PRIMARY KEY,
+timestamp BIGINT UNIQUE NOT NULL,
+metatype VARCHAR NOT NULL,
+metaseq INT NOT NULL
+"#
+    }
+    fn from_row(row: &Row) -> Self {
+        Self {
+            id: row.get(0),
+            timestamp: row.get(1),
+            metatype: row.get(2),
+            metaseq: row.get(3),
+        }
+    }
+}
+impl InsertableDbType for ScheduleFile {
+    type Id = ();
+    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<()> {
+        conn.execute("INSERT INTO schedule_files
+                      (timestamp, metatype, metaseq)
+                      VALUES ($1, $2, $3)",
+                     &[&self.timestamp, &self.metatype, &self.metaseq])?;
+        Ok(())
     }
 }
 
@@ -401,10 +497,10 @@ impl DbType for CorpusEntry {
     fn table_desc() -> &'static str {
         r#"
 stanox VARCHAR UNIQUE,
-uic VARCHAR UNIQUE,
-crs VARCHAR UNIQUE,
+uic VARCHAR,
+crs VARCHAR,
 tiploc VARCHAR UNIQUE,
-nlc VARCHAR UNIQUE,
+nlc VARCHAR,
 nlcdesc VARCHAR,
 nlcdesc16 VARCHAR
 "#

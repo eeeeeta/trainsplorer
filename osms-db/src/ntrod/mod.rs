@@ -168,6 +168,7 @@ pub fn apply_schedule_records<T: GenericConnection, R: Read>(conn: &T, rdr: R, r
     let mut inserted = 0;
     let trans = conn.transaction()?;
     let rdr = BufReader::new(rdr);
+    let mut verified = false;
     for line in rdr.lines() {
         let line = line?;
         let rec: ::std::result::Result<schedule::Record, _> = serde_json::from_str(&line);
@@ -181,6 +182,10 @@ pub fn apply_schedule_records<T: GenericConnection, R: Read>(conn: &T, rdr: R, r
         };
         match rec {
             schedule::Record::Schedule(rec) => {
+                if !verified {
+                    error!("apply_schedule_records: file contained no Timetable record!");
+                    return Err(OsmsError::InvalidScheduleFile);
+                }
                 if let Some(atc) = restrict_atoc {
                     if !rec.atoc_code.as_ref().map(|x| x == atc).unwrap_or(false) {
                         continue;
@@ -190,8 +195,29 @@ pub fn apply_schedule_records<T: GenericConnection, R: Read>(conn: &T, rdr: R, r
                 inserted += 1;
             },
             schedule::Record::Timetable(rec) => {
-                debug!("apply_schedule_records: this is a {}-type timetable from {} (ts: {})",
-                       rec.classification, rec.owner, rec.timestamp);
+                debug!("apply_schedule_records: this is a {}-type timetable (seq {}) from {} (ts: {})",
+                       rec.metadata.ty, rec.metadata.sequence, rec.owner, rec.timestamp);
+                debug!("apply_schedule_records: checking whether this timetable is new...");
+                let files = ScheduleFile::from_select(&trans, "WHERE timestamp = $1", &[&(rec.timestamp as i64)])?;
+                if files.len() > 0 {
+                    error!("apply_schedule_records: schedule inserted already!");
+                    return Err(OsmsError::ScheduleFileExists);
+                }
+                let full = ScheduleFile::from_select(&trans, "WHERE metaseq > $1", &[&(rec.metadata.sequence as i64)])?;
+                if full.len() > 0 && rec.metadata.ty == "full" {
+                    error!("apply_schedule_records: a schedule with a greater sequence number has been inserted!");
+                    return Err(OsmsError::ScheduleFileImportInvalid("sequence number error"));
+                }
+                debug!("apply_schedule_records: inserting file record...");
+                let file = ScheduleFile {
+                    id: -1,
+                    timestamp: rec.timestamp as _,
+                    metatype: rec.metadata.ty.clone(),
+                    metaseq: rec.metadata.sequence as _
+                };
+                file.insert_self(&trans)?;
+                debug!("apply_schedule_records: timetable OK");
+                verified = true;
             },
             _ => {}
         }
