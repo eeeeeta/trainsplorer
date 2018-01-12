@@ -203,7 +203,7 @@ pub fn apply_schedule_records<T: GenericConnection, R: Read>(conn: &T, rdr: R, r
                     error!("apply_schedule_records: schedule inserted already!");
                     return Err(OsmsError::ScheduleFileExists);
                 }
-                let full = ScheduleFile::from_select(&trans, "WHERE metaseq > $1", &[&(rec.metadata.sequence as i64)])?;
+                let full = ScheduleFile::from_select(&trans, "WHERE metaseq > $1", &[&(rec.metadata.sequence as i32)])?;
                 if full.len() > 0 && rec.metadata.ty == "full" {
                     error!("apply_schedule_records: a schedule with a greater sequence number has been inserted!");
                     return Err(OsmsError::ScheduleFileImportInvalid("sequence number error"));
