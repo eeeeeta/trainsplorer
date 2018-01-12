@@ -486,8 +486,10 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     let bar = ctx.make_custom_bar(polys.len() as _);
     bar.set_message("Making stations");
     let mut fb = 0;
+    let mut bo = 0;
     for (nr_ref, polys) in polys {
         let mut poly = polys.last().unwrap();
+        let mut nodes = None;
         for pway in polys.iter() {
             if pway.exterior.0.first() != pway.exterior.0.last() {
                 warn!("Polygon for TIPLOC {} isn't closed", nr_ref);
@@ -498,14 +500,15 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
                 rings: vec![geo_ls_to_postgis(pway.exterior.clone())],
                 srid: Some(4326)
             };
-            let nodes = Node::from_select(&trans, "WHERE ST_Intersects(location, $1)", &[&pgpoly])?;
-            if nodes.len() == 0 {
+            let nds = Node::from_select(&trans, "WHERE ST_Intersects(location, $1)", &[&pgpoly])?;
+            if nds.len() == 0 {
                 fb += 1;
                 continue;
             }
+            nodes = Some(nds);
             poly = pway;
         }
-        bar.set_message(&format!("Processing TIPLOC {} ({} fallbacks)", nr_ref, fb));
+        bar.set_message(&format!("Processing TIPLOC {} ({} fallbacks, {} bottoms)", nr_ref, fb, bo));
         let centroid = poly.centroid().ok_or(format_err!("Station has no centroid"))?;
         let pgpoly = PgPolygon {
             rings: vec![geo_ls_to_postgis(poly.exterior.clone())],
@@ -513,7 +516,11 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
         };
         let nd = Node::insert(&trans, geo_pt_to_postgis(centroid))?;
         Station::insert(&trans, &nr_ref, nd, pgpoly.clone())?;
-        for pt in Node::from_select(&trans, "WHERE ST_Intersects(location, $1)", &[&pgpoly])? {
+        if nodes.is_none() {
+            bo += 1;
+            nodes = Some(Node::from_select(&trans, "WHERE ST_Intersects(location, $1)", &[&pgpoly])?);
+        }
+        for pt in nodes.unwrap() {
             let geopt = Point::from_postgis(&pt.location);
             let link = LineString(vec![poly.exterior.0[0], geopt]);
             let dist = link.haversine_length();
