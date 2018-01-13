@@ -97,16 +97,21 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
     if ways.len() == 0 {
         bail!("No ways found for train {}", m.train_id);
     }
+    let mut did_something = false;
     for way in ways {
         let sp = StationPath::from_select(conn, "WHERE id = $1", &[&way.station_path])?;
         let sp = sp.into_iter().nth(0).expect("Foreign key didn't do its job");
         if sp.s1 == tiploc {
+            did_something = true;
             debug!("Train movement matches way #{}'s start location!", way.id);
             let way_duration = way.et.signed_duration_since(way.st);
             let new_end = m.actual_timestamp + way_duration;
             conn.execute("UPDATE schedule_ways SET st = $1, et = $2 WHERE id = $3",
                          &[&m.actual_timestamp.time(), &new_end.time(), &way.id])?;
         }
+    }
+    if !did_something {
+        bail!("No way with TIPLOC {} found for train {}", tiploc, m.train_id);
     }
     debug!("Train movement processed.");
     Ok(())
