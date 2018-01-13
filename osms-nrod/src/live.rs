@@ -86,13 +86,13 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
         Some(t) => t,
         None => bail!("No train found for ID {}", m.train_id)
     };
-    let entries = CorpusEntry::from_select(conn, "WHERE stanox = $1 AND crs IS NOT NULL",
+    let entries = CorpusEntry::from_select(conn, "WHERE stanox = $1 AND tiploc IS NOT NULL",
                                            &[&m.loc_stanox])?;
-    let crs = match entries.into_iter().nth(0) {
-        Some(c) => c.crs.unwrap(),
-        None => bail!("No CRS found for STANOX {}", m.loc_stanox)
+    let tiploc = match entries.into_iter().nth(0) {
+        Some(c) => c.tiploc.unwrap(),
+        None => bail!("No TIPLOC found for STANOX {}", m.loc_stanox)
     };
-    debug!("Found CRS: {}", crs);
+    debug!("Found TIPLOC: {}", tiploc);
     let ways = ScheduleWay::from_select(conn, "WHERE train_id = $1", &[&train.id])?;
     if ways.len() == 0 {
         bail!("No ways found for train {}", m.train_id);
@@ -100,7 +100,7 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
     for way in ways {
         let sp = StationPath::from_select(conn, "WHERE id = $1", &[&way.station_path])?;
         let sp = sp.into_iter().nth(0).expect("Foreign key didn't do its job");
-        if sp.s1 == crs {
+        if sp.s1 == tiploc {
             debug!("Train movement matches way #{}'s start location!", way.id);
             let way_duration = way.et.signed_duration_since(way.st);
             let new_end = m.actual_timestamp + way_duration;
