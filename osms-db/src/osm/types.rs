@@ -120,7 +120,8 @@ impl DbType for Link {
     fn indexes() -> Vec<&'static str> {
         vec![
             "links_p1 ON links (p1)",
-            "links_p2 ON links (p2)"
+            "links_p2 ON links (p2)",
+            "links_geom ON links USING GIST (way)"
         ]
     }
     fn table_desc() -> &'static str {
