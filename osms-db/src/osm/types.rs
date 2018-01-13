@@ -29,6 +29,7 @@ osm_was_crossing BOOL NOT NULL DEFAULT false
         vec![
             "nodes_id ON nodes (id)",
             "nodes_location ON nodes (location)",
+            "nodes_geom ON nodes USING GIST (location)",
             "nodes_orig_osm_id ON nodes (orig_osm_id)"
         ]
     }

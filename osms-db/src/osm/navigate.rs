@@ -146,7 +146,7 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
     debug!("navigate: finding intersecting crossings...");
     let mut crossing_locations = vec![];
     for cx in Crossing::from_select(conn, "WHERE id = ANY($1)", &[&crossings])? {
-        for row in &trans.query("SELECT ST_Line_Locate_Point($1, ST_Centroid($2))",
+        for row in &trans.query("SELECT ST_LineLocatePoint($1, ST_Centroid($2))",
                                 &[&path, &cx.area])? {
             let location: f64 = row.get(0);
             crossing_locations.push(location);

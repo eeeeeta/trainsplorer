@@ -489,7 +489,7 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     let mut bo = 0;
     for (nr_ref, polys) in polys {
         let mut poly = polys.last().unwrap();
-        let mut nodes = None;
+        let mut links = None;
         for pway in polys.iter() {
             if pway.exterior.0.first() != pway.exterior.0.last() {
                 warn!("Polygon for TIPLOC {} isn't closed", nr_ref);
@@ -500,12 +500,12 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
                 rings: vec![geo_ls_to_postgis(pway.exterior.clone())],
                 srid: Some(4326)
             };
-            let nds = Node::from_select(&trans, "WHERE ST_Intersects(location, $1)", &[&pgpoly])?;
-            if nds.len() == 0 {
+            let lks = Link::from_select(&trans, "WHERE ST_Intersects(way, $1)", &[&pgpoly])?;
+            if lks.len() == 0 {
                 fb += 1;
                 continue;
             }
-            nodes = Some(nds);
+            links = Some(lks);
             poly = pway;
         }
         bar.set_message(&format!("Processing TIPLOC {} ({} fallbacks, {} bottoms)", nr_ref, fb, bo));
@@ -516,21 +516,40 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
         };
         let nd = Node::insert(&trans, geo_pt_to_postgis(centroid))?;
         Station::insert(&trans, &nr_ref, nd, pgpoly.clone())?;
-        if nodes.is_none() {
+        if links.is_none() {
             bo += 1;
-            nodes = Some(Node::from_select(&trans, "WHERE ST_Intersects(location, $1)", &[&pgpoly])?);
+            links = Some(vec![]);
         }
-        for pt in nodes.unwrap() {
-            let geopt = Point::from_postgis(&pt.location);
-            let link = LineString(vec![poly.exterior.0[0], geopt]);
-            let dist = link.haversine_length();
-            let link = Link {
+        let mut connected = HashSet::new();
+        for link in links.unwrap() {
+            if link.p1 == link.p2 {
+                continue;
+            }
+            if !connected.insert(link.p1) || !connected.insert(link.p2) {
+                continue;
+            }
+            let pt1 = Node::from_select(&trans, "WHERE id = $1", &[&link.p1])?
+                .into_iter().nth(0).ok_or(format_err!("foreign key fail"))?;
+            let pt2 = Node::from_select(&trans, "WHERE id = $1", &[&link.p2])?
+                .into_iter().nth(0).ok_or(format_err!("foreign key fail"))?;
+            let lp1 = Point::from_postgis(&pt1.location);
+            let lp2 = Point::from_postgis(&pt2.location);
+            let lp1_station = LineString(vec![lp1, centroid.clone()]);
+            let lp1_s_dist = lp1_station.haversine_length();
+            let station_lp2 = LineString(vec![centroid.clone(), lp2]);
+            let s_lp2_dist = station_lp2.haversine_length();
+            Link {
+                p1: link.p1,
+                p2: nd,
+                way: geo_ls_to_postgis(lp1_station),
+                distance: lp1_s_dist as f32
+            }.insert(&trans)?;
+            Link {
                 p1: nd,
-                p2: pt.id,
-                way: geo_ls_to_postgis(link),
-                distance: dist as _
-            };
-            link.insert(&trans)?;
+                p2: link.p2,
+                way: geo_ls_to_postgis(station_lp2),
+                distance: s_lp2_dist as f32
+            }.insert(&trans)?;
         }
         bar.inc(1);
     }
