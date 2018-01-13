@@ -94,6 +94,19 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
     };
     debug!("Found TIPLOC: {}", tiploc);
     let ways = ScheduleWay::from_select(conn, "WHERE train_id = $1", &[&train.id])?;
+    let sched = Schedule::from_select(conn, "WHERE id = $1", &[&train.from_id])?;
+    if sched.len() == 0 {
+        bail!("No schedule found for train {}", m.train_id);
+    }
+    let mut exists = false;
+    for locs in sched[0].locs.iter() {
+        if locs.tiploc == tiploc {
+            exists = true;
+        }
+    }
+    if !exists {
+        bail!("TIPLOC {} doesn't show up in train {}'s schedule (#{}) (!!!)", tiploc, m.train_id, sched[0].id);
+    }
     if ways.len() == 0 {
         bail!("No ways found for train {}", m.train_id);
     }
