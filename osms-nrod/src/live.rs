@@ -81,6 +81,9 @@ pub fn process_cancellation<T: GenericConnection>(conn: &T, c: Cancellation) -> 
 }
 pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<()> {
     debug!("Processing movement of train {} at STANOX {}...", m.train_id, m.loc_stanox);
+    if m.offroute_ind {
+        bail!("Train #{} off route.", m.train_id);
+    }
     let trains = Train::from_select(conn, "WHERE trust_id = $1", &[&m.train_id])?;
     let train = match trains.into_iter().nth(0) {
         Some(t) => t,
