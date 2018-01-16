@@ -494,7 +494,7 @@ impl InsertableDbType for ScheduleWay {
     type Id = i32;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
         let qry = conn.query("INSERT INTO schedule_ways
-                              (st, et, station_path, parent_id, start_date, end_date, train_id)
+                              (st, et, station_path, parent_id, start_date, end_date, train_id, source)
                               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                               ON CONFLICT(id) DO UPDATE SET station_path = excluded.station_path
                               RETURNING id",
