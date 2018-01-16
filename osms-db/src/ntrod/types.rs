@@ -264,6 +264,9 @@ END$$;"#
         for row in &conn.query("SELECT crs FROM msn_entries WHERE tiploc = $1", &[&self.tiploc])? {
             return Ok(Some(row.get(0)));
         }
+        for row in &conn.query("SELECT crs FROM corpus_entries WHERE tiploc = $1 AND crs IS NOT NULL", &[&self.tiploc])? {
+            return Ok(Some(row.get(0)));
+        }
         warn!("No CRS for TIPLOC {}", self.tiploc);
         Ok(None)
     }
