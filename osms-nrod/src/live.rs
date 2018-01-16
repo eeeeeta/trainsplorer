@@ -82,52 +82,49 @@ pub fn process_cancellation<T: GenericConnection>(conn: &T, c: Cancellation) -> 
 pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<()> {
     debug!("Processing movement of train {} at STANOX {}...", m.train_id, m.loc_stanox);
     if m.offroute_ind {
-        bail!("Train #{} off route.", m.train_id);
+        debug!("Train #{} off route.", m.train_id);
+        return Ok(());
     }
     let trains = Train::from_select(conn, "WHERE trust_id = $1", &[&m.train_id])?;
     let train = match trains.into_iter().nth(0) {
         Some(t) => t,
         None => bail!("No train found for ID {}", m.train_id)
     };
-    let entries = CorpusEntry::from_select(conn, "WHERE stanox = $1 AND tiploc IS NOT NULL",
+    let entries = CorpusEntry::from_select(conn, "WHERE stanox = $1 AND crs IS NOT NULL",
                                            &[&m.loc_stanox])?;
-    let tiploc = match entries.into_iter().nth(0) {
-        Some(c) => c.tiploc.unwrap(),
-        None => bail!("No TIPLOC found for STANOX {}", m.loc_stanox)
+    let crs = match entries.into_iter().nth(0) {
+        Some(c) => c.crs.unwrap(),
+        None => bail!("No CRS found for STANOX {}", m.loc_stanox)
     };
-    debug!("Found TIPLOC: {}", tiploc);
+    debug!("Found CRS: {}", crs);
     let ways = ScheduleWay::from_select(conn, "WHERE train_id = $1", &[&train.id])?;
-    let sched = Schedule::from_select(conn, "WHERE id = $1", &[&train.from_id])?;
-    if sched.len() == 0 {
-        bail!("No schedule found for train {}", m.train_id);
-    }
-    let mut exists = false;
-    for locs in sched[0].locs.iter() {
-        if locs.tiploc == tiploc {
-            exists = true;
-        }
-    }
-    if !exists {
-        bail!("TIPLOC {} doesn't show up in train {}'s schedule (#{}) (!!!)", tiploc, m.train_id, sched[0].id);
-    }
     if ways.len() == 0 {
         bail!("No ways found for train {}", m.train_id);
     }
     let mut did_something = false;
+    let mut delta = None;
     for way in ways {
         let sp = StationPath::from_select(conn, "WHERE id = $1", &[&way.station_path])?;
         let sp = sp.into_iter().nth(0).expect("Foreign key didn't do its job");
-        if sp.s1 == tiploc {
+        if let Some(delta) = delta {
+            debug!("Updating way #{} by delta of {}", way.id, delta);
+            let new_start: ::chrono::NaiveTime = way.st + delta;
+            let new_end: ::chrono::NaiveTime = way.et + delta;
+            conn.execute("UPDATE schedule_ways SET st = $1, et = $2, source = 2 WHERE id = $3",
+                         &[&new_start, &new_end, &way.id])?;
+        }
+        if sp.s1 == crs {
             did_something = true;
             debug!("Train movement matches way #{}'s start location!", way.id);
             let way_duration = way.et.signed_duration_since(way.st);
             let new_end = m.actual_timestamp + way_duration;
-            conn.execute("UPDATE schedule_ways SET st = $1, et = $2 WHERE id = $3",
+            delta = Some(m.actual_timestamp.time().signed_duration_since(way.st));
+            conn.execute("UPDATE schedule_ways SET st = $1, et = $2, source = 1 WHERE id = $3",
                          &[&m.actual_timestamp.time(), &new_end.time(), &way.id])?;
         }
     }
     if !did_something {
-        bail!("No way with TIPLOC {} found for train {}", tiploc, m.train_id);
+        bail!("No way with CRS {} found for train {}", crs, m.train_id);
     }
     debug!("Train movement processed.");
     Ok(())

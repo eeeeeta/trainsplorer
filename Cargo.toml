@@ -1,2 +1,2 @@
 [workspace]
-members = ["./osms-db", "./national-rail-departures", "./osms-nrod", "./ntrod-types", "./osms-db-setup", "./osms-web"]
+members = ["./osms-db", "./national-rail-departures", "./osms-nrod", "./ntrod-types", "./osms-db-setup", "./osms-web", "./atoc-msn"]

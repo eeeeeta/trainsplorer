@@ -6,8 +6,8 @@ version = "0.1.0"
 [dependencies]
 chrono = "0.4.0"
 clap = "~2.29.0"
-csv = "1.0.0-beta.5"
 crossbeam = "0.3.0"
+csv = "1.0.0-beta.5"
 error-chain = "0.10.0"
 failure = "0.1.1"
 failure_derive = "0.1.1"
@@ -29,6 +29,9 @@ git = "https://github.com/eeeeeta/rust-geo"
 
 [dependencies.osms-db]
 path = "../osms-db"
+
+[dependencies.atoc-msn]
+path = "../atoc-msn"
 
 [dependencies.postgres]
 features = ["with-native-tls"]

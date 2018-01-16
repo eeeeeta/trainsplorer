@@ -2,7 +2,7 @@ use osmpbfreader::{OsmPbfReader};
 use osmpbfreader::reader::ParIter;
 use osmpbfreader::objects::{OsmObj, OsmId};
 use indicatif::{ProgressStyle, ProgressBar};
-use std::io::{Read, Seek};
+use std::io::{Read, BufRead, Seek};
 use geo::*;
 use std::collections::HashSet;
 use postgis::ewkb::Point as PgPoint;
@@ -11,7 +11,7 @@ use postgis::ewkb::Polygon as PgPolygon;
 use osms_db::db::*;
 use osms_db::util;
 use osms_db::osm::types::*;
-use osms_db::ntrod::types::{TiplocEntry, NaptanEntry};
+use osms_db::ntrod::types::{MsnEntry, NaptanEntry};
 use crossbeam::sync::chase_lev;
 use failure::Error;
 use std::collections::HashMap;
@@ -151,17 +151,6 @@ pub fn crossings<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     Ok(())
 }
 #[derive(Deserialize)]
-pub struct TiplocCsv {
-    #[serde(rename = "TIPLOC")]
-    tiploc: String,
-    #[serde(rename = "NAME")]
-    name: String,
-    #[serde(rename = "EASTING")]
-    easting: u32,
-    #[serde(rename = "NORTHING")]
-    northing: u32
-}
-#[derive(Deserialize)]
 pub struct NaptanCsv {
     #[serde(rename = "AtcoCode")]
     atcocode: String,
@@ -176,24 +165,36 @@ pub struct NaptanCsv {
     #[serde(rename = "Northing")]
     northing: u32
 }
-pub fn tiploc_entries<R: Read, T: GenericConnection>(conn: &T, file: R) -> Result<()> {
+pub fn msn_entries<R: BufRead, T: GenericConnection>(conn: &T, file: R) -> Result<()> {
+    use atoc_msn::*;
+    use atoc_msn::types::*;
+
     let trans = conn.transaction()?;
-    info!("Importing tiploc entries...");
-    let mut rdr = ::csv::Reader::from_reader(file);
-    for result in rdr.deserialize() {
-        let rec: TiplocCsv = result?;
-        let mut pgp: Option<PgPoint> = None;
-        for row in &trans.query("SELECT ST_Transform(ST_SetSRID(ST_MakePoint($1, $2), 27700), 4326)", &[&(rec.easting as f64), &(rec.northing as f64)])? {
-            pgp = Some(row.get(0));
+    info!("Importing MSN entries...");
+    info!("(that's Master Station Names, not Microsoft Network...)");
+    let mut done = 0;
+    for line in file.lines() {
+        let line = line?;
+        if let IResult::Done(_, data) = msn_record(&line) {
+            match data {
+                MsnRecord::Header(h) => {
+                    debug!("msn_entries: file creation timestamp {}", h.timestamp); 
+                },
+                MsnRecord::Station(s) => {
+                    let me = MsnEntry {
+                        tiploc: s.tiploc,
+                        name: s.name,
+                        cate: s.cate_type as _,
+                        crs: s.crs    
+                    };
+                    me.insert_self(&trans)?;
+                    done += 1;
+                },
+                _ => {}
+            }
         }
-        let pgp = pgp.ok_or(format_err!("couldn't transform point"))?;
-        let npt = TiplocEntry {
-            tiploc: rec.tiploc,
-            name: rec.name,
-            loc: pgp
-        };
-        npt.insert_self(&trans)?;
     }
+    debug!("msn_entries: imported {} records", done);
     trans.commit()?;
     Ok(())
 }
@@ -359,34 +360,11 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     'outer: for obj in ctx.par_iter()? {
         bar.inc(1);
         let obj = obj?;
-        if obj.tags().contains("railway", "station") {
-            let mut tiplocs: HashSet<String> = HashSet::new();
+        if obj.tags().contains("railway", "station") && obj.tags().get("ref").is_some() {
+            let crs = obj.tags().get("ref").unwrap().to_owned();
             let mut this_polys = vec![];
-            if let Some(crs) = obj.tags().get("ref") {
-                for row in &trans.query("SELECT tiploc FROM corpus_entries WHERE crs = $1 AND tiploc IS NOT NULL", &[&crs])? {
-                    tiplocs.insert(row.get(0));
-                }
-            }
-            if let Some(crs) = obj.tags().get("ref:crs") {
-                for row in &trans.query("SELECT tiploc FROM corpus_entries WHERE crs = $1 AND tiploc IS NOT NULL", &[&crs])? {
-                    tiplocs.insert(row.get(0));
-                }
-            }
-            if let Some(tiploc) = obj.tags().get("ref:tiploc") {
-                for row in &trans.query("SELECT tiploc FROM corpus_entries WHERE tiploc = $1 AND tiploc IS NOT NULL", &[&tiploc])? {
-                    tiplocs.insert(row.get(0));
-                }
-            }
-            if let Some(stanox) = obj.tags().get("ref:stanox") {
-                for row in &trans.query("SELECT tiploc FROM corpus_entries WHERE stanox = $1 AND tiploc IS NOT NULL", &[&stanox])? {
-                    tiplocs.insert(row.get(0));
-                }
-            }
-            if tiplocs.len() == 0 {
-                continue 'outer;
-            }
-            bar.set_message(&format!("Processing TIPLOCs {:?} ({} polys thus far)",
-                                     tiplocs, polys.len()));
+            bar.set_message(&format!("Processing station {} ({} polys thus far)",
+                                     crs, polys.len()));
             let (mut way, mut node) = match obj {
                 OsmObj::Way(w) => (Some(w), None),
                 OsmObj::Node(nd) => {
@@ -449,10 +427,8 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
             if this_polys.len() == 0 {
                 continue 'outer;
             }
-            for loc in tiplocs {
-                for poly in this_polys.clone() {
-                    polys.entry(loc.clone()).or_insert(vec![]).push(poly);
-                }
+            for poly in this_polys {
+                polys.entry(crs.clone()).or_insert(vec![]).push(poly);
             }
         }
         objs += 1;
@@ -469,19 +445,7 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
         let nd = nodes[0];
         nodes.push(nd);
         let poly = Polygon { exterior: LineString(nodes), interiors: vec![] };
-        polys.entry(ent.tiploc).or_insert(vec![]).push(poly);
-    }
-    bar.set_message("Processing TIPLOC entries...");
-    for ent in TiplocEntry::from_select(&trans, "", &[])? {
-        let pt = Point::from_postgis(&ent.loc);
-        let mut nodes = vec![];
-        for bearing in 0..360 {
-            nodes.push(pt.haversine_destination(bearing as _, 50.0));
-        }
-        let nd = nodes[0];
-        nodes.push(nd);
-        let poly = Polygon { exterior: LineString(nodes), interiors: vec![] };
-        polys.entry(ent.tiploc).or_insert(vec![]).push(poly);
+        polys.entry(ent.crs).or_insert(vec![]).push(poly);
     }
     let bar = ctx.make_custom_bar(polys.len() as _);
     bar.set_message("Making stations");
@@ -492,7 +456,7 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
         let mut links = None;
         for pway in polys.iter() {
             if pway.exterior.0.first() != pway.exterior.0.last() {
-                warn!("Polygon for TIPLOC {} isn't closed", nr_ref);
+                warn!("Polygon for CRS {} isn't closed", nr_ref);
                 fb += 1;
                 continue;
             }
@@ -508,7 +472,7 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
             links = Some(lks);
             poly = pway;
         }
-        bar.set_message(&format!("Processing TIPLOC {} ({} fallbacks, {} bottoms)", nr_ref, fb, bo));
+        bar.set_message(&format!("Processing station {} ({} fallbacks, {} bottoms)", nr_ref, fb, bo));
         let centroid = poly.centroid().ok_or(format_err!("Station has no centroid"))?;
         let pgpoly = PgPolygon {
             rings: vec![geo_ls_to_postgis(poly.exterior.clone())],

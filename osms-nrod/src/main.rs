@@ -11,6 +11,7 @@ extern crate futures;
 extern crate tokio_core;
 #[macro_use] extern crate failure;
 extern crate cadence;
+extern crate chrono;
 
 use stomp::session::{SessionEvent, Session};
 use stomp::header::Header;

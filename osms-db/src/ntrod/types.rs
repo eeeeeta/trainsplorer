@@ -91,7 +91,8 @@ impl Schedule {
                             station_path: path,
                             id: -1,
                             parent_id: Some(self.id),
-                            train_id: None
+                            train_id: None,
+                            source: 0
                         };
                         sway.insert_self(conn)?;
                         p1 = p2 + 1;
@@ -247,12 +248,24 @@ END$$;"#
         Self { tiploc: tiploc.into(), time: dep, event: event.into() }
     }
     pub fn get_station<T: GenericConnection>(&self, conn: &T) -> Result<Option<Station>> {
-        let stats = Station::from_select(conn, "WHERE nr_ref = $1", &[&self.tiploc])?;
-        if stats.len() == 0 {
-            warn!("No station for TIPLOC {}", self.tiploc);
+        if let Some(crs) = self.get_crs(conn)? {
+            let stats = Station::from_select(conn, "WHERE nr_ref = $1", &[&crs])?;
+            if stats.len() == 0 {
+                warn!("No station for CRS {}", crs);
+            }
+            Ok(stats.into_iter()
+               .nth(0))
         }
-        Ok(stats.into_iter()
-           .nth(0))
+        else {
+            Ok(None)
+        }
+    }
+    pub fn get_crs<T: GenericConnection>(&self, conn: &T) -> Result<Option<String>> {
+        for row in &conn.query("SELECT crs FROM msn_entries WHERE tiploc = $1", &[&self.tiploc])? {
+            return Ok(Some(row.get(0)));
+        }
+        warn!("No CRS for TIPLOC {}", self.tiploc);
+        Ok(None)
     }
 }
 #[derive(Debug, Clone)]
@@ -308,37 +321,40 @@ impl InsertableDbType for Train {
     }
 }
 #[derive(Debug, Clone)]
-pub struct TiplocEntry {
+pub struct MsnEntry {
     pub tiploc: String,
     pub name: String,
-    pub loc: Point
+    pub cate: i32,
+    pub crs: String,
 }
-impl DbType for TiplocEntry {
+impl DbType for MsnEntry {
     fn table_name() -> &'static str {
-        "tiploc_entries"
+        "msn_entries"
     }
     fn table_desc() -> &'static str {
         r#"
-tiploc VARCHAR PRIMARY KEY,
+tiploc VARCHAR NOT NULL,
 name VARCHAR NOT NULL,
-loc geometry NOT NULL
+cate INT NOT NULL,
+crs VARCHAR NOT NULL
 "#
     }
     fn from_row(row: &Row) -> Self {
         Self {
             tiploc: row.get(0),
             name: row.get(1),
-            loc: row.get(2)
+            cate: row.get(2),
+            crs: row.get(3),
         }
     }
 }
-impl InsertableDbType for TiplocEntry {
+impl InsertableDbType for MsnEntry {
     type Id = ();
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<()> {
-        conn.execute("INSERT INTO tiploc_entries
-                      (tiploc, name, loc)
-                      VALUES ($1, $2, $3)",
-                     &[&self.tiploc, &self.name, &self.loc])?;
+        conn.execute("INSERT INTO msn_entries
+                      (tiploc, name, cate, crs)
+                      VALUES ($1, $2, $3, $4)",
+                     &[&self.tiploc, &self.name, &self.cate, &self.crs])?;
         Ok(())
     }
 }
@@ -434,6 +450,7 @@ pub struct ScheduleWay {
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
     pub station_path: i32,
+    pub source: i32
 }
 impl DbType for ScheduleWay {
     fn table_name() -> &'static str {
@@ -449,6 +466,7 @@ et TIME NOT NULL,
 start_date DATE NOT NULL,
 end_date DATE NOT NULL,
 station_path INT NOT NULL REFERENCES station_paths ON DELETE RESTRICT,
+source INT NOT NULL,
 CHECK((parent_id IS NULL) != (train_id IS NULL))
 "#
     }
@@ -468,6 +486,7 @@ CHECK((parent_id IS NULL) != (train_id IS NULL))
             start_date: row.get(5),
             end_date: row.get(6),
             station_path: row.get(7),
+            source: row.get(8),
         }
     }
 }
@@ -476,12 +495,12 @@ impl InsertableDbType for ScheduleWay {
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
         let qry = conn.query("INSERT INTO schedule_ways
                               (st, et, station_path, parent_id, start_date, end_date, train_id)
-                              VALUES ($1, $2, $3, $4, $5, $6, $7)
+                              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                               ON CONFLICT(id) DO UPDATE SET station_path = excluded.station_path
                               RETURNING id",
                              &[&self.st, &self.et, &self.station_path,
                                &self.parent_id, &self.start_date,
-                               &self.end_date, &self.train_id])?;
+                               &self.end_date, &self.train_id, &self.source])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))
@@ -507,10 +526,10 @@ impl DbType for CorpusEntry {
     }
     fn table_desc() -> &'static str {
         r#"
-stanox VARCHAR UNIQUE,
+stanox VARCHAR,
 uic VARCHAR,
 crs VARCHAR,
-tiploc VARCHAR UNIQUE,
+tiploc VARCHAR,
 nlc VARCHAR,
 nlcdesc VARCHAR,
 nlcdesc16 VARCHAR

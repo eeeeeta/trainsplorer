@@ -12,3 +12,6 @@ config.toml
 Rocket.toml
 Cargo.lock
 *.swp
+*.csv
+*.msn
+*.o5m

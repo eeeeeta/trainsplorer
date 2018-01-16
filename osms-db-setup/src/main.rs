@@ -17,6 +17,7 @@ extern crate clap;
 extern crate chrono;
 extern crate reqwest;
 extern crate csv;
+extern crate atoc_msn;
 
 use clap::{Arg, App, SubCommand, AppSettings};
 use std::fs::File;
@@ -88,17 +89,19 @@ fn run() -> Result<(), Error> {
                                      .help("Path to a PBF-format file to import map data from.")))
                     .subcommand(SubCommand::with_name("nrod")
                                 .about("Imports reference data from Network Rail.")
-                                .arg(Arg::with_name("tiploc")
-                                     .short("t")
-                                     .long("tiploc")
+                                .arg(Arg::with_name("msn")
+                                     .short("m")
+                                     .long("msn")
                                      .value_name("FILE")
                                      .takes_value(true)
-                                     .help("Path to TIPLOC Eastings and Northings.csv from Network Rail."))
+                                     .required(true)
+                                     .help("Path to ttisf786.msn from ATOC."))
                                 .arg(Arg::with_name("naptan")
                                      .short("a")
                                      .long("naptan")
                                      .value_name("FILE")
                                      .takes_value(true)
+                                     .required(true)
                                      .help("Path to RailReferences.csv from the NAPTAN data."))
                                 .arg(Arg::with_name("corpus")
                                      .short("r")
@@ -232,15 +235,16 @@ fn run() -> Result<(), Error> {
                             .context(err_msg("couldn't start gunzipping corpus data file"))?;
                         ntrod::import_corpus(&*conn, data)?;
                     }
-                    if util::count(&*conn, "FROM naptan_entries", &[])? == 0 && opts.value_of("naptan").is_some() {
+                    if util::count(&*conn, "FROM naptan_entries", &[])? == 0 {
                         let data = File::open(opts.value_of("naptan").unwrap())
                             .context(err_msg("couldn't open naptan data file"))?;
                         make::naptan_entries(&*conn, data)?;
                     }
-                    if util::count(&*conn, "FROM tiploc_entries", &[])? == 0 && opts.value_of("tiploc").is_some() {
-                        let data = File::open(opts.value_of("tiploc").unwrap())
-                            .context(err_msg("couldn't open tiploc data file"))?;
-                        make::tiploc_entries(&*conn, data)?;
+                    if util::count(&*conn, "FROM msn_entries", &[])? == 0 {
+                        let data = File::open(opts.value_of("msn").unwrap())
+                            .context(err_msg("couldn't open msn data file"))?;
+                        let data = BufReader::new(data);
+                        make::msn_entries(&*conn, data)?;
                     }
                 },
                 (x, _) => panic!("Invalid setup subcommand {}", x)
