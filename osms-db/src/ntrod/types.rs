@@ -314,7 +314,7 @@ impl InsertableDbType for Train {
     type Id = i32;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
         let qry = conn.query("INSERT INTO trains
-                              (from_id, trust_id, date, signalling_id)
+                              (from_id, trust_id, date, signalling_id, terminated)
                               VALUES ($1, $2, $3, $4, $5)
                               RETURNING id",
                              &[&self.from_id, &self.trust_id, &self.date,
