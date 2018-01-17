@@ -94,7 +94,10 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
                                            &[&m.loc_stanox])?;
     let crs = match entries.into_iter().nth(0) {
         Some(c) => c.crs.unwrap(),
-        None => bail!("No CRS found for STANOX {}", m.loc_stanox)
+        None => {
+            debug!("No CRS found for STANOX {}", m.loc_stanox);
+            return Ok(());
+        }
     };
     debug!("Found CRS: {}", crs);
     let ways = ScheduleWay::from_select(conn, "WHERE train_id = $1", &[&train.id])?;
@@ -131,7 +134,13 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
         }
     }
     if !did_something {
-        bail!("No way with CRS {} found for train {}", crs, m.train_id);
+        let stations = Station::from_select(conn, "WHERE nr_ref = $1", &[&crs])?;
+        if stations.len() > 0 {
+            bail!("No way with valid CRS {} found for train {}", crs, m.train_id);
+        }
+        else {
+            debug!("No way with invalid CRS {} found for train {}", crs, m.train_id);
+        }
     }
     debug!("Train movement processed.");
     Ok(())
