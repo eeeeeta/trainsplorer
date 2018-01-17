@@ -278,6 +278,7 @@ pub struct Train {
     pub trust_id: String,
     pub date: NaiveDate,
     pub signalling_id: String,
+    pub terminated: bool
 }
 impl DbType for Train {
     fn table_name() -> &'static str {
@@ -289,7 +290,8 @@ id SERIAL PRIMARY KEY,
 from_id INT NOT NULL REFERENCES schedules ON DELETE CASCADE,
 trust_id VARCHAR NOT NULL UNIQUE,
 date DATE NOT NULL,
-signalling_id VARCHAR NOT NULL
+signalling_id VARCHAR NOT NULL,
+terminated BOOL NOT NULL DEFAULT false
 "#
     }
     fn indexes() -> Vec<&'static str> {
@@ -304,6 +306,7 @@ signalling_id VARCHAR NOT NULL
             trust_id: row.get(2),
             date: row.get(3),
             signalling_id: row.get(4),
+            terminated: row.get(5)
         }
     }
 }
@@ -312,10 +315,10 @@ impl InsertableDbType for Train {
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
         let qry = conn.query("INSERT INTO trains
                               (from_id, trust_id, date, signalling_id)
-                              VALUES ($1, $2, $3, $4)
+                              VALUES ($1, $2, $3, $4, $5)
                               RETURNING id",
                              &[&self.from_id, &self.trust_id, &self.date,
-                               &self.signalling_id])?;
+                               &self.signalling_id, &self.terminated])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))

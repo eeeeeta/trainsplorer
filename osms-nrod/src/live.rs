@@ -54,7 +54,8 @@ pub fn process_activation<T: GenericConnection>(conn: &T, a: Activation) -> Resu
         from_id: auth_schedule.id,
         trust_id: a.train_id,
         date: a.origin_dep_timestamp.date(),
-        signalling_id: a.schedule_wtt_id
+        signalling_id: a.schedule_wtt_id,
+        terminated: false
     };
     let id = train.insert_self(conn)?;
     let mut new_ways = vec![];
@@ -81,6 +82,10 @@ pub fn process_cancellation<T: GenericConnection>(conn: &T, c: Cancellation) -> 
 }
 pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<()> {
     debug!("Processing movement of train {} at STANOX {}...", m.train_id, m.loc_stanox);
+    if m.train_terminated {
+        debug!("Train #{} has terminated.", m.train_terminated);
+        conn.execute("UPDATE trains SET terminated = true WHERE trust_id = $1", &[&m.train_id])?;
+    }
     if m.offroute_ind {
         debug!("Train #{} off route.", m.train_id);
         return Ok(());
