@@ -106,7 +106,7 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
     for way in ways {
         let sp = StationPath::from_select(conn, "WHERE id = $1", &[&way.station_path])?;
         let sp = sp.into_iter().nth(0).expect("Foreign key didn't do its job");
-        if let Some(delta) = delta {
+        if let Some(delta) = delta && way.source == 0 {
             debug!("Updating way #{} by delta of {}", way.id, delta);
             let new_start: ::chrono::NaiveTime = way.st + delta;
             let new_end: ::chrono::NaiveTime = way.et + delta;
@@ -121,6 +121,13 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
             delta = Some(m.actual_timestamp.time().signed_duration_since(way.st));
             conn.execute("UPDATE schedule_ways SET st = $1, et = $2, source = 1 WHERE id = $3",
                          &[&m.actual_timestamp.time(), &new_end.time(), &way.id])?;
+        }
+        if sp.s2 == crs {
+            did_something = true;
+            debug!("Train movement matches way #{}'s end location!", way.id);
+            delta = Some(m.actual_timestamp.time().signed_duration_since(way.et));
+            conn.execute("UPDATE schedule_ways SET et = $1, source = 3 WHERE id = $2",
+                         &[&m.actual_timestamp.time(), &way.id])?;
         }
     }
     if !did_something {
