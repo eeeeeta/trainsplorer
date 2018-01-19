@@ -6,8 +6,6 @@ use std::io::{Read, BufRead, Seek};
 use geo::*;
 use std::collections::HashSet;
 use postgis::ewkb::Point as PgPoint;
-use postgis::ewkb::LineString as PgLineString;
-use postgis::ewkb::Polygon as PgPolygon;
 use osms_db::db::*;
 use osms_db::util;
 use osms_db::osm::types::*;
@@ -76,15 +74,6 @@ impl<'a, R> ImportContext<'a, R> where R: Read + Seek {
         Ok(util::count(&*self.get_conn(), query, &[])?)
     }
 }
-pub fn geo_pt_to_postgis(pt: Point<f64>) -> PgPoint {
-    PgPoint::new(pt.0.x, pt.0.y, Some(4326))
-}
-pub fn geo_ls_to_postgis(ls: LineString<f64>) -> PgLineString {
-    PgLineString {
-        points: ls.0.into_iter().map(geo_pt_to_postgis).collect(),
-        srid: Some(4326)
-    }
-}
 pub fn count<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     let bar = ctx.make_bar();
     bar.set_message("Beginning object count: iterating");
@@ -132,16 +121,8 @@ pub fn crossings<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
             }
         }
         let bbox = mp.bbox().ok_or(format_err!("couldn't find bounding box"))?;
-        let ls = geo_ls_to_postgis(LineString(vec![
-            Point::new(bbox.xmin, bbox.ymin),
-            Point::new(bbox.xmin, bbox.ymax),
-            Point::new(bbox.xmax, bbox.ymax),
-            Point::new(bbox.xmax, bbox.ymin),
-        ]));
-        let poly = PgPolygon {
-            rings: vec![ls],
-            srid: Some(4326)
-        };
+        let poly = util::geo_bbox_to_poly(bbox);
+        let poly = util::geo_poly_to_postgis(poly);
         let cx = Crossing::insert(&trans, None, poly)?;
         for nd in nodes {
             trans.execute("UPDATE nodes SET parent_crossing = $1 WHERE id = $2", &[&cx, &nd])?;
@@ -327,7 +308,7 @@ pub fn links<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
                                 let link = Link {
                                     p1: p1.id,
                                     p2: p2.id,
-                                    way: geo_ls_to_postgis(ls),
+                                    way: util::geo_ls_to_postgis(ls),
                                     distance: dist as _
                                 };
                                 link.insert(&trans).unwrap();
@@ -460,10 +441,7 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
                 fb += 1;
                 continue;
             }
-            let pgpoly = PgPolygon {
-                rings: vec![geo_ls_to_postgis(pway.exterior.clone())],
-                srid: Some(4326)
-            };
+            let pgpoly = util::geo_poly_to_postgis(pway.clone());
             let lks = Link::from_select(&trans, "WHERE ST_Intersects(way, $1)", &[&pgpoly])?;
             if lks.len() == 0 {
                 fb += 1;
@@ -474,11 +452,8 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
         }
         bar.set_message(&format!("Processing station {} ({} fallbacks, {} bottoms)", nr_ref, fb, bo));
         let centroid = poly.centroid().ok_or(format_err!("Station has no centroid"))?;
-        let pgpoly = PgPolygon {
-            rings: vec![geo_ls_to_postgis(poly.exterior.clone())],
-            srid: Some(4326)
-        };
-        let nd = Node::insert(&trans, geo_pt_to_postgis(centroid))?;
+        let pgpoly = util::geo_poly_to_postgis(poly.clone());
+        let nd = Node::insert(&trans, util::geo_pt_to_postgis(centroid))?;
         Station::insert(&trans, &nr_ref, nd, pgpoly.clone())?;
         if links.is_none() {
             bo += 1;
@@ -505,13 +480,13 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
             Link {
                 p1: link.p1,
                 p2: nd,
-                way: geo_ls_to_postgis(lp1_station),
+                way: util::geo_ls_to_postgis(lp1_station),
                 distance: lp1_s_dist as f32
             }.insert(&trans)?;
             Link {
                 p1: nd,
                 p2: link.p2,
-                way: geo_ls_to_postgis(station_lp2),
+                way: util::geo_ls_to_postgis(station_lp2),
                 distance: s_lp2_dist as f32
             }.insert(&trans)?;
         }
