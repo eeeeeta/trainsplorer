@@ -2,6 +2,7 @@ use chrono::*;
 use super::fns::*;
 use super::cif::*;
 use chrono_tz::Tz;
+use std::fmt;
 
 #[derive(Deserialize, Clone, Debug, is_enum_variant)]
 pub enum Record {
@@ -32,6 +33,18 @@ pub struct Days {
     pub fri: bool,
     pub sat: bool,
     pub sun: bool
+}
+impl fmt::Display for Days {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}{}{}{}{}{}{}",
+               if self.mon { "Mo" } else { "" },
+               if self.tue { "Tu" } else { "" },
+               if self.wed { "We" } else { "" },
+               if self.thu { "Th" } else { "" },
+               if self.fri { "Fr" } else { "" },
+               if self.sat { "Sa" } else { "" },
+               if self.sun { "Su" } else { "" })
+    }
 }
 impl Days {
     pub fn value_for_iso_weekday(&self, wd: u32) -> Option<bool> {

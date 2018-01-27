@@ -12,9 +12,8 @@ extern crate geo;
 #[macro_use] extern crate postgres_derive;
 extern crate fallible_iterator;
 extern crate ordered_float;
-extern crate chashmap;
 extern crate crossbeam;
-extern crate osmpbfreader;
+#[macro_use] extern crate serde_derive;
 
 #[macro_use] pub mod util;
 pub mod errors;

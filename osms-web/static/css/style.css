@@ -1,10 +1,87 @@
 body {
-	margin-left: 20px;
 	font-family: sans-serif;
+	margin-top: 0px;
+	margin-left: 0px;
+	margin-right: 0px;
+}
+.osms-body {
+	max-width: calc(1000px - (30px * 2));
+	margin-right: auto;
+	margin-left: auto;
+	padding-right: 30px;
+	padding-left: 30px;
+}
+.osms-header {
+	text-align: center;
+	padding-top: 10px;
+	padding-bottom: 10px;
+	border-bottom: 1px solid #999;
+	position: relative;
+}
+.osms-title {
+	font-size: 20px;
+	padding-bottom: 5px;
+	display: block;
+}
+.nav-link {
+	text-decoration: none;
+	padding-left: 5px;
+	padding-right: 5px;
 }
 #mappy-map {
 	height: 500px;
 }
+.pagination-link {
+	display: block;
+	width: 100%;
+	text-align: center;
+	background-color: #337ab7;
+	color: #fff;
+	text-decoration: none;
+	padding: 5px;
+	margin: 5px;
+	border-radius: 3px;
+}
 h1, h2, h3, h4, h5, h6 {
 	font-weight: normal;
+}
+table.fancytable {
+  border: 2px solid #FFFFFF;
+  width: 100%;
+  text-align: center;
+  border-collapse: collapse;
+}
+table.fancytable td, table.fancytable th {
+  border: 1px solid #FFFFFF;
+  padding: 3px 4px;
+}
+table.fancytable tbody td {
+  font-size: 13px;
+}
+table.fancytable td:nth-child(even) {
+  background: #EBEBEB;
+}
+table.fancytable thead {
+  background: #FFFFFF;
+  border-bottom: 4px solid #333333;
+}
+table.fancytable thead th {
+  font-size: 15px;
+  font-weight: bold;
+  color: #333333;
+  text-align: center;
+  border-left: 2px solid #333333;
+}
+table.fancytable thead th:first-child {
+  border-left: none;
+}
+
+table.fancytable tfoot {
+  font-size: 14px;
+  font-weight: bold;
+  color: #333333;
+  border-top: 4px solid #333333;
+}
+table.fancytable tfoot td {
+  font-size: 14px;
 }

@@ -1,0 +1,43 @@
+{{> header }}
+<p><i>Note: click on headers to sort data. Sorting does not work with pagination
+	like you might expect, however, and merely sorts the data currently on
+	the page.</i></p>
+<script src="/ext/sorttable.js"></script>
+<table class="sortable fancytable">
+	<thead>
+		<tr>
+			<td>UID</td>
+			<td>Type</td>
+			<td>Description</td>
+			<td>Start date</td>
+			<td>End date</td>
+			<td>Days</td>
+			<td><abbr title="Processed and usable">Prc</abbr></td>
+			<td>View</td>
+		</tr>
+	</thead>
+	{{#each body.schedules}}
+		<tr>
+			<td>
+				<a href="/schedules?uid={{this.uid}}">
+					{{this.uid}}
+				</a>
+			</td>
+			<td>{{this.stp}}</td>
+			<td>{{this.desc}}</td>
+			<td>{{this.start_date}}</td>
+			<td>{{this.end_date}}</td>
+			<td>{{this.days}}</td>
+			<td>{{this.processed}}</td>
+			<td><a href="/schedule/{{this.id}}">🠊</a></td>
+		</tr>
+	{{/each}}
+</table>
+{{#if body.more}}
+<a href="/schedules?{{body.more}}" class="pagination-link">Next page</a>
+{{#if body.date}}
+<a href="/schedules?date={{body.date}}" class="pagination-link">Show today's schedules only</a>
+{{/if}}
+<a href="/schedules" class="pagination-link">Reset filters & pagination</a>
+{{/if}}
+{{> footer }}

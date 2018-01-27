@@ -8,7 +8,7 @@ use chrono::*;
 use osm;
 use errors::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Serialize, Clone)]
 pub struct Schedule {
     pub id: i32,
     pub uid: String,
@@ -224,7 +224,7 @@ UNIQUE(uid, start_date, stp_indicator)
     }
 }
 
-#[derive(Debug, ToSql, FromSql, Clone)]
+#[derive(Debug, Serialize, ToSql, FromSql, Clone)]
 pub struct ScheduleLocation {
     pub tiploc: String,
     pub time: NaiveTime,

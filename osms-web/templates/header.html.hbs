@@ -2,10 +2,15 @@
 <html lang="en-GB">
 	<head>
 		<meta charset="UTF-8">
-		<title>{{ title }}</title>
+		<title>{{ title }} | osm-signal</title>
 		<link href="/css/style.css" rel="stylesheet">
 		<link href="/ext/leaflet.css" rel="stylesheet">
-		<script src="/ext/leaflet.js"></script>
-		<script src="/js/main.js"></script>
 	</head>
 	<body>
+		<header class="osms-header">
+			<span class="osms-title">osm-signal</span>
+				{{> nav }}
+			</nav>
+		</header>
+		<div class="osms-body">
+			<h2 class="page-title">{{ title }}</h2>
