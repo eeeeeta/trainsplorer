@@ -1,13 +1,13 @@
-#[macro_use] extern crate error_chain;
 extern crate osms_db;
-extern crate r2d2;
-extern crate r2d2_postgres;
+extern crate failure;
+extern crate postgres;
 extern crate clap;
 extern crate env_logger;
 
 use osms_db::*;
+use failure::Fail;
 use osms_db::errors::*;
-use r2d2_postgres::{TlsMode, PostgresConnectionManager};
+use postgres::{Connection, TlsMode};
 use clap::{Arg, App};
 fn example() -> Result<()> {
     env_logger::init().unwrap();
@@ -39,12 +39,9 @@ fn example() -> Result<()> {
     let url = matches.value_of("url").unwrap();
     let from = matches.value_of("from").unwrap();
     let to = matches.value_of("to").unwrap();
-    let r2c = r2d2::Config::default();
-    let manager = PostgresConnectionManager::new(url, TlsMode::None)
-        .unwrap();
-    let pool = r2d2::Pool::new(r2c, manager).unwrap();;
-    db::initialize_database(&pool, 4)?;
-    let sp = osm::navigate::navigate(&*pool.get().unwrap(), from, to)?;
+    let conn = Connection::connect(url, TlsMode::None)?;
+    db::initialize_database(&conn)?;
+    let sp = osm::navigate::navigate(&conn, from, to)?;
     println!(r#"
 <?xml version="1.0" encoding="UTF-8"?>
 <gpx
@@ -65,4 +62,11 @@ xsi:schemaLocation="http://www.topografix.com/GPX/1/0 http://www.topografix.com/
 </gpx>"#);
     Ok(())
 }
-quick_main!(example);
+fn main() {
+    if let Err(e) = example() {
+        eprintln!("ERROR: {}", e);
+        for c in e.causes().skip(1) {
+            eprintln!("Cause: {}", c);
+        }
+    }
+}

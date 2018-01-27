@@ -89,6 +89,8 @@ pub fn count<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
 }
 pub fn crossings<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     use geo::algorithm::boundingbox::BoundingBox;
+    use geo::algorithm::from_postgis::FromPostgis;
+    use geo::algorithm::to_postgis::ToPostgis;
 
     if ctx.count("FROM crossings")? != 0 { return Ok(()) };
     info!("Phase 1.4: making crossings");
@@ -121,8 +123,7 @@ pub fn crossings<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
             }
         }
         let bbox = mp.bbox().ok_or(format_err!("couldn't find bounding box"))?;
-        let poly = util::geo_bbox_to_poly(bbox);
-        let poly = util::geo_poly_to_postgis(poly);
+        let poly = util::geo_bbox_to_poly(bbox).to_postgis_wgs84();
         let cx = Crossing::insert(&trans, None, poly)?;
         for nd in nodes {
             trans.execute("UPDATE nodes SET parent_crossing = $1 WHERE id = $2", &[&cx, &nd])?;
@@ -236,6 +237,8 @@ pub fn nodes<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
 }
 pub fn links<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     use geo::algorithm::haversine_length::HaversineLength;
+    use geo::algorithm::from_postgis::FromPostgis;
+    use geo::algorithm::to_postgis::ToPostgis;
     use self::chase_lev::Steal;
 
     if ctx.count("FROM links")? != 0 { return Ok(()) };
@@ -308,7 +311,7 @@ pub fn links<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
                                 let link = Link {
                                     p1: p1.id,
                                     p2: p2.id,
-                                    way: util::geo_ls_to_postgis(ls),
+                                    way: ls.to_postgis_wgs84(),
                                     distance: dist as _
                                 };
                                 link.insert(&trans).unwrap();
@@ -328,6 +331,8 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     use geo::algorithm::haversine_destination::HaversineDestination;
     use geo::algorithm::haversine_length::HaversineLength;
     use geo::algorithm::centroid::Centroid;
+    use geo::algorithm::from_postgis::FromPostgis;
+    use geo::algorithm::to_postgis::ToPostgis;
 
     if ctx.count("FROM stations")? != 0 { return Ok(()) };
     info!("Phase 1.3: making stations");
@@ -441,7 +446,7 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
                 fb += 1;
                 continue;
             }
-            let pgpoly = util::geo_poly_to_postgis(pway.clone());
+            let pgpoly = pway.to_postgis_wgs84();
             let lks = Link::from_select(&trans, "WHERE ST_Intersects(way, $1)", &[&pgpoly])?;
             if lks.len() == 0 {
                 fb += 1;
@@ -452,8 +457,8 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
         }
         bar.set_message(&format!("Processing station {} ({} fallbacks, {} bottoms)", nr_ref, fb, bo));
         let centroid = poly.centroid().ok_or(format_err!("Station has no centroid"))?;
-        let pgpoly = util::geo_poly_to_postgis(poly.clone());
-        let nd = Node::insert(&trans, util::geo_pt_to_postgis(centroid))?;
+        let pgpoly = poly.to_postgis_wgs84();
+        let nd = Node::insert(&trans, centroid.to_postgis_wgs84())?;
         Station::insert(&trans, &nr_ref, nd, pgpoly.clone())?;
         if links.is_none() {
             bo += 1;
@@ -480,13 +485,13 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
             Link {
                 p1: link.p1,
                 p2: nd,
-                way: util::geo_ls_to_postgis(lp1_station),
+                way: lp1_station.to_postgis_wgs84(),
                 distance: lp1_s_dist as f32
             }.insert(&trans)?;
             Link {
                 p1: nd,
                 p2: link.p2,
-                way: util::geo_ls_to_postgis(station_lp2),
+                way: station_lp2.to_postgis_wgs84(),
                 distance: s_lp2_dist as f32
             }.insert(&trans)?;
         }

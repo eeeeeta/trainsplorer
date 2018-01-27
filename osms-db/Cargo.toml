@@ -20,6 +20,7 @@ serde_derive = "1.0"
 
 [dependencies.geo]
 git = "https://github.com/eeeeeta/rust-geo"
+features = ["postgis-integration"]
 
 [dependencies.ntrod-types]
 features = ["postgres-traits"]

@@ -20,6 +20,7 @@ url = "1.6.0"
 
 [dependencies.geo]
 git = "https://github.com/eeeeeta/rust-geo"
+features = ["postgis-integration"]
 
 [dependencies.osms-db]
 path = "../osms-db"

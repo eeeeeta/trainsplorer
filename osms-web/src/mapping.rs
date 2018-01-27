@@ -34,7 +34,8 @@ impl GeoParameters {
         util::geo_bbox_to_poly(self.as_bbox())
     }
     fn as_pg_poly(&self) -> PgPolygon {
-        util::geo_poly_to_postgis(self.as_poly())
+        use geo::algorithm::to_postgis::ToPostgis;
+        self.as_poly().to_postgis_wgs84()
     }
     fn get_limit_and_pg_poly(&self) -> (u32, PgPolygon) {
         let mut limit = self.limit.unwrap_or(500);
