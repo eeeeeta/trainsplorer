@@ -1,27 +1,91 @@
 use db::{DbType, InsertableDbType, GenericConnection, Row};
-use osm::types::Station;
 use postgis::ewkb::Point;
 use ntrod_types::schedule::*;
 use ntrod_types::reference::*;
 use ntrod_types::cif::*;
 use chrono::*;
-use osm;
 use errors::*;
 
+/// A schedule from NROD, describing how trains should theoretically run.
 #[derive(Debug, Serialize, Clone)]
 pub struct Schedule {
+    /// Internal primary key.
     pub id: i32,
+    /// Schedule UID from NROD.
     pub uid: String,
+    /// Schedule start date.
     pub start_date: NaiveDate,
+    /// Schedule end date.
     pub end_date: NaiveDate,
+    /// Days of the week where this schedule applies.
     pub days: Days,
+    /// STP indicator from NROD.
     pub stp_indicator: StpIndicator,
-    pub signalling_id: Option<String>,
-    pub locs: Vec<ScheduleLocation>,
-    pub processed: bool
+    pub signalling_id: Option<String>
 }
+impl DbType for Schedule {
+    fn table_name() -> &'static str {
+        "schedules"
+    }
+    fn table_desc() -> &'static str {
+        r#"
+id SERIAL PRIMARY KEY,
+uid VARCHAR NOT NULL,
+start_date DATE NOT NULL,
+end_date DATE NOT NULL,
+days "Days" NOT NULL,
+stp_indicator "StpIndicator" NOT NULL,
+signalling_id VARCHAR,
+UNIQUE(uid, start_date, stp_indicator)
+"#
+    }
+    fn from_row(row: &Row) -> Self {
+        Self {
+            id: row.get(0),
+            uid: row.get(1),
+            start_date: row.get(2),
+            end_date: row.get(3),
+            days: row.get(4),
+            stp_indicator: row.get(5),
+            signalling_id: row.get(6),
+        }
+    }
+}
+impl InsertableDbType for Schedule {
+    type Id = i32;
+    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
+        for row in &conn.query(
+            "SELECT id FROM schedules
+             WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3",
+                               &[&self.uid, &self.start_date, &self.stp_indicator])? {
+            return Ok(row.get(0));
+        }
+        let qry = conn.query(
+            "INSERT INTO schedules
+             (uid, start_date, end_date, days, stp_indicator, signalling_id)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id",
+            &[&self.uid, &self.start_date, &self.end_date, &self.days, &self.stp_indicator,
+              &self.signalling_id])?;
+        let mut ret = None;
+        for row in &qry {
+            ret = Some(row.get(0))
+        }
+        Ok(ret.expect("No id in Schedule::insert?!"))
+    }
+}
+
+
 impl Schedule {
+    /// Checks whether this schedule is authoritative on the given date.
+    ///
+    /// 'Authoritative' = not superseded by another schedule, like an overlay or
+    /// cancellation schedule.
     pub fn is_authoritative<T: GenericConnection>(&self, conn: &T, on_date: NaiveDate) -> Result<bool> {
+        if !self.days.value_for_iso_weekday(on_date.weekday().number_from_monday()).unwrap() {
+            warn!("Schedule #{} was asked is_authoritative() outside days range", self.id);
+            return Ok(false);
+        }
         if on_date > self.end_date || on_date < self.start_date {
             warn!("Schedule #{} was asked is_authoritative() outside date range", self.id);
             return Ok(false);
@@ -32,13 +96,6 @@ impl Schedule {
                                            &[&self.uid, &on_date])?;
         let mut highest = (0, StpIndicator::None);
         for sched in scheds.into_iter() {
-            let trains = Train::from_select(conn, "WHERE from_id = $1
-                                                   AND date = $2",
-                                            &[&sched.id, &on_date])?;
-            if trains.len() > 0 {
-                debug!("Schedule #{} is superseded by a pre-existing train", self.id);
-                return Ok(false);
-            }
             if !sched.days.value_for_iso_weekday(on_date.weekday().number_from_monday()).unwrap() {
                 continue;
             }
@@ -55,229 +112,88 @@ impl Schedule {
         }
         Ok(highest.0 == self.id)
     }
-    pub fn make_ways<T: GenericConnection>(&self, conn: &T) -> Result<()> {
-        debug!("making ways for record (UID {}, start {}, stp_indicator {:?})",
-               self.uid, self.start_date, self.stp_indicator);
-        if self.processed {
-            let n_ways = ScheduleWay::from_select(conn, "WHERE parent_id = $1", &[&self.id])?.len();
-            warn!("Already processed this record - has {} ways!", n_ways);
-            return Ok(());
-        }
-        let mut p1 = 0;
-        'outer: loop {
-            if p1 >= self.locs.len() { break; }
-            if let Some(e1) = self.locs[p1].get_station(conn)? {
-                for p2 in p1..self.locs.len() {
-                    if let Some(e2) = self.locs[p2].get_station(conn)? {
-                        if e1.nr_ref == e2.nr_ref {
-                            continue;
-                        }
-                        let path = match osm::navigate::navigate_cached(conn, &e1.nr_ref, &e2.nr_ref) {
-                            Ok(x) => x,
-                            Err(e) => {
-                                error!("*** failed to navigate from {} to {}: {} ***",
-                                       e1.nr_ref, e2.nr_ref, e);
-                                continue;
-                            }
-                        };
-                        debug!("made way from {} ({}) to {} ({})",
-                               e1.nr_ref, self.locs[p1].time,
-                               e2.nr_ref, self.locs[p2].time);
-                        let sway = ScheduleWay {
-                            st: self.locs[p1].time,
-                            et: self.locs[p2].time,
-                            start_date: self.start_date,
-                            end_date: self.end_date,
-                            station_path: path,
-                            id: -1,
-                            parent_id: Some(self.id),
-                            train_id: None,
-                            source: 0
-                        };
-                        sway.insert_self(conn)?;
-                        p1 = p2 + 1;
-                        continue 'outer;
-                    }
-                }
-            }
-            p1 += 1;
-        }
-        conn.execute("UPDATE schedules SET processed = true WHERE id = $1", &[&self.id])?;
-        Ok(())
-    }
-    pub fn apply_rec<T: GenericConnection>(conn: &T, rec: ScheduleRecord) -> Result<Option<i32>> {
-        use self::LocationRecord::*;
-        if let CreateOrDelete::Delete = rec.transaction_type {
-            conn.execute("DELETE FROM schedules
-                          WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3",
-                         &[&rec.train_uid, &rec.schedule_start_date.naive_utc(), &rec.stp_indicator])?;
-            return Ok(None);
-        }
-        if let YesOrNo::N = rec.applicable_timetable {
-            return Ok(None);
-        }
-        debug!("inserting record (UID {}, start {}, stp_indicator {:?})",
-               rec.train_uid, rec.schedule_start_date, rec.stp_indicator);
-        let ScheduleRecord {
-            train_uid,
-            schedule_start_date,
-            schedule_end_date,
-            schedule_days_runs,
-            stp_indicator,
-            schedule_segment,
-            ..
-        } = rec;
-        let ScheduleSegment {
-            schedule_location,
-            signalling_id,
-            ..
-        } = schedule_segment;
-        let mut sched = Schedule {
-            uid: train_uid,
-            start_date: schedule_start_date.naive_utc(),
-            end_date: schedule_end_date.naive_utc(),
-            days: schedule_days_runs,
-            stp_indicator,
-            signalling_id,
-            processed: false,
-            locs: vec![],
-            id: -1
-        };
-        for loc in schedule_location {
-            match loc {
-                Originating { tiploc_code, departure, .. } => {
-                    sched.locs.push(
-                        ScheduleLocation::new(tiploc_code, departure, "originate"));
-                },
-                Intermediate { tiploc_code, arrival, departure, .. } => {
-                    sched.locs.push(
-                        ScheduleLocation::new(tiploc_code.clone(), arrival, "arrive"));
-                    sched.locs.push(
-                        ScheduleLocation::new(tiploc_code, departure, "depart"));
-                },
-                Pass { tiploc_code, pass, .. } => {
-                    sched.locs.push(
-                        ScheduleLocation::new(tiploc_code, pass, "pass"));
-                },
-                Terminating { tiploc_code, arrival, .. } => {
-                    sched.locs.push(
-                        ScheduleLocation::new(tiploc_code, arrival, "terminate"));
-                }
-            }
-        }
-        Ok(Some(sched.insert_self(conn)?))
-    }
 }
-impl InsertableDbType for Schedule {
-    type Id = i32;
-    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
-        for row in &conn.query(
-            "SELECT id FROM schedules
-             WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3",
-                               &[&self.uid, &self.start_date, &self.stp_indicator])? {
-            return Ok(row.get(0));
-        }
-        let qry = conn.query(
-            "INSERT INTO schedules
-             (uid, start_date, end_date, days, stp_indicator, signalling_id, locs, processed)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-             RETURNING id",
-            &[&self.uid, &self.start_date, &self.end_date, &self.days, &self.stp_indicator,
-              &self.signalling_id, &self.locs, &self.processed])?;
-        let mut ret = None;
-        for row in &qry {
-            ret = Some(row.get(0))
-        }
-        Ok(ret.expect("No id in Schedule::insert?!"))
-    }
+#[derive(Debug, Serialize, Clone)]
+/// Describes a movement a train makes within a schedule.
+pub struct ScheduleMvt {
+    /// Internal primary key.
+    pub id: i32,
+    /// Schedule this is a part of.
+    pub parent_sched: i32,
+    /// Timing Point Location where this movement happens.
+    pub tiploc: String,
+    /// Station where this movement happens (optional, 'cause not all TIPLOCs have stations)
+    pub parent_station: Option<i32>,
+    /// What actually happens here - one of:
+    ///
+    /// - 0: arrival
+    /// - 1: departure
+    /// - 2: pass
+    pub action: i32,
+    /// Whether the train originates or terminates here.
+    ///
+    /// (Obviously, look at `action` to determine which)
+    pub origterm: bool,
+    /// The time at which this movement happens.
+    pub time: NaiveTime
 }
-impl DbType for Schedule {
+impl DbType for ScheduleMvt {
     fn table_name() -> &'static str {
-        "schedules"
+        "schedule_movements"
     }
     fn table_desc() -> &'static str {
         r#"
 id SERIAL PRIMARY KEY,
-uid VARCHAR NOT NULL,
-start_date DATE NOT NULL,
-end_date DATE NOT NULL,
-days "Days" NOT NULL,
-stp_indicator "StpIndicator" NOT NULL,
-signalling_id VARCHAR,
-locs "ScheduleLocation"[] NOT NULL,
-processed BOOL NOT NULL,
-UNIQUE(uid, start_date, stp_indicator)
+parent_sched INT NOT NULL REFERENCES schedules ON DELETE CASCADE,
+tiploc VARCHAR NOT NULL,
+parent_station INT REFERENCES stations ON DELETE RESTRICT,
+action INT NOT NULL,
+origterm BOOL NOT NULL,
+time TIME NOT NULL
 "#
     }
     fn from_row(row: &Row) -> Self {
         Self {
             id: row.get(0),
-            uid: row.get(1),
-            start_date: row.get(2),
-            end_date: row.get(3),
-            days: row.get(4),
-            stp_indicator: row.get(5),
-            signalling_id: row.get(6),
-            locs: row.get(7),
-            processed: row.get(8)
+            parent_sched: row.get(1),
+            tiploc: row.get(2),
+            parent_station: row.get(3),
+            action: row.get(4),
+            origterm: row.get(5),
+            time: row.get(6),
         }
     }
 }
-
-#[derive(Debug, Serialize, ToSql, FromSql, Clone)]
-pub struct ScheduleLocation {
-    pub tiploc: String,
-    pub time: NaiveTime,
-    pub event: String
-}
-impl ScheduleLocation {
-    pub fn create_type() -> &'static str {
-        r#"
-DO $$
-BEGIN
-IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ScheduleLocation') THEN
-CREATE TYPE "ScheduleLocation" AS (
-tiploc VARCHAR,
-time TIME,
-event VARCHAR
-);
-END IF;
-END$$;"#
-    }
-    pub fn new<T: Into<String>, U: Into<String>>(tiploc: T, dep: NaiveTime, event: U) -> Self {
-        Self { tiploc: tiploc.into(), time: dep, event: event.into() }
-    }
-    pub fn get_station<T: GenericConnection>(&self, conn: &T) -> Result<Option<Station>> {
-        if let Some(crs) = self.get_crs(conn)? {
-            let stats = Station::from_select(conn, "WHERE nr_ref = $1", &[&crs])?;
-            if stats.len() == 0 {
-                warn!("No station for CRS {}", crs);
-            }
-            Ok(stats.into_iter()
-               .nth(0))
+impl InsertableDbType for ScheduleMvt {
+    type Id = i32;
+    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
+        let qry = conn.query("INSERT INTO schedule_movements
+                              (parent_sched, tiploc, parent_station, action, origterm, time)
+                              VALUES ($1, $2, $3, $4, $5, $6)
+                              RETURNING id",
+                             &[&self.parent_sched, &self.tiploc, &self.parent_station,
+                               &self.action, &self.origterm, &self.time])?;
+        let mut ret = None;
+        for row in &qry {
+            ret = Some(row.get(0))
         }
-        else {
-            Ok(None)
-        }
-    }
-    pub fn get_crs<T: GenericConnection>(&self, conn: &T) -> Result<Option<String>> {
-        for row in &conn.query("SELECT crs FROM msn_entries WHERE tiploc = $1", &[&self.tiploc])? {
-            return Ok(Some(row.get(0)));
-        }
-        for row in &conn.query("SELECT crs FROM corpus_entries WHERE tiploc = $1 AND crs IS NOT NULL", &[&self.tiploc])? {
-            return Ok(Some(row.get(0)));
-        }
-        warn!("No CRS for TIPLOC {}", self.tiploc);
-        Ok(None)
+        Ok(ret.expect("No id in ScheduleMvt::insert?!"))
     }
 }
 #[derive(Debug, Clone)]
+/// A train, tracked in real-time.
 pub struct Train {
+    /// Internal primary key.
     pub id: i32,
-    pub from_id: i32,
+    /// Schedule this train is running from.
+    pub parent_sched: i32,
+    /// TRUST ID from NROD.
     pub trust_id: String,
+    /// Date this train was running on.
     pub date: NaiveDate,
+    /// Signalling headcode from TRUST.
     pub signalling_id: String,
+    /// Whether this train has terminated or not.
     pub terminated: bool
 }
 impl DbType for Train {
@@ -287,7 +203,7 @@ impl DbType for Train {
     fn table_desc() -> &'static str {
         r#"
 id SERIAL PRIMARY KEY,
-from_id INT NOT NULL REFERENCES schedules ON DELETE CASCADE,
+parent_sched INT NOT NULL REFERENCES schedules ON DELETE CASCADE,
 trust_id VARCHAR NOT NULL UNIQUE,
 date DATE NOT NULL,
 signalling_id VARCHAR NOT NULL,
@@ -302,7 +218,7 @@ terminated BOOL NOT NULL DEFAULT false
     fn from_row(row: &Row) -> Self {
         Self {
             id: row.get(0),
-            from_id: row.get(1),
+            parent_sched: row.get(1),
             trust_id: row.get(2),
             date: row.get(3),
             signalling_id: row.get(4),
@@ -314,10 +230,10 @@ impl InsertableDbType for Train {
     type Id = i32;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
         let qry = conn.query("INSERT INTO trains
-                              (from_id, trust_id, date, signalling_id, terminated)
+                              (parent_sched, trust_id, date, signalling_id, terminated)
                               VALUES ($1, $2, $3, $4, $5)
                               RETURNING id",
-                             &[&self.from_id, &self.trust_id, &self.date,
+                             &[&self.parent_sched, &self.trust_id, &self.date,
                                &self.signalling_id, &self.terminated])?;
         let mut ret = None;
         for row in &qry {
@@ -326,6 +242,59 @@ impl InsertableDbType for Train {
         Ok(ret.expect("No id in Train::insert?!"))
     }
 }
+#[derive(Debug, Clone)]
+/// A live update to a `ScheduleMvt`.
+pub struct TrainMvt {
+    /// Internal primary key.
+    pub id: i32,
+    /// References the `Train` this movement belongs to.
+    pub parent_train: i32,
+    /// Which schedule movement this updates.
+    pub parent_mvt: i32,
+    /// The updated time.
+    pub time: NaiveTime,
+    /// Source of this update.
+    pub source: String
+}
+impl DbType for TrainMvt {
+    fn table_name() -> &'static str {
+        "train_movements"
+    }
+    fn table_desc() -> &'static str {
+        r#"
+id SERIAL PRIMARY KEY,
+parent_train INT NOT NULL REFERENCES trains ON DELETE CASCADE,
+parent_mvt INT NOT NULL REFERENCES schedule_movements ON DELETE CASCADE,
+time TIME NOT NULL,
+source VARCHAR NOT NULL
+        "#
+    }
+    fn from_row(row: &Row) -> Self {
+        Self {
+            id: row.get(0),
+            parent_train: row.get(1),
+            parent_mvt: row.get(2),
+            time: row.get(3),
+            source: row.get(4),
+        }
+    }
+}
+impl InsertableDbType for TrainMvt {
+    type Id = i32;
+    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
+        let qry = conn.query("INSERT INTO train_movements
+                              (parent_train, parent_mvt, time, source)
+                              VALUES ($1, $2, $3, $4)
+                              RETURNING id",
+                             &[&self.parent_train, &self.parent_mvt, &self.time, &self.source])?;
+        let mut ret = None;
+        for row in &qry {
+            ret = Some(row.get(0))
+        }
+        Ok(ret.expect("No id in TrainMvt::insert?!"))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MsnEntry {
     pub tiploc: String,
@@ -443,75 +412,6 @@ impl InsertableDbType for ScheduleFile {
                       VALUES ($1, $2, $3)",
                      &[&self.timestamp, &self.metatype, &self.metaseq])?;
         Ok(())
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ScheduleWay {
-    pub id: i32,
-    pub parent_id: Option<i32>,
-    pub train_id: Option<i32>,
-    pub st: NaiveTime,
-    pub et: NaiveTime,
-    pub start_date: NaiveDate,
-    pub end_date: NaiveDate,
-    pub station_path: i32,
-    pub source: i32
-}
-impl DbType for ScheduleWay {
-    fn table_name() -> &'static str {
-        "schedule_ways"
-    }
-    fn table_desc() -> &'static str {
-        r#"
-id SERIAL PRIMARY KEY,
-parent_id INT REFERENCES schedules ON DELETE CASCADE,
-train_id INT REFERENCES trains ON DELETE CASCADE,
-st TIME NOT NULL,
-et TIME NOT NULL,
-start_date DATE NOT NULL,
-end_date DATE NOT NULL,
-station_path INT NOT NULL REFERENCES station_paths ON DELETE RESTRICT,
-source INT NOT NULL,
-CHECK((parent_id IS NULL) != (train_id IS NULL))
-"#
-    }
-    fn indexes() -> Vec<&'static str> {
-        vec![
-            "schedule_ways_parent_id ON schedule_ways (parent_id)",
-            "schedule_ways_train_id ON schedule_ways (train_id)"
-        ]
-    }
-    fn from_row(row: &Row) -> Self {
-        Self {
-            id: row.get(0),
-            parent_id: row.get(1),
-            train_id: row.get(2),
-            st: row.get(3),
-            et: row.get(4),
-            start_date: row.get(5),
-            end_date: row.get(6),
-            station_path: row.get(7),
-            source: row.get(8),
-        }
-    }
-}
-impl InsertableDbType for ScheduleWay {
-    type Id = i32;
-    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
-        let qry = conn.query("INSERT INTO schedule_ways
-                              (st, et, station_path, parent_id, start_date, end_date, train_id, source)
-                              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                              ON CONFLICT(id) DO UPDATE SET station_path = excluded.station_path
-                              RETURNING id",
-                             &[&self.st, &self.et, &self.station_path,
-                               &self.parent_id, &self.start_date,
-                               &self.end_date, &self.train_id, &self.source])?;
-        let mut ret = None;
-        for row in &qry {
-            ret = Some(row.get(0))
-        }
-        Ok(ret.expect("no ID in ScheduleWay insert"))
     }
 }
 impl InsertableDbType for CorpusEntry {

@@ -28,7 +28,7 @@ impl PartialOrd for State {
         Some(self.cmp(other))
     }
 }
-pub fn navigate_cached<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<i32> {
+pub fn navigate_cached<T: GenericConnection>(conn: &T, from: i32, to: i32) -> Result<i32> {
     let paths = StationPath::from_select(conn, "WHERE s1 = $1 AND s2 = $2", &[&from, &to])?;
     if paths.len() > 0 {
         debug!("navigate_cached: returning memoized path from {} to {}", from, to);
@@ -38,15 +38,15 @@ pub fn navigate_cached<T: GenericConnection>(conn: &T, from: &str, to: &str) -> 
     debug!("navigate_cached: memoizing path");
     Ok(path.insert_self(conn)?)
 }
-pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<StationPath> {
+pub fn navigate<T: GenericConnection>(conn: &T, from: i32, to: i32) -> Result<StationPath> {
     // Create a transaction: we don't actually want to modify the database here.
     // This transaction will be reverted when we return.
     let trans = conn.transaction()?;
 
-    let starting_node = Station::from_select(&trans, "WHERE nr_ref = $1", &[&from])?.into_iter()
+    let starting_node = Station::from_select(&trans, "WHERE id = $1", &[&from])?.into_iter()
         .nth(0).ok_or(OsmsError::StationNotFound(from.into()))?.point;
 
-    let goal_node = Station::from_select(&trans, "WHERE nr_ref = $1", &[&to])?.into_iter()
+    let goal_node = Station::from_select(&trans, "WHERE id = $1", &[&to])?.into_iter()
         .nth(0).ok_or(OsmsError::StationNotFound(to.into()))?.point;
 
     debug!("navigate: navigating from {} ({}) to {} ({})",
@@ -154,7 +154,7 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: &str, to: &str) -> Result<
     }
     debug!("navigate: completed");
     Ok(StationPath {
-        s1: from.to_string(), s2: to.to_string(), way: path,
+        s1: from, s2: to, way: path,
         nodes: path_nodes, crossings, crossing_locations,
         id: -1
     })

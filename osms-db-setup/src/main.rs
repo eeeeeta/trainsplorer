@@ -18,6 +18,8 @@ extern crate chrono;
 extern crate reqwest;
 extern crate csv;
 extern crate atoc_msn;
+extern crate ntrod_types;
+extern crate serde_json;
 
 use clap::{Arg, App, SubCommand, AppSettings};
 use std::fs::File;
@@ -233,7 +235,7 @@ fn run() -> Result<(), Error> {
                         let data = BufReader::new(data);
                         let data = GzDecoder::new(data)
                             .context(err_msg("couldn't start gunzipping corpus data file"))?;
-                        ntrod::import_corpus(&*conn, data)?;
+                        make::corpus_entries(&*conn, data)?;
                     }
                     if util::count(&*conn, "FROM naptan_entries", &[])? == 0 {
                         let data = File::open(opts.value_of("naptan").unwrap())
@@ -260,7 +262,7 @@ fn run() -> Result<(), Error> {
                     let data = BufReader::new(data);
                     let data = GzDecoder::new(data)
                         .context(err_msg("couldn't start gunzipping schedule data file"))?;
-                    ntrod::apply_schedule_records(&*conn, data, opts.value_of("limit_toc"))?;
+                    make::apply_schedule_records(&*conn, data, opts.value_of("limit_toc"))?;
                 },
                 ("update", Some(opts)) => {
                     use chrono::*;
@@ -282,72 +284,17 @@ fn run() -> Result<(), Error> {
                     let data = BufReader::new(data);
                     let data = GzDecoder::new(data)
                         .context(err_msg("couldn't start gunzipping schedule data file"))?;
-                    ntrod::apply_schedule_records(&*conn, data, opts.value_of("limit_toc"))?;
+                    make::apply_schedule_records(&*conn, data, opts.value_of("limit_toc"))?;
                 },
                 ("ways", _) => {},
                 (x, _) => panic!("Invalid schedule subcommand {}", x)
             }
-            info!("Updating schedule ways...");
-            ntrod::make_schedule_ways(&pool, conf.threads)?;
         },
         ("crossing", Some(opts)) => {
         },
         (x, _) => panic!("Invalid subcommand {}", x)
     }
 
-    /*
-    info!("Opening data files...");
-    let corpus = BufReader::new(File::open(conf.corpus_data)
-        .context(err_msg("couldn't open corpus data file"))?);
-    let schedule = BufReader::new(File::open(conf.schedule_data)
-                                  .context(err_msg("couldn't open schedule data file"))?);
-    let schedule = GzDecoder::new(schedule)
-        .context(err_msg("couldn't start gunzipping schedule data file"))?;
-    let mut map = osmpbfreader::new(bufreader::new(file::open(conf.map_data)
-                                               .context(err_msg("couldn't open map data file"))?));
-        let manager = PostgresConnectionManager::new(conf.database_url, tls)
-        .context(err_msg("couldn't connect to postgres"))?;
-    let pool = r2d2::Pool::new(r2c, manager).context(err_msg("couldn't make db pool"))?;
-
-    let mut ctx = make::ImportContext::new(&mut map, &pool, conf.threads);
-    if conf.always_count {
-        info!("Counting objects in map file...");
-        make::count(&mut ctx)?;
-    }
-    info!("Phase 1: initialising database");
-
-    db::initialize_database(&*pool.get().unwrap())?;
-    make::nodes(&mut ctx)?;
-    make::links(&mut ctx)?;
-    make::stations(&mut ctx)?;
-    make::crossings(&mut ctx)?;
-    make::separate_nodes(&mut ctx)?;
-    if conf.db_only {
-        info!("Database-only initialization specified; aborting!");
-        return Ok(());
-    }
-    {
-        let conn = pool.get().unwrap();
-        if util::count(&*conn, "FROM corpus_entries", &[])? == 0 {
-            info!("Phase 2: importing corpus data");
-            ntrod::import_corpus(&*conn, corpus)?;
-        }
-        else {
-            info!("Skipping phase 2: corpus data exists");
-        }
-        if util::count(&*conn, "FROM schedules", &[])? == 0 {
-            info!("Phase 3: importing schedule records");
-            ntrod::apply_schedule_records(&*conn, schedule,
-                                          conf.limit_schedule_toc.as_ref().map(|x| x as &str))?;
-        }
-        else {
-            info!("Skipping phase 3: schedule records exist");
-        }
-    }
-    info!("Phase 4: making schedule ways");
-    ntrod::make_schedule_ways(&pool, conf.threads)?;
-
-    */
     info!("Complete!");
     Ok(())
 }

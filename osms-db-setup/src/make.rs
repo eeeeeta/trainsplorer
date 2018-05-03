@@ -2,14 +2,17 @@ use osmpbfreader::{OsmPbfReader};
 use osmpbfreader::reader::ParIter;
 use osmpbfreader::objects::{OsmObj, OsmId};
 use indicatif::{ProgressStyle, ProgressBar};
-use std::io::{Read, BufRead, Seek};
+use std::io::{Read, BufRead, Seek, BufReader};
 use geo::*;
 use std::collections::HashSet;
 use postgis::ewkb::Point as PgPoint;
 use osms_db::db::*;
 use osms_db::util;
 use osms_db::osm::types::*;
-use osms_db::ntrod::types::{MsnEntry, NaptanEntry};
+use osms_db::errors::OsmsError;
+use osms_db::ntrod::types::*;
+use ntrod_types::reference::CorpusData;
+use ntrod_types::schedule::{self, ScheduleRecord};
 use crossbeam::sync::chase_lev;
 use failure::Error;
 use std::collections::HashMap;
@@ -180,9 +183,155 @@ pub fn msn_entries<R: BufRead, T: GenericConnection>(conn: &T, file: R) -> Resul
     trans.commit()?;
     Ok(())
 }
+pub fn corpus_entries<R: Read, T: GenericConnection>(conn: &T, file: R) -> Result<()> {
+    info!("corpus_entries: Importing CORPUS entries...");
+    let data: CorpusData = ::serde_json::from_reader(file)?;
+    let mut inserted = 0;
+    let trans = conn.transaction()?;
+    for ent in data.tiploc_data {
+        if ent.contains_data() {
+            ent.insert_self(&trans)?;
+            inserted += 1;
+        }
+    }
+    trans.commit()?;
+    debug!("corpus_entries: inserted {} entries", inserted);
+    Ok(())
+}
+pub fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord) -> Result<()> {
+    use ntrod_types::schedule::*;
+    use ntrod_types::schedule::LocationRecord::*;
+
+    if let CreateOrDelete::Delete = rec.transaction_type {
+        conn.execute("DELETE FROM schedules
+                          WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3",
+                          &[&rec.train_uid, &rec.schedule_start_date.naive_utc(), &rec.stp_indicator])?;
+        return Ok(());
+    }
+    if let YesOrNo::N = rec.applicable_timetable {
+        return Ok(());
+    }
+    debug!("apply_schedule_record: inserting record (UID {}, start {}, stp_indicator {:?})",
+    rec.train_uid, rec.schedule_start_date, rec.stp_indicator);
+    let ScheduleRecord {
+        train_uid,
+        schedule_start_date,
+        schedule_end_date,
+        schedule_days_runs,
+        stp_indicator,
+        schedule_segment,
+        ..
+    } = rec;
+    let ScheduleSegment {
+        schedule_location,
+        signalling_id,
+        ..
+    } = schedule_segment;
+    let sched = Schedule {
+        uid: train_uid,
+        start_date: schedule_start_date.naive_utc(),
+        end_date: schedule_end_date.naive_utc(),
+        days: schedule_days_runs,
+        stp_indicator,
+        signalling_id,
+        id: -1
+    };
+    let sid = sched.insert_self(conn)?;
+    let mut mvts = vec![];
+    for loc in schedule_location {
+        match loc {
+            Originating { tiploc_code, departure, .. } => {
+                mvts.push((tiploc_code, departure, 1, true));
+            },
+            Intermediate { tiploc_code, arrival, departure, .. } => {
+                mvts.push((tiploc_code.clone(), arrival, 0, false));
+                mvts.push((tiploc_code, departure, 1, false));
+            },
+            Pass { tiploc_code, pass, .. } => {
+                mvts.push((tiploc_code, pass, 2, false));
+            },
+            Terminating { tiploc_code, arrival, .. } => {
+                mvts.push((tiploc_code, arrival, 0, true));
+            }
+        }
+    }
+    for (tiploc, time, action, origterm) in mvts {
+        let mvt = ScheduleMvt {
+            parent_sched: sid,
+            id: -1,
+            parent_station: None,
+            tiploc, time, action, origterm
+        };
+        mvt.insert_self(conn)?;
+    }
+    Ok(())
+}
+pub fn apply_schedule_records<R: Read, T: GenericConnection>(conn: &T, file: R, restrict_atoc: Option<&str>) -> Result<()> {
+    debug!("apply_schedule_records: running...");
+    let mut inserted = 0;
+    let trans = conn.transaction()?;
+    let rdr = BufReader::new(file);
+    let mut verified = false;
+    for line in rdr.lines() {
+        let line = line?;
+        let rec: ::std::result::Result<schedule::Record, _> = ::serde_json::from_str(&line);
+        let rec = match rec {
+            Ok(r) => r,
+            Err(e) => {
+                warn!("apply_schedule_records: error parsing: {}", e);
+                debug!("apply_schedule_records: line was: {}", line);
+                continue;
+            }
+        };
+        match rec {
+            schedule::Record::Schedule(rec) => {
+                if !verified {
+                    error!("apply_schedule_records: file contained no Timetable record!");
+                    return Err(OsmsError::InvalidScheduleFile.into());
+                }
+                if let Some(atc) = restrict_atoc {
+                    if !rec.atoc_code.as_ref().map(|x| x == atc).unwrap_or(false) {
+                        continue;
+                    }
+                }
+                apply_schedule_record(&trans, rec)?;
+                inserted += 1;
+            },
+            schedule::Record::Timetable(rec) => {
+                debug!("apply_schedule_records: this is a {}-type timetable (seq {}) from {} (ts: {})",
+                       rec.metadata.ty, rec.metadata.sequence, rec.owner, rec.timestamp);
+                debug!("apply_schedule_records: checking whether this timetable is new...");
+                let files = ScheduleFile::from_select(&trans, "WHERE timestamp = $1", &[&(rec.timestamp as i64)])?;
+                if files.len() > 0 {
+                    error!("apply_schedule_records: schedule inserted already!");
+                    return Err(OsmsError::ScheduleFileExists.into());
+                }
+                let full = ScheduleFile::from_select(&trans, "WHERE metaseq > $1", &[&(rec.metadata.sequence as i32)])?;
+                if full.len() > 0 && rec.metadata.ty == "full" {
+                    error!("apply_schedule_records: a schedule with a greater sequence number has been inserted!");
+                    return Err(OsmsError::ScheduleFileImportInvalid("sequence number error").into());
+                }
+                debug!("apply_schedule_records: inserting file record...");
+                let file = ScheduleFile {
+                    id: -1,
+                    timestamp: rec.timestamp as _,
+                    metatype: rec.metadata.ty.clone(),
+                    metaseq: rec.metadata.sequence as _
+                };
+                file.insert_self(&trans)?;
+                debug!("apply_schedule_records: timetable OK");
+                verified = true;
+            },
+            _ => {}
+        }
+    }
+    trans.commit()?;
+    debug!("apply_schedule_records: applied {} entries", inserted);
+    Ok(())
+}
 pub fn naptan_entries<R: Read, T: GenericConnection>(conn: &T, file: R) -> Result<()> {
     let trans = conn.transaction()?;
-    info!("Importing naptan entries...");
+    info!("naptan_entries: Importing naptan entries...");
     let mut rdr = ::csv::Reader::from_reader(file);
     for result in rdr.deserialize() {
         let rec: NaptanCsv = result?;

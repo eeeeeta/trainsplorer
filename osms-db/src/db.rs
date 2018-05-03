@@ -80,7 +80,6 @@ pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
     debug!("initialize_database: making types...");
     conn.execute(ntrod_types::schedule::Days::create_type(), &[])?;
     conn.execute(ntrod_types::cif::StpIndicator::create_type(), &[])?;
-    conn.execute(ScheduleLocation::create_type(), &[])?;
     debug!("initialize_database: making tables...");
     Crossing::make_table(conn)?;
     Node::make_table(conn)?;
@@ -89,7 +88,8 @@ pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
     StationPath::make_table(conn)?;
     Schedule::make_table(conn)?;
     Train::make_table(conn)?;
-    ScheduleWay::make_table(conn)?;
+    TrainMvt::make_table(conn)?;
+    ScheduleMvt::make_table(conn)?;
     ScheduleFile::make_table(conn)?;
     NaptanEntry::make_table(conn)?;
     MsnEntry::make_table(conn)?;

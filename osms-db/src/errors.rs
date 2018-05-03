@@ -11,8 +11,8 @@ pub enum OsmsError {
     Serde(#[cause] SerdeError),
     #[fail(display = "Database inconsistency: {}", _0)]
     DatabaseInconsistency(&'static str),
-    #[fail(display = "Station {} couldn't be found", _0)]
-    StationNotFound(String),
+    #[fail(display = "Station #{} couldn't be found", _0)]
+    StationNotFound(i32),
     #[fail(display = "Crossing {} couldn't be found", _0)]
     CrossingNotFound(i32),
     #[fail(display = "Schedule file is invalid")]
@@ -21,10 +21,10 @@ pub enum OsmsError {
     ScheduleFileExists,
     #[fail(display = "Bad schedule file import request: {}", _0)]
     ScheduleFileImportInvalid(&'static str),
-    #[fail(display = "Station {} isn't in the same graph part as station {}.", to, from)]
+    #[fail(display = "Station #{} isn't in the same graph part as station #{}.", to, from)]
     IncorrectGraphPart {
-        from: String,
-        to: String
+        from: i32,
+        to: i32
     },
     #[fail(display = "No authoritative schedules.")]
     NoAuthoritativeSchedules,

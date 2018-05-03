@@ -22,17 +22,21 @@ r2d2_postgres = "0.13"
 reqwest = "0.8"
 serde = "1.0"
 serde_derive = "1.0"
+serde_json = "1.0.17"
 toml = "0.4"
-
-[dependencies.geo]
-git = "https://github.com/eeeeeta/rust-geo"
-features = ["postgis-integration"]
-
-[dependencies.osms-db]
-path = "../osms-db"
 
 [dependencies.atoc-msn]
 path = "../atoc-msn"
+
+[dependencies.geo]
+features = ["postgis-integration"]
+git = "https://github.com/eeeeeta/rust-geo"
+
+[dependencies.ntrod-types]
+path = "../ntrod-types"
+
+[dependencies.osms-db]
+path = "../osms-db"
 
 [dependencies.postgres]
 features = ["with-native-tls"]

@@ -75,6 +75,7 @@ impl Node {
 }
 #[derive(Debug, Clone)]
 pub struct Station {
+    pub id: i32,
     pub nr_ref: String,
     pub point: i64,
     pub area: Polygon
@@ -85,16 +86,18 @@ impl DbType for Station {
     }
     fn table_desc() -> &'static str {
         r#"
-nr_ref VARCHAR PRIMARY KEY,
+id SERIAL PRIMARY KEY,
+nr_ref VARCHAR NOT NULL,
 point BIGINT NOT NULL REFERENCES nodes ON DELETE CASCADE,
 area geometry NOT NULL
 "#
     }
     fn from_row(row: &Row) -> Self {
         Self {
-            nr_ref: row.get(0),
-            point: row.get(1),
-            area: row.get(2),
+            id: row.get(0),
+            nr_ref: row.get(1),
+            point: row.get(2),
+            area: row.get(3),
         }
     }
 }
@@ -152,8 +155,8 @@ impl Link {
 }
 #[derive(Debug, Clone)]
 pub struct StationPath {
-    pub s1: String,
-    pub s2: String,
+    pub s1: i32,
+    pub s2: i32,
     pub way: LineString,
     pub nodes: Vec<i64>,
     pub crossings: Vec<i32>,
@@ -166,8 +169,8 @@ impl DbType for StationPath {
     }
     fn table_desc() -> &'static str {
         r#"
-s1 VARCHAR NOT NULL REFERENCES stations ON DELETE RESTRICT,
-s2 VARCHAR NOT NULL REFERENCES stations ON DELETE RESTRICT,
+s1 INT NOT NULL REFERENCES stations ON DELETE RESTRICT,
+s2 INT NOT NULL REFERENCES stations ON DELETE RESTRICT,
 way geometry NOT NULL,
 nodes BIGINT[] NOT NULL,
 crossings INT[] NOT NULL,
