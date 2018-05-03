@@ -2,6 +2,12 @@
 
 (document still *very much* WIP; in future, this will actually be helpful)
 
+## new schema migration TODO
+
+- remember to link up new ScheduleMvts with new stations somehow
+- convert osms-nrod and osms-web to use the new schema
+- while we're at it, probably worth fixing stations as well
+
 ## `Schedule`
 
 - id
