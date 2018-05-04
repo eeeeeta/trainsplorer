@@ -102,7 +102,10 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
             (0, EventType::Destination) => {},
             (2, EventType::Arrival) => {},
             (1, EventType::Departure) => {}
-            _ => continue
+            (x, y) => {
+                debug!("Mismatched movement: mvt.action {} event_type {:?}", x, y);
+                continue;
+            }
         }
         let tmvt = TrainMvt {
             id: -1,
