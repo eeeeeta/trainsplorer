@@ -193,6 +193,8 @@ pub struct Train {
     pub date: NaiveDate,
     /// Signalling headcode from TRUST.
     pub signalling_id: String,
+    /// Whether this train was cancelled or not.
+    pub cancelled: bool,
     /// Whether this train has terminated or not.
     pub terminated: bool
 }
@@ -207,6 +209,7 @@ parent_sched INT NOT NULL REFERENCES schedules ON DELETE CASCADE,
 trust_id VARCHAR NOT NULL UNIQUE,
 date DATE NOT NULL,
 signalling_id VARCHAR NOT NULL,
+cancelled BOOL NOT NULL DEFAULT false,
 terminated BOOL NOT NULL DEFAULT false
 "#
     }
@@ -222,7 +225,8 @@ terminated BOOL NOT NULL DEFAULT false
             trust_id: row.get(2),
             date: row.get(3),
             signalling_id: row.get(4),
-            terminated: row.get(5)
+            cancelled: row.get(5),
+            terminated: row.get(6)
         }
     }
 }
@@ -230,11 +234,11 @@ impl InsertableDbType for Train {
     type Id = i32;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
         let qry = conn.query("INSERT INTO trains
-                              (parent_sched, trust_id, date, signalling_id, terminated)
-                              VALUES ($1, $2, $3, $4, $5)
+                              (parent_sched, trust_id, date, signalling_id, cancelled, terminated)
+                              VALUES ($1, $2, $3, $4, $5, $6)
                               RETURNING id",
                              &[&self.parent_sched, &self.trust_id, &self.date,
-                               &self.signalling_id, &self.terminated])?;
+                               &self.signalling_id, &self.cancelled, &self.terminated])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))
