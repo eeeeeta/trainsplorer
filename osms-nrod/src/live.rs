@@ -100,7 +100,7 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
         match (mvt.action, m.event_type) {
             (0, EventType::Arrival) => {},
             (0, EventType::Destination) => {},
-            (2, EventType::Arrival) => {},
+            (2, _) => {},
             (1, EventType::Departure) => {}
             (x, y) => {
                 debug!("Mismatched movement: mvt.action {} event_type {:?}", x, y);
