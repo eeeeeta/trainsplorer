@@ -88,8 +88,8 @@ pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
     StationPath::make_table(conn)?;
     Schedule::make_table(conn)?;
     Train::make_table(conn)?;
-    TrainMvt::make_table(conn)?;
     ScheduleMvt::make_table(conn)?;
+    TrainMvt::make_table(conn)?;
     ScheduleFile::make_table(conn)?;
     NaptanEntry::make_table(conn)?;
     MsnEntry::make_table(conn)?;
