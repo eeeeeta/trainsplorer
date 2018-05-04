@@ -74,7 +74,7 @@ pub fn process_cancellation<T: GenericConnection>(conn: &T, c: Cancellation) -> 
 pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<()> {
     debug!("Processing movement of train {} at STANOX {}...", m.train_id, m.loc_stanox);
     if m.train_terminated {
-        debug!("Train #{} has terminated.", m.train_terminated);
+        debug!("Train has terminated.");
         conn.execute("UPDATE trains SET terminated = true WHERE trust_id = $1", &[&m.train_id])?;
     }
     if m.offroute_ind {
