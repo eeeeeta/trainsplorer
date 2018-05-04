@@ -88,15 +88,13 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
     };
     let entries = CorpusEntry::from_select(conn, "WHERE stanox = $1 AND tiploc IS NOT NULL",
                                            &[&m.loc_stanox])?;
-    let tiploc = match entries.into_iter().nth(0) {
-        Some(c) => c.tiploc.unwrap(),
-        None => {
-            debug!("No TIPLOC found for STANOX {}", m.loc_stanox);
-            return Ok(());
-        }
-    };
-    debug!("Mapped STANOX {} to TIPLOC {}", m.loc_stanox, tiploc);
-    let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = $2", &[&train.parent_sched, &tiploc])?;
+    let tiplocs = entries.into_iter().map(|x| x.tiploc.unwrap()).collect::<Vec<_>>();
+    if tiplocs.len() == 0 {
+        debug!("No TIPLOC found for STANOX {}", m.loc_stanox);
+        return Ok(());
+    }
+    debug!("Mapped STANOX {} to TIPLOCs {:?}", m.loc_stanox, tiplocs);
+    let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = ANY($2)", &[&train.parent_sched, &tiplocs])?;
     let mut did_something = false;
     for mvt in mvts {
         match (mvt.action, m.event_type) {
