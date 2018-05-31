@@ -221,7 +221,6 @@ fn run() -> Result<(), Error> {
                     make::nodes(&mut ctx)?;
                     make::links(&mut ctx)?;
                     make::stations(&mut ctx)?;
-                    make::crossings(&mut ctx)?;
                     make::separate_nodes(&mut ctx)?;
                 },
                 ("nrod", Some(opts)) => {

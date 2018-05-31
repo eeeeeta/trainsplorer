@@ -101,13 +101,85 @@ area geometry NOT NULL
         }
     }
 }
-impl Station {
-    pub fn insert<T: GenericConnection>(conn: &T, nr_ref: &str, point: i64, area: Polygon) -> Result<()> {
-        conn.execute("INSERT INTO stations (nr_ref, point, area) VALUES ($1, $2, $3)",
-                     &[&nr_ref, &point, &area])?;
+impl InsertableDbType for Station {
+    type Id = i32;
+    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
+        let qry = conn.query("INSERT INTO stations
+                              (nr_ref, point, area)
+                              VALUES ($1, $2, $3)
+                              RETURNING id",
+                             &[&self.nr_ref, &self.point, &self.area])?;
+        let mut ret = None;
+        for row in &qry {
+            ret = Some(row.get(0))
+        }
+        Ok(ret.expect("no ID in Station insert"))
+    }
+}
+pub struct StationOverride {
+    pub id: i32,
+    pub nr_ref: String,
+    pub area: Polygon
+}
+impl DbType for StationOverride {
+    fn table_name() -> &'static str {
+        "station_overrides"
+    }
+    fn table_desc() -> &'static str {
+        r#"
+id SERIAL PRIMARY KEY,
+nr_ref VARCHAR NOT NULL,
+area geometry NOT NULL
+"#
+    }
+    fn from_row(row: &Row) -> Self {
+        Self {
+            id: row.get(0),
+            nr_ref: row.get(1),
+            area: row.get(2),
+        }
+    }
+}
+impl StationOverride {
+    pub fn insert<T: GenericConnection>(conn: &T, nr_ref: &str, area: Polygon) -> Result<()> {
+        conn.execute("INSERT INTO station_overrides (nr_ref, area) VALUES ($1, $2)",
+                     &[&nr_ref, &area])?;
         Ok(())
     }
-
+}
+pub struct ProblematicStation {
+    pub id: i32,
+    pub nr_ref: String,
+    pub area: Polygon,
+    pub defect: i32
+}
+impl DbType for ProblematicStation {
+    fn table_name() -> &'static str {
+        "problematic_stations"
+    }
+    fn table_desc() -> &'static str {
+        r#"
+id SERIAL PRIMARY KEY,
+nr_ref VARCHAR NOT NULL,
+area geometry NOT NULL,
+defect INT NOT NULL
+"#
+    }
+    fn from_row(row: &Row) -> Self {
+        Self {
+            id: row.get(0),
+            nr_ref: row.get(1),
+            area: row.get(2),
+            defect: row.get(3),
+        }
+    }
+}
+impl ProblematicStation {
+    pub fn insert<T: GenericConnection>(conn: &T, nr_ref: &str, area: Polygon, defect: i32) -> Result<()> {
+        conn.execute("INSERT INTO problematic_stations (nr_ref, area, defect) VALUES ($1, $2, $3)",
+                     &[&nr_ref, &area, &defect])?;
+        Ok(())
+    }
 }
 #[derive(Debug, Clone)]
 pub struct Link {

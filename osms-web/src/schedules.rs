@@ -38,7 +38,6 @@ pub struct ScheduleRow {
     start_date: String,
     end_date: String,
     days: String,
-    processed: String
 }
 #[derive(Serialize)]
 pub struct ScheduleView {
@@ -90,20 +89,20 @@ fn schedules(db: DbConn, opts: ScheduleOptions) -> Result<Template> {
     }
     let mut rows = vec![];
     for sched in schedules {
-        let desc = if sched.locs.len() >= 2 {
+        let locs = ScheduleMvt::from_select(&*db, "WHERE parent_sched = $1", &[&sched.id])?;
+        let desc = if locs.len() >= 2 {
             let s1 = MsnEntry::from_select(&*db, "WHERE tiploc = $1",
-                                           &[&sched.locs[0].tiploc])?;
+                                           &[&locs[0].tiploc])?;
             let s2 = MsnEntry::from_select(&*db, "WHERE tiploc = $1",
-                                           &[&sched.locs.last().unwrap().tiploc])?;
+                                           &[&locs.last().unwrap().tiploc])?;
             format!("{} {} → {}", 
-                    sched.locs[0].time.format("%H:%M"),
-                    s1.first().map(|x| &x.name).unwrap_or(&sched.locs[0].tiploc),
-                    s2.first().map(|x| &x.name).unwrap_or(&sched.locs.last().unwrap().tiploc))
-        }
+                    locs[0].time.format("%H:%M"),
+                    s1.first().map(|x| &x.name).unwrap_or(&locs[0].tiploc),
+                    s2.first().map(|x| &x.name).unwrap_or(&locs.last().unwrap().tiploc))
+        } 
         else {
             "Cancellation or empty schedule".into()
         };
-        let processed = if sched.processed { "Y" } else { "N" };
         rows.push(ScheduleRow {
             id: sched.id.to_string(),
             uid: sched.uid.clone(),
@@ -111,8 +110,7 @@ fn schedules(db: DbConn, opts: ScheduleOptions) -> Result<Template> {
             desc,
             start_date: sched.start_date.format("%Y-%m-%d").to_string(),
             end_date: sched.end_date.format("%Y-%m-%d").to_string(),
-            days: sched.days.to_string(),
-            processed: processed.to_string()
+            days: sched.days.to_string()
         })
     }
     Ok(Template::render("schedules", TemplateContext {

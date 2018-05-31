@@ -4,6 +4,7 @@ name = "osms-db-setup"
 version = "0.1.0"
 
 [dependencies]
+chan = "0.1.21"
 chrono = "0.4"
 clap = "~2.29.0"
 crossbeam = "0.3"
@@ -15,8 +16,8 @@ fern = "0.4"
 flate2 = "0.2"
 indicatif = "0.7"
 log = "0.3"
-osmpbfreader = "0.11"
-postgis = "0.5"
+osmpbfreader = "0.12"
+postgis = "0.6"
 r2d2 = "0.7"
 r2d2_postgres = "0.13"
 reqwest = "0.8"
@@ -29,8 +30,8 @@ toml = "0.4"
 path = "../atoc-msn"
 
 [dependencies.geo]
-features = ["postgis-integration"]
-git = "https://github.com/eeeeeta/rust-geo"
+features = ["postgis-integration", "use-serde"]
+version = "0.9"
 
 [dependencies.ntrod-types]
 path = "../ntrod-types"

@@ -1,17 +1,18 @@
 use osmpbfreader::{OsmPbfReader};
 use osmpbfreader::reader::ParIter;
-use osmpbfreader::objects::{OsmObj, OsmId};
+use osmpbfreader::objects::OsmObj;
 use indicatif::{ProgressStyle, ProgressBar};
 use std::io::{Read, BufRead, Seek, BufReader};
 use geo::*;
 use std::collections::HashSet;
 use postgis::ewkb::Point as PgPoint;
+use postgis::ewkb::Polygon as PgPolygon;
 use osms_db::db::*;
 use osms_db::util;
 use osms_db::osm::types::*;
 use osms_db::errors::OsmsError;
 use osms_db::ntrod::types::*;
-use ntrod_types::reference::CorpusData;
+use ntrod_types::reference::{CorpusEntry, CorpusData};
 use ntrod_types::schedule::{self, ScheduleRecord};
 use crossbeam::sync::chase_lev;
 use failure::Error;
@@ -478,100 +479,26 @@ pub fn links<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
 }
 pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     use geo::algorithm::haversine_destination::HaversineDestination;
-    use geo::algorithm::haversine_length::HaversineLength;
-    use geo::algorithm::centroid::Centroid;
     use geo::algorithm::from_postgis::FromPostgis;
     use geo::algorithm::to_postgis::ToPostgis;
 
-    if ctx.count("FROM stations")? != 0 { return Ok(()) };
-    info!("Phase 1.3: making stations");
 
+    if ctx.count("FROM stations")? != 0 { return Ok(()) };
+    info!("Making stations...");
     let conn = ctx.get_conn();
     let trans = conn.transaction()?;
-    let bar = ctx.make_bar();
-    bar.set_message("Beginning station import");
-    let mut objs = 0;
-    let mut polys = HashMap::new();
-    'outer: for obj in ctx.par_iter()? {
-        bar.inc(1);
-        let obj = obj?;
-        if obj.tags().contains("railway", "station") && obj.tags().get("ref").is_some() {
-            let crs = obj.tags().get("ref").unwrap().to_owned();
-            let mut this_polys = vec![];
-            bar.set_message(&format!("Processing station {} ({} polys thus far)",
-                                     crs, polys.len()));
-            let (mut way, mut node) = match obj {
-                OsmObj::Way(w) => (Some(w), None),
-                OsmObj::Node(nd) => {
-                    let lat = nd.decimicro_lat as f64 / 10_000_000.0;
-                    let lon = nd.decimicro_lon as f64 / 10_000_000.0;
-                    let pt = Point::new(lon, lat);
-                    (None, Some(pt))
-                },
-                OsmObj::Relation(rel) => {
-                    let mut node = None;
-                    for rf in rel.refs.iter() {
-                        let rf = match rf.member {
-                            OsmId::Node(id) => id.0,
-                            _ => continue
-                        };
-                        if let Some(pt) = Node::from_select(&trans, "WHERE orig_osm_id = $1", &[&rf])?.into_iter().nth(0) {
-                            node = Some(Point::from_postgis(&pt.location));
-                            break;
-                        }
-                    }
-                    if let Some(node) = node {
-                        (None, Some(node))
-                    }
-                    else {
-                        continue 'outer;
-                    }
-                },
-            };
-            if let Some(way) = way {
-                if way.is_closed() {
-                    let mut nodes = vec![];
-                    for nd in way.nodes.iter() {
-                        let pt = Node::from_select(&trans, "WHERE orig_osm_id = $1", &[&nd.0])?.into_iter()
-                            .nth(0);
-                        let pt = match pt {
-                            Some(n) => n,
-                            None => {
-                                debug!("stations: way #{} contained invalid point #{}",
-                                       way.id.0, nd.0);
-                                continue 'outer;
-                            }
-                        };
-                        nodes.push(Point::from_postgis(&pt.location));
-                    }
-                    let poly = Polygon { exterior: LineString(nodes), interiors: vec![] };
-                    node = poly.centroid();
-                    this_polys.push(poly);
-                }
-            }
-            if let Some(pt) = node {
-                let mut nodes = vec![];
-                for bearing in 0..360 {
-                    nodes.push(pt.haversine_destination(bearing as _, 50.0));
-                }
-                let nd = nodes[0];
-                nodes.push(nd);
-                let poly = Polygon { exterior: LineString(nodes), interiors: vec![] };
-                this_polys.push(poly);
-            }
-            if this_polys.len() == 0 {
-                continue 'outer;
-            }
-            for poly in this_polys {
-                polys.entry(crs.clone()).or_insert(vec![]).push(poly);
-            }
-        }
-        objs += 1;
-    }
-    ctx.update_objs(objs);
-    bar.finish();
+    let naptan_entries = NaptanEntry::from_select(&trans, "", &[])?;
+    let bar = ctx.make_custom_bar(naptan_entries.len() as _);
+    let mut polys: HashMap<String, Polygon<f64>> = HashMap::new();
     bar.set_message("Processing NAPTAN entries...");
-    for ent in NaptanEntry::from_select(&trans, "", &[])? {
+    for ent in naptan_entries {
+        bar.set_message(&format!("Processing naptan for {}", ent.tiploc));
+        let entries = CorpusEntry::from_select(&trans, "WHERE tiploc = $1 AND stanox IS NOT NULL", &[&ent.tiploc])?;
+        if entries.len() != 1 {
+            warn!("TIPLOC {} doesn't map to one single STANOX\n", ent.tiploc);
+            continue;
+        }
+        let nr_ref = entries.into_iter().nth(0).unwrap().stanox.unwrap();
         let pt = Point::from_postgis(&ent.loc);
         let mut nodes = vec![];
         for bearing in 0..360 {
@@ -579,70 +506,37 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
         }
         let nd = nodes[0];
         nodes.push(nd);
-        let poly = Polygon { exterior: LineString(nodes), interiors: vec![] };
-        polys.entry(ent.crs).or_insert(vec![]).push(poly);
+        let mut poly = Polygon { exterior: LineString(nodes), interiors: vec![] };
+        if let Some(p2) = polys.get(&nr_ref) {
+            let p1 = poly.to_postgis_wgs84();
+            let p2 = p2.to_postgis_wgs84(); 
+            for row in &trans.query("SELECT ST_ConvexHull(ST_Collect($1, $2));", &[&p1, &p2])? {
+                let p: PgPolygon = row.get(0);
+                poly = Option::from_postgis(&p).unwrap();
+            }
+        }
+        polys.insert(nr_ref, poly);
+        bar.inc(1);
     }
+    bar.finish();
     let bar = ctx.make_custom_bar(polys.len() as _);
-    bar.set_message("Making stations");
-    let mut fb = 0;
-    let mut bo = 0;
-    for (nr_ref, polys) in polys {
-        let mut poly = polys.last().unwrap();
-        let mut links = None;
-        for pway in polys.iter() {
-            if pway.exterior.0.first() != pway.exterior.0.last() {
-                warn!("Polygon for CRS {} isn't closed", nr_ref);
-                fb += 1;
-                continue;
+    bar.set_message("Making stations...");
+    for (nr_ref, poly) in polys {
+        use osms_db::osm::{self, ProcessStationError};
+
+        bar.set_message(&format!("Processing station for {}", nr_ref));
+        match osm::process_station(&trans, &nr_ref, poly) {
+            Ok(_) => {},
+            Err(ProcessStationError::AlreadyProcessed) => {
+                debug!("Already processed station for {}\n", nr_ref);
+            },
+            Err(ProcessStationError::Problematic(poly, code)) => {
+                warn!("Station {} is problematic: code {}\n", nr_ref, code);
+                ProblematicStation::insert(&trans, &nr_ref, poly, code)?;
+            },
+            Err(ProcessStationError::Error(e)) => {
+                Err(e)?
             }
-            let pgpoly = pway.to_postgis_wgs84();
-            let lks = Link::from_select(&trans, "WHERE ST_Intersects(way, $1)", &[&pgpoly])?;
-            if lks.len() == 0 {
-                fb += 1;
-                continue;
-            }
-            links = Some(lks);
-            poly = pway;
-        }
-        bar.set_message(&format!("Processing station {} ({} fallbacks, {} bottoms)", nr_ref, fb, bo));
-        let centroid = poly.centroid().ok_or(format_err!("Station has no centroid"))?;
-        let pgpoly = poly.to_postgis_wgs84();
-        let nd = Node::insert(&trans, centroid.to_postgis_wgs84())?;
-        Station::insert(&trans, &nr_ref, nd, pgpoly.clone())?;
-        if links.is_none() {
-            bo += 1;
-            links = Some(vec![]);
-        }
-        let mut connected = HashSet::new();
-        for link in links.unwrap() {
-            if link.p1 == link.p2 {
-                continue;
-            }
-            if !connected.insert(link.p1) || !connected.insert(link.p2) {
-                continue;
-            }
-            let pt1 = Node::from_select(&trans, "WHERE id = $1", &[&link.p1])?
-                .into_iter().nth(0).ok_or(format_err!("foreign key fail"))?;
-            let pt2 = Node::from_select(&trans, "WHERE id = $1", &[&link.p2])?
-                .into_iter().nth(0).ok_or(format_err!("foreign key fail"))?;
-            let lp1 = Point::from_postgis(&pt1.location);
-            let lp2 = Point::from_postgis(&pt2.location);
-            let lp1_station = LineString(vec![lp1, centroid.clone()]);
-            let lp1_s_dist = lp1_station.haversine_length();
-            let station_lp2 = LineString(vec![centroid.clone(), lp2]);
-            let s_lp2_dist = station_lp2.haversine_length();
-            Link {
-                p1: link.p1,
-                p2: nd,
-                way: lp1_station.to_postgis_wgs84(),
-                distance: lp1_s_dist as f32
-            }.insert(&trans)?;
-            Link {
-                p1: nd,
-                p2: link.p2,
-                way: station_lp2.to_postgis_wgs84(),
-                distance: s_lp2_dist as f32
-            }.insert(&trans)?;
         }
         bar.inc(1);
     }

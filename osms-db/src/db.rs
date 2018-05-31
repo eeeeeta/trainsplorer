@@ -93,6 +93,8 @@ pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
     ScheduleFile::make_table(conn)?;
     NaptanEntry::make_table(conn)?;
     MsnEntry::make_table(conn)?;
+    StationOverride::make_table(conn)?;
+    ProblematicStation::make_table(conn)?;
     ntrod_types::reference::CorpusEntry::make_table(conn)?;
     Ok(())
 }

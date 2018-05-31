@@ -12,7 +12,7 @@ extern crate serde;
 extern crate geojson;
 #[macro_use] extern crate serde_json;
 extern crate geo;
-extern crate failure;
+#[macro_use] extern crate failure;
 extern crate postgis;
 extern crate url;
 extern crate chrono;
@@ -58,6 +58,7 @@ fn main() {
                schedules::schedules_noqs,
                mapping::geo_ways, 
                mapping::geo_stations,
+               mapping::geo_correct_station,
                file_static
         ])
         .launch();

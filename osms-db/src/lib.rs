@@ -1,5 +1,5 @@
 extern crate postgres;
-extern crate failure;
+#[macro_use] extern crate failure;
 #[macro_use] extern crate failure_derive;
 extern crate r2d2;
 extern crate r2d2_postgres;
