@@ -15,10 +15,14 @@ pub enum OsmsError {
     StationNotFound(i32),
     #[fail(display = "Crossing {} couldn't be found", _0)]
     CrossingNotFound(i32),
+    #[fail(display = "Path intersected stations {:?}.", _0)]
+    IntersectingStation(Vec<i32>),
     #[fail(display = "Schedule file is invalid")]
     InvalidScheduleFile,
     #[fail(display = "Schedule file has already been inserted")]
     ScheduleFileExists,
+    #[fail(display = "Navigation problem exists for query: {}", _0)]
+    NavProblem(String),
     #[fail(display = "Bad schedule file import request: {}", _0)]
     ScheduleFileImportInvalid(&'static str),
     #[fail(display = "Station #{} isn't in the same graph part as station #{}.", to, from)]

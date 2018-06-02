@@ -135,21 +135,6 @@ fn run() -> Result<(), Error> {
                     .subcommand(SubCommand::with_name("ways")
                                 .about("Makes schedule ways for unprocessed schedules."))
         )
-        .subcommand(SubCommand::with_name("crossing")
-                    .about("Gets the status of a level crossing.")
-                    .arg(Arg::with_name("id")
-                         .short("i")
-                         .long("id")
-                         .value_name("ID")
-                         .takes_value(true)
-                         .help("Gets the status of a crossing with a given ID."))
-                    .arg(Arg::with_name("osm-parent")
-                         .short("o")
-                         .long("osm-parent")
-                         .value_name("OSMID")
-                         .takes_value(true)
-                         .help("Gets the status of a crossing with a given OSM ID."))
-        )
         .get_matches();
     let mut disp = fern::Dispatch::new()
         .format(|out, msg, record| {
@@ -285,11 +270,11 @@ fn run() -> Result<(), Error> {
                         .context(err_msg("couldn't start gunzipping schedule data file"))?;
                     make::apply_schedule_records(&*conn, data, opts.value_of("limit_toc"))?;
                 },
-                ("ways", _) => {},
+                ("ways", _) => {
+                    make::geo_process_schedules(&pool, conf.threads)?;
+                },
                 (x, _) => panic!("Invalid schedule subcommand {}", x)
             }
-        },
-        ("crossing", Some(opts)) => {
         },
         (x, _) => panic!("Invalid subcommand {}", x)
     }

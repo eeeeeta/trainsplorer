@@ -21,7 +21,8 @@ pub struct Schedule {
     pub days: Days,
     /// STP indicator from NROD.
     pub stp_indicator: StpIndicator,
-    pub signalling_id: Option<String>
+    pub signalling_id: Option<String>,
+    pub geo_generation: i32
 }
 impl DbType for Schedule {
     fn table_name() -> &'static str {
@@ -36,6 +37,7 @@ end_date DATE NOT NULL,
 days "Days" NOT NULL,
 stp_indicator "StpIndicator" NOT NULL,
 signalling_id VARCHAR,
+geo_generation INT NOT NULL DEFAULT 0,
 UNIQUE(uid, start_date, stp_indicator)
 "#
     }
@@ -48,6 +50,7 @@ UNIQUE(uid, start_date, stp_indicator)
             days: row.get(4),
             stp_indicator: row.get(5),
             signalling_id: row.get(6),
+            geo_generation: row.get(7),
         }
     }
 }
@@ -122,8 +125,6 @@ pub struct ScheduleMvt {
     pub parent_sched: i32,
     /// Timing Point Location where this movement happens.
     pub tiploc: String,
-    /// Station where this movement happens (optional, 'cause not all TIPLOCs have stations)
-    pub parent_station: Option<i32>,
     /// What actually happens here - one of:
     ///
     /// - 0: arrival
@@ -135,7 +136,9 @@ pub struct ScheduleMvt {
     /// (Obviously, look at `action` to determine which)
     pub origterm: bool,
     /// The time at which this movement happens.
-    pub time: NaiveTime
+    pub time: NaiveTime,
+    pub starts_path: Option<i32>,
+    pub ends_path: Option<i32>
 }
 impl DbType for ScheduleMvt {
     fn table_name() -> &'static str {
@@ -146,10 +149,11 @@ impl DbType for ScheduleMvt {
 id SERIAL PRIMARY KEY,
 parent_sched INT NOT NULL REFERENCES schedules ON DELETE CASCADE,
 tiploc VARCHAR NOT NULL,
-parent_station INT REFERENCES stations ON DELETE RESTRICT,
 action INT NOT NULL,
 origterm BOOL NOT NULL,
-time TIME NOT NULL
+time TIME NOT NULL,
+starts_path INT REFERENCES station_paths ON DELETE RESTRICT,
+ends_path INT REFERENCES station_paths ON DELETE RESTRICT
 "#
     }
     fn from_row(row: &Row) -> Self {
@@ -157,10 +161,11 @@ time TIME NOT NULL
             id: row.get(0),
             parent_sched: row.get(1),
             tiploc: row.get(2),
-            parent_station: row.get(3),
-            action: row.get(4),
-            origterm: row.get(5),
-            time: row.get(6),
+            action: row.get(3),
+            origterm: row.get(4),
+            time: row.get(5),
+            starts_path: row.get(6),
+            ends_path: row.get(7),
         }
     }
 }
@@ -168,10 +173,10 @@ impl InsertableDbType for ScheduleMvt {
     type Id = i32;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
         let qry = conn.query("INSERT INTO schedule_movements
-                              (parent_sched, tiploc, parent_station, action, origterm, time)
-                              VALUES ($1, $2, $3, $4, $5, $6)
+                              (parent_sched, tiploc, action, origterm, time)
+                              VALUES ($1, $2, $3, $4, $5)
                               RETURNING id",
-                             &[&self.parent_sched, &self.tiploc, &self.parent_station,
+                             &[&self.parent_sched, &self.tiploc,
                                &self.action, &self.origterm, &self.time])?;
         let mut ret = None;
         for row in &qry {
@@ -444,6 +449,12 @@ nlc VARCHAR,
 nlcdesc VARCHAR,
 nlcdesc16 VARCHAR
 "#
+    }
+    fn indexes() -> Vec<&'static str> {
+        vec![
+            "corpus_entries_stanox ON corpus_entries (stanox)",
+            "corpus_entries_tiploc ON corpus_entries (tiploc)"
+        ]
     }
     fn from_row(row: &Row) -> Self {
         Self {

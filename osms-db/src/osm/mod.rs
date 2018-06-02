@@ -4,6 +4,8 @@ pub mod org;
 
 use db::*;
 use self::types::*;
+use ntrod::types::*;
+use ntrod;
 use geo::*;
 use std::collections::HashSet;
 use postgis::ewkb::Polygon as PgPolygon;
@@ -83,4 +85,48 @@ pub fn process_station<T: GenericConnection>(conn: &T, nr_ref: &str, poly: Polyg
         area: pgpoly
     }.insert_self(conn)?;
     Ok(ret)
+}
+pub fn geo_process_schedule<T: GenericConnection>(conn: &T, sched: Schedule) -> Result<(), ::failure::Error> {
+    let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 ORDER BY time ASC", &[&sched.id])?;
+    debug!("geo_process_schedule: processing schedule {} ({} mvts)", sched.id, mvts.len());
+    let mut connections: Vec<(i32, i32)> = vec![];
+    let gen = sched.geo_generation + 1;
+    for mvt in mvts {
+        let stanox = match ntrod::get_stanox_for_tiploc(conn, &mvt.tiploc)? {
+            Some(x) => x,
+            None => continue
+        };
+        let stations = Station::from_select(conn, "WHERE nr_ref = $1", &[&stanox])?;
+        let station = match stations.into_iter().nth(0) {
+            Some(s) => s,
+            None => continue
+        };
+        if let Some(conn) = connections.last() {
+            if conn.1 == station.id {
+                continue;
+            }
+        }
+        trace!("geo_process_schedule: mvt #{} of action {} at STANOX {} (TIPLOC {}) (station #{}) works", mvt.id, mvt.action, stanox, &mvt.tiploc, station.id);
+        connections.push((mvt.id, station.id));
+    }
+    debug!("geo_process_schedule: connections = {:?}", connections);
+    for arr in connections.windows(2) {
+        let (m1, s1) = arr[0];
+        let trans = conn.transaction()?;
+        let (m2, s2) = arr[1];
+        debug!("geo_process_schedule: navigating from {} (mvt #{}) to {} (mvt #{})", s1, m1, s2, m2);
+        match navigate::navigate_cached(&trans, s1, s2) {
+            Ok(pid) => {
+                debug!("geo_process_schedule: navigation successful, got sp {} for {} and {}", pid, m1, m2);
+                trans.execute("UPDATE schedule_movements SET starts_path = $1 WHERE id = $2", &[&pid, &m1])?;
+                trans.execute("UPDATE schedule_movements SET ends_path = $1 WHERE id = $2", &[&pid, &m2])?;
+            },
+            Err(e) => {
+                warn!("geo_process_schedule: error navigating from #{} to #{}: {}", s1, s2, e);
+                StationNavigationProblem::insert(&trans, gen, s1, s2, e.to_string())?;
+            },
+        }
+        trans.commit()?;
+    }
+    Ok(())
 }

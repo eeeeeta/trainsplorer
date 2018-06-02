@@ -29,7 +29,13 @@ impl PartialOrd for State {
     }
 }
 pub fn navigate_cached<T: GenericConnection>(conn: &T, from: i32, to: i32) -> Result<i32> {
-    let paths = StationPath::from_select(conn, "WHERE s1 = $1 AND s2 = $2", &[&from, &to])?;
+    let paths = StationPath::from_select(conn, "WHERE s1 = $1 AND s2 = $2 FOR UPDATE", &[&from, &to])?;
+    let station_nav_problems = StationNavigationProblem::from_select(conn, "WHERE origin = $1 AND destination = $2 FOR UPDATE", &[&from, &to])?;
+    if station_nav_problems.len() > 0 {
+        let err = &station_nav_problems[0].desc;
+        debug!("navigate_cached: nav problem exists: {}", err);
+        return Err(OsmsError::NavProblem(err.to_owned()));
+    }
     if paths.len() > 0 {
         debug!("navigate_cached: returning memoized path from {} to {}", from, to);
         return Ok(paths.into_iter().nth(0).unwrap().id);

@@ -55,6 +55,7 @@ struct CorrectionDetails {
 #[post("/geo/correct_station", data = "<details>")]
 fn geo_correct_station(db: DbConn, details: Json<CorrectionDetails>) -> Result<()> {
     use geojson::conversion::TryInto;
+    use geo::algorithm::to_postgis::ToPostgis;
 
     let poly = details.0.poly.geometry.ok_or(format_err!("no geometry provided"))?;
     let mut poly: Polygon<f64> = poly.value.try_into()?;
@@ -62,6 +63,8 @@ fn geo_correct_station(db: DbConn, details: Json<CorrectionDetails>) -> Result<(
     // FIXME: postgis complains if you have an empty ring; this should
     // ideally be fixed in the geo library
     poly.interiors = vec![];
+    let pgpoly = poly.to_postgis_wgs84();
+    StationOverride::insert(&*db, &details.0.name, pgpoly)?;
     osm::remove_station(&*db, &details.0.name)?;
     match osm::process_station(&*db, &details.0.name, poly) {
         Ok(_) => {},

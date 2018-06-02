@@ -235,6 +235,7 @@ pub fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord
         days: schedule_days_runs,
         stp_indicator,
         signalling_id,
+        geo_generation: 0,
         id: -1
     };
     let sid = sched.insert_self(conn)?;
@@ -260,7 +261,8 @@ pub fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord
         let mvt = ScheduleMvt {
             parent_sched: sid,
             id: -1,
-            parent_station: None,
+            starts_path: None,
+            ends_path: None,
             tiploc, time, action, origterm
         };
         mvt.insert_self(conn)?;
@@ -328,6 +330,45 @@ pub fn apply_schedule_records<R: Read, T: GenericConnection>(conn: &T, file: R, 
     }
     trans.commit()?;
     debug!("apply_schedule_records: applied {} entries", inserted);
+    Ok(())
+}
+pub fn geo_process_schedules(pool: &DbPool, n_threads: usize) -> Result<()> {
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+    use std::sync::Arc;
+    use osms_db::osm;
+
+    let n_schedules = util::count(&*pool.get().unwrap(), "FROM schedules WHERE geo_generation = 0", &[])?;
+    let mut threads = vec![];
+    let processed = Arc::new(AtomicUsize::new(0));
+    debug!("geo_process_schedules: {} schedules to process", n_schedules);
+    for n in 0..n_threads {
+        let pool = pool.clone();
+        let proc = processed.clone();
+        debug!("geo_process_schedules: starting thread {}", n);
+        threads.push(::std::thread::spawn(move || {
+            let conn = pool.get().unwrap();
+            loop {
+                let conn2 = pool.get().unwrap();
+                let trans = conn.transaction().unwrap();
+                let scheds = Schedule::from_select(&trans, "WHERE geo_generation = 0 FOR UPDATE SKIP LOCKED LIMIT 1", &[]).unwrap();
+                let sched = match scheds.into_iter().nth(0) {
+                    Some(s) => s,
+                    None => break
+                };
+                let id = sched.id;
+                osm::geo_process_schedule(&*conn2, sched).unwrap();
+                trans.execute("UPDATE schedules SET geo_generation = 1 WHERE id = $1", &[&id]).unwrap();
+                trans.commit().unwrap();
+                let cnt = proc.fetch_add(1, Ordering::Relaxed);
+                debug!("geo_process_schedules: {} of {} schedules processed ({:.02}%)", cnt, n_schedules, ((cnt as f32 / n_schedules as f32) * 100.0f32));
+            }
+            debug!("geo_process_schedules: thread {} done", n);
+        }));
+    }
+    for thr in threads {
+        thr.join().map_err(|_| format_err!("thread failed"))?;
+    }
     Ok(())
 }
 pub fn naptan_entries<R: Read, T: GenericConnection>(conn: &T, file: R) -> Result<()> {

@@ -142,11 +142,54 @@ area geometry NOT NULL
 }
 impl StationOverride {
     pub fn insert<T: GenericConnection>(conn: &T, nr_ref: &str, area: Polygon) -> Result<()> {
-        conn.execute("INSERT INTO station_overrides (nr_ref, area) VALUES ($1, $2)",
+        conn.execute("INSERT INTO station_overrides (nr_ref, area) VALUES ($1, $2)
+                      ON CONFLICT DO UPDATE",
                      &[&nr_ref, &area])?;
         Ok(())
     }
 }
+pub struct StationNavigationProblem {
+    pub id: i32,
+    pub geo_generation: i32,
+    pub origin: i32,
+    pub destination: i32,
+    pub desc: String
+}
+impl DbType for StationNavigationProblem {
+    fn table_name() -> &'static str {
+        "station_navigation_problems"
+    }
+    fn table_desc() -> &'static str {
+        r#"
+id SERIAL PRIMARY KEY,
+geo_generation INT NOT NULL,
+origin INT NOT NULL REFERENCES stations ON DELETE CASCADE,
+destination INT NOT NULL REFERENCES stations ON DELETE CASCADE,
+descrip VARCHAR NOT NULL,
+UNIQUE(geo_generation, origin, destination)
+"#
+    }
+    fn from_row(row: &Row) -> Self {
+        Self {
+            id: row.get(0),
+            geo_generation: row.get(1),
+            origin: row.get(2),
+            destination: row.get(3),
+            desc: row.get(4),
+        }
+    }
+}
+impl StationNavigationProblem {
+    pub fn insert<T: GenericConnection>(conn: &T, gen: i32, orig: i32, dest: i32, desc: String) -> Result<()> {
+        conn.execute("INSERT INTO station_navigation_problems
+                     (geo_generation, origin, destination, descrip)
+                     VALUES ($1, $2, $3, $4)
+                     ON CONFLICT DO NOTHING",
+                     &[&gen, &orig, &dest, &desc])?;
+        Ok(())
+    }
+}
+
 pub struct ProblematicStation {
     pub id: i32,
     pub nr_ref: String,
