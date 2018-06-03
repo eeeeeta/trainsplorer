@@ -2,6 +2,15 @@
 
 (document still *very much* WIP; in future, this will actually be helpful)
 
+## todo (osms-web)
+
+- make the map display station paths as well / toggle different layers being displayed
+- have a 'problems' bit displaying dodgy stuff:
+  - station problems
+  - station nav problems
+  - not-fully-linked schedules
+  - etc
+
 ## linking NROD stuff to geo stuff
 
 - grab railtrack data from OSM
