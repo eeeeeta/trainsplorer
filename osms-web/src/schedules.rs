@@ -54,6 +54,26 @@ pub struct ScheduleOrigDest {
     dest: String,
     dest_tiploc: String
 }
+impl ScheduleOrigDest {
+    pub fn get_for_schedule<T: GenericConnection>(conn: &T, sid: i32) -> Result<Option<Self>> {
+        let locs = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 ORDER BY time ASC", &[&sid])?;
+        Ok(if locs.len() >= 2 {
+            let orig_tiploc = &locs[0].tiploc;
+            let dest_tiploc = &locs.last().unwrap().tiploc;
+            let orig = tiploc_to_readable(conn, orig_tiploc)?;
+            let dest = tiploc_to_readable(conn, dest_tiploc)?;
+            let time = locs[0].time.format("%H:%M").to_string();
+            Some(ScheduleOrigDest {
+                orig_tiploc: orig_tiploc.to_owned(),
+                dest_tiploc: dest_tiploc.to_owned(),
+                orig, dest, time
+            })
+        } 
+        else {
+            None
+        })
+    }
+}
 #[derive(Serialize)]
 pub struct ScheduleRow {
     id: String,
@@ -116,22 +136,7 @@ fn schedules(db: DbConn, opts: ScheduleOptions) -> Result<Template> {
     }
     let mut rows = vec![];
     for sched in schedules {
-        let locs = ScheduleMvt::from_select(&*db, "WHERE parent_sched = $1 ORDER BY time ASC", &[&sched.id])?;
-        let orig_dest = if locs.len() >= 2 {
-            let orig_tiploc = &locs[0].tiploc;
-            let dest_tiploc = &locs.last().unwrap().tiploc;
-            let orig = tiploc_to_readable(&*db, orig_tiploc)?;
-            let dest = tiploc_to_readable(&*db, dest_tiploc)?;
-            let time = locs[0].time.format("%H:%M").to_string();
-            Some(ScheduleOrigDest {
-                orig_tiploc: orig_tiploc.to_owned(),
-                dest_tiploc: dest_tiploc.to_owned(),
-                orig, dest, time
-            })
-        } 
-        else {
-            None
-        };
+        let orig_dest = ScheduleOrigDest::get_for_schedule(&*db, sched.id)?;
         let n_trains = util::count(&*db, "FROM trains WHERE parent_sched = $1", &[&sched.id])?;
         rows.push(ScheduleRow {
             id: sched.id.to_string(),

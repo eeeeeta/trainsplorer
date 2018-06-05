@@ -227,6 +227,7 @@ terminated BOOL NOT NULL DEFAULT false
     fn indexes() -> Vec<&'static str> {
         vec![
             "trains_parent_sched ON trains (parent_sched)",
+            "trains_date ON trains (date)",
             "trains_trust_id ON trains (trust_id)"
         ]
     }

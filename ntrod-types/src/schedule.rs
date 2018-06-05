@@ -76,6 +76,36 @@ sun BOOL
 END IF;
 END$$;"#
     }
+    pub fn create_value_for_iso_weekday_function() -> &'static str {
+r#"
+CREATE OR REPLACE FUNCTION days_value_for_iso_weekday(days "Days", wd int)
+    RETURNS boolean AS $$
+DECLARE
+    ret boolean := false;
+BEGIN
+    CASE wd
+        WHEN 1 THEN
+            ret := days.mon;
+        WHEN 2 THEN
+            ret := days.tue;
+        WHEN 3 THEN
+            ret := days.wed;
+        WHEN 4 THEN
+            ret := days.thu;
+        WHEN 5 THEN
+            ret := days.fri;
+        WHEN 6 THEN
+            ret := days.sat;
+        WHEN 7 THEN
+            ret := days.sun;
+        ELSE
+            RAISE EXCEPTION 'must provide a valid ISO weekday';
+        END CASE;
+        RETURN ret;
+END;
+$$ LANGUAGE plpgsql;
+"#
+    }
 }
 #[derive(Serialize, Deserialize, Copy, Clone, Debug, SmartDefault, is_enum_variant)]
 #[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]

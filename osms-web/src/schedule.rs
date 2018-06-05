@@ -5,12 +5,23 @@ use tmpl::TemplateContext;
 use osms_db::db::*;
 use osms_db::ntrod::types::*;
 use schedules;
-use chrono::NaiveTime;
 
+pub fn action_to_str(act: i32) -> &'static str {
+    match act {
+        0 => "arr",
+        1 => "dep",
+        2 => "pass",
+        _ => "???"
+    }
+}
 #[derive(Serialize)]
 pub struct ScheduleDesc {
     movements: Vec<ScheduleMvtDesc>,
     trains: Vec<ScheduleTrainDesc>
+}
+#[derive(Serialize)]
+pub struct TrainDesc {
+    movements: Vec<ScheduleMvtDesc>
 }
 #[derive(Serialize)]
 pub struct ScheduleTrainDesc {
@@ -28,15 +39,6 @@ pub struct ScheduleMvtDesc {
     ends_path: Option<i32>,
     starts_path: Option<i32>
 }
-pub struct TrainJoinRow {
-    tiploc: String,
-    action: i32,
-    time: NaiveTime,
-    starts_path: Option<i32>,
-    ends_path: Option<i32>,
-    time_live: NaiveTime,
-    live_source: String
-}
 #[get("/train/<id>")]
 fn train(db: DbConn, id: i32) -> Result<Template> {
     let train = Train::from_select(&*db, "WHERE id = $1", &[&id])?
@@ -47,47 +49,39 @@ fn train(db: DbConn, id: i32) -> Result<Template> {
         .into_iter()
         .nth(0)
         .unwrap();
+    let sched_mvts = ScheduleMvt::from_select(&*db, "WHERE parent_sched = $1 ORDER BY time ASC", &[&parent_sched.id])?;
+    let train_mvts = TrainMvt::from_select(&*db, "WHERE parent_train = $1", &[&train.id])?;
     let mut descs = vec![];
-    for row in &db.query("SELECT schedule_movements.tiploc, schedule_movements.action, schedule_movements.time,
-                                 schedule_movements.starts_path, schedule_movements.ends_path, train_movements.time,
-                                 train_movements.source
-                            FROM schedule_movements, train_movements
-                           WHERE train_movements.parent_mvt = schedule_movements.id
-                             AND train_movements.parent_train = $1
-                             AND schedule_movements.parent_sched = $2
-                        ORDER BY schedule_movements.time ASC", &[&train.id, &parent_sched.id])? {
-        let tjr = TrainJoinRow {
-            tiploc: row.get(0),
-            action: row.get(1),
-            time: row.get(2),
-            starts_path: row.get(3),
-            ends_path: row.get(4),
-            time_live: row.get(5),
-            live_source: row.get(6)
-        };
-        let action = match tjr.action {
-            0 => "arr",
-            1 => "dep",
-            2 => "pass",
-            _ => "???"
-        };
-        let location = schedules::tiploc_to_readable(&*db, &tjr.tiploc)?;
+    for mvt in sched_mvts {
+        let action = action_to_str(mvt.action);
+        let location = schedules::tiploc_to_readable(&*db, &mvt.tiploc)?;
+        let (mut time_live, mut live_source) = (None, None);
+        let mut trig = false;
+        for tmvt in train_mvts.iter() {
+            if tmvt.parent_mvt == mvt.id {
+                if trig {
+                    eprintln!("Duplicate train movement on train #{} for schedule mvt #{}", tmvt.parent_train, mvt.id);
+                }
+                time_live = Some(tmvt.time.to_string());
+                live_source = Some(tmvt.source.clone());
+                trig = true;
+            }
+        }
         descs.push(ScheduleMvtDesc {
             action,
             location,
-            tiploc: tjr.tiploc,
-            time_sched: tjr.time.to_string(),
-            time_live: Some(tjr.time_live.to_string()),
-            live_source: Some(tjr.live_source),
-            starts_path: tjr.starts_path,
-            ends_path: tjr.ends_path
+            tiploc: mvt.tiploc,
+            time_sched: mvt.time.to_string(),
+            time_live,
+            live_source,
+            starts_path: mvt.starts_path,
+            ends_path: mvt.ends_path
         });
     }
-    let sd = ScheduleDesc {
+    let sd = TrainDesc {
         movements: descs,
-        trains: vec![]
     };
-    Ok(Template::render("schedule", TemplateContext {
+    Ok(Template::render("train", TemplateContext {
         title: format!("Train #{}", train.id).into(),
         body: sd
     }))
@@ -101,12 +95,7 @@ fn schedule(db: DbConn, id: i32) -> Result<Template> {
     let movements = ScheduleMvt::from_select(&*db, "WHERE parent_sched = $1 ORDER BY time ASC", &[&id])?;
     let mut descs = vec![];
     for mvt in movements {
-        let action = match mvt.action {
-            0 => "arr",
-            1 => "dep",
-            2 => "pass",
-            _ => "???"
-        };
+        let action = action_to_str(mvt.action);
         let location = schedules::tiploc_to_readable(&*db, &mvt.tiploc)?;
         descs.push(ScheduleMvtDesc {
             action,

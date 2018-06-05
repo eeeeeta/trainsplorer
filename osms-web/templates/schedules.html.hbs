@@ -26,14 +26,7 @@
 			</td>
 			<td>{{this.stp}}</td>
 			<td>
-				{{#if this.orig_dest}}
-				<span class="schedule-list-time">{{this.orig_dest.time}}</span>
-				<span class="schedule-list-origin"><a href="/stations/{{this.orig_dest.orig_tiploc}}">{{this.orig_dest.orig}}</a></span>
-				→
-				<span class="schedule-list-destination"><a href="/stations/{{this.orig_dest.dest_tiploc}}">{{this.orig_dest.dest}}</a></span>
-				{{else}}
-				<span class="void">[cancellation or empty schedule]</span>
-				{{/if}}
+				{{> orig_dest}}
 			</td>
 			<td>{{this.start_date}}</td>
 			<td>{{this.end_date}}</td>

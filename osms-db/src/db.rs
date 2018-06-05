@@ -80,6 +80,8 @@ pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
     debug!("initialize_database: making types...");
     conn.execute(ntrod_types::schedule::Days::create_type(), &[])?;
     conn.execute(ntrod_types::cif::StpIndicator::create_type(), &[])?;
+    debug!("initialize_database: making functions..");
+    conn.execute(ntrod_types::schedule::Days::create_value_for_iso_weekday_function(), &[])?;
     debug!("initialize_database: making tables...");
     Crossing::make_table(conn)?;
     Node::make_table(conn)?;

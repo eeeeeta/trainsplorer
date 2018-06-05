@@ -29,6 +29,7 @@ pub mod qb;
 pub mod schedules;
 pub mod schedule;
 pub mod mapping;
+pub mod movements;
 use tmpl::TemplateContext;
 
 pub type Result<T> = ::std::result::Result<T, failure::Error>;
@@ -56,6 +57,7 @@ fn main() {
         .mount("/", routes![
                index, 
                map,
+               movements::movements,
                schedule::schedule,
                schedule::train,
                schedules::schedules_qs,

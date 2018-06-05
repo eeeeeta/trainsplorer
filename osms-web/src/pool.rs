@@ -33,6 +33,10 @@ pub fn attach_db(rocket: Rocket) -> Rocket {
         PostgresConnectionManager::new(url, TlsMode::None).unwrap()
     };
     let pool = r2d2::Pool::new(config, manager).expect("db pool");
+    {
+        let conn = pool.get().unwrap();
+        ::osms_db::db::initialize_database(&*conn).unwrap();
+    }
     rocket.manage(pool)
 }
 

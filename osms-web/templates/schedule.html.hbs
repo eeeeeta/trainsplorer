@@ -1,55 +1,9 @@
 {{> header }}
-<table class="fancytable">
-	<thead>
-		<tr>
-			<td>Location</td>
-			<td><abbr title="Scheduled time">Sched</abbr></td>
-			<td><abbr title="Actual time">Live</abbr></td>
-			<td><abbr title="Source of live time">Src</abbr></td>
-			<td>Path</td>
-		</tr>
-	</thead>
-	{{#each body.movements}}
-		<tr>
-			<td>
-				<p class="schedule-location">
-				<a href="/stations/{{this.tiploc}}">{{this.location}}</a>&nbsp;<span class="schedule-location-tiploc">({{this.tiploc}})</span>
-				</p>
-				<p class="schedule-action">
-				({{this.action}})
-				</p>
-			</td>
-			<td>{{this.time_sched}}</td>
-			<td>
-				{{#if this.time_live}}
-					{{this.time_live}}
-				{{/if}}
-			</td>
-			<td>
-				{{#if this.live_source}}
-				        {{this.live_source}}
-				{{/if}}
-			</td>
-			<td>
-				{{#if this.ends_path}}
-					→<a href="/paths/{{this.ends_path}}">{{this.ends_path}}</a>
-					{{#if this.starts_path}}
-					&middot;
-					{{/if}}
-				{{/if}}
-				{{#if this.starts_path}}
-					<a href="/paths/{{this.starts_path}}">{{this.starts_path}}</a>→
-				{{/if}}
-			</td>
-		</tr>
-	{{/each}}
-</table>
-{{#if body.trains}}
+{{> schedule_table}}
 <h3>Trains running to this schedule</h3>
 <ul>
 	{{#each body.trains}}
 	<li><a href="/train/{{this.id}}">{{this.date}} (#{{this.id}})</a></li>
 	{{/each}}
 </ul>
-{{/if}}
 {{> footer }}
