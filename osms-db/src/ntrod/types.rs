@@ -1,10 +1,11 @@
 use db::{DbType, InsertableDbType, GenericConnection, Row};
 use postgis::ewkb::Point;
 use ntrod_types::schedule::*;
-use ntrod_types::reference::*;
 use ntrod_types::cif::*;
 use chrono::*;
 use errors::*;
+
+pub use ntrod_types::reference::CorpusEntry;
 
 /// A schedule from NROD, describing how trains should theoretically run.
 #[derive(Debug, Serialize, Clone)]

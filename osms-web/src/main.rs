@@ -16,6 +16,7 @@ extern crate geo;
 extern crate postgis;
 extern crate url;
 extern crate chrono;
+extern crate titlecase;
 
 pub mod pool;
 use rocket_contrib::Template;

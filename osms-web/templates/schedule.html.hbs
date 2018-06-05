@@ -1,11 +1,7 @@
 {{> header }}
-<h2>Schedule #{{body.id}}</h2>
-<script src="/ext/sorttable.js"></script>
-<table class="sortable fancytable">
+<table class="fancytable">
 	<thead>
 		<tr>
-			<td>ID</td>
-			<td>Action</td>
 			<td>Location</td>
 			<td><abbr title="Scheduled time">Sched</abbr></td>
 			<td><abbr title="Actual time">Live</abbr></td>
@@ -15,9 +11,14 @@
 	</thead>
 	{{#each body.movements}}
 		<tr>
-			<td>{{this.id}}</td>
-			<td>{{this.action}}</td>
-			<td>{{this.location}}</td>
+			<td>
+				<p class="schedule-location">
+				<a href="/stations/{{this.tiploc}}">{{this.location}}</a>&nbsp;<span class="schedule-location-tiploc">({{this.tiploc}})</span>
+				</p>
+				<p class="schedule-action">
+				({{this.action}})
+				</p>
+			</td>
 			<td>{{this.time_sched}}</td>
 			<td>
 				{{#if this.time_live}}
@@ -33,7 +34,7 @@
 				{{#if this.ends_path}}
 					→<a href="/paths/{{this.ends_path}}">{{this.ends_path}}</a>
 					{{#if this.starts_path}}
-						;&nbsp;
+					&middot;
 					{{/if}}
 				{{/if}}
 				{{#if this.starts_path}}

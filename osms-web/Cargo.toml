@@ -6,7 +6,6 @@ version = "0.1.0"
 [dependencies]
 chrono = "0.4.0"
 failure = "0.1"
-geojson = { git = "https://github.com/eeeeeta/rust-geojson" }
 postgis = "0.6"
 postgres = "0.15"
 r2d2 = "0.7"
@@ -16,11 +15,15 @@ rocket_codegen = "0.3"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
+titlecase = "0.10.0"
 url = "1.6.0"
 
 [dependencies.geo]
-version = "0.9"
 features = ["postgis-integration", "use-serde"]
+version = "0.9"
+
+[dependencies.geojson]
+git = "https://github.com/eeeeeta/rust-geojson"
 
 [dependencies.osms-db]
 path = "../osms-db"

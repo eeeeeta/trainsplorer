@@ -13,9 +13,9 @@ pub struct ScheduleDesc {
 }
 #[derive(Serialize)]
 pub struct ScheduleMvtDesc {
-    id: i32,
     action: &'static str,
     location: String,
+    tiploc: String,
     time_sched: String,
     time_live: Option<String>,
     live_source: Option<String>,
@@ -39,9 +39,9 @@ fn schedule(db: DbConn, id: i32) -> Result<Template> {
         };
         let location = schedules::tiploc_to_readable(&*db, &mvt.tiploc)?;
         descs.push(ScheduleMvtDesc {
-            id: mvt.id,
             action,
             location,
+            tiploc: mvt.tiploc,
             time_sched: mvt.time.to_string(),
             time_live: None,
             live_source: None,

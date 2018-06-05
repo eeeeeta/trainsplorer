@@ -12,7 +12,7 @@
 			<td>Start date</td>
 			<td>End date</td>
 			<td>Days</td>
-			<td><abbr title="Processed and usable">Prc</abbr></td>
+			<td><abbr title="Geography generation">Gen</abbr></td>
 			<td>View</td>
 		</tr>
 	</thead>
@@ -24,11 +24,20 @@
 				</a>
 			</td>
 			<td>{{this.stp}}</td>
-			<td>{{this.desc}}</td>
+			<td>
+				{{#if this.orig_dest}}
+				<span class="schedule-list-time">{{this.orig_dest.time}}</span>
+				<span class="schedule-list-origin"><a href="/stations/{{this.orig_dest.orig_tiploc}}">{{this.orig_dest.orig}}</a></span>
+				→
+				<span class="schedule-list-destination"><a href="/stations/{{this.orig_dest.dest_tiploc}}">{{this.orig_dest.dest}}</a></span>
+				{{else}}
+				<span class="void">[cancellation or empty schedule]</span>
+				{{/if}}
+			</td>
 			<td>{{this.start_date}}</td>
 			<td>{{this.end_date}}</td>
 			<td>{{this.days}}</td>
-			<td>{{this.processed}}</td>
+			<td>{{this.geo_generation}}</td>
 			<td><a href="/schedule/{{this.id}}">🠊</a></td>
 		</tr>
 	{{/each}}

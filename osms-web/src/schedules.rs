@@ -8,9 +8,18 @@ use osms_db::ntrod::types::*;
 
 pub fn tiploc_to_readable<T: GenericConnection>(conn: &T, tl: &str) -> Result<String> {
     let msn = MsnEntry::from_select(conn, "WHERE tiploc = $1", &[&tl])?;
-    Ok(match msn.into_iter().nth(0) {
-        Some(e) => e.name,
-        None => format!("[TIPLOC {}]", tl)
+    let desc = match msn.into_iter().nth(0) {
+        Some(e) => Some(e.name),
+        None => {
+            let ce = CorpusEntry::from_select(conn, "WHERE nlcdesc IS NOT NULL AND tiploc = $1", &[&tl])?;
+            ce.into_iter().nth(0).map(|x| x.nlcdesc.unwrap())
+        }
+    };
+    Ok(if let Some(d) = desc {
+        ::titlecase::titlecase(&d)
+    }
+    else {
+        format!("[TIPLOC {}]", tl)
     })
 }
 #[derive(Serialize, FromForm, Default, Clone)]
@@ -37,14 +46,23 @@ impl ScheduleOptions {
     }
 }
 #[derive(Serialize)]
+pub struct ScheduleOrigDest {
+    time: String,
+    orig: String,
+    orig_tiploc: String,
+    dest: String,
+    dest_tiploc: String
+}
+#[derive(Serialize)]
 pub struct ScheduleRow {
     id: String,
     uid: String,
     stp: String,
-    desc: String,
+    orig_dest: Option<ScheduleOrigDest>,
     start_date: String,
     end_date: String,
     days: String,
+    geo_generation: i32
 }
 #[derive(Serialize)]
 pub struct ScheduleView {
@@ -96,25 +114,28 @@ fn schedules(db: DbConn, opts: ScheduleOptions) -> Result<Template> {
     }
     let mut rows = vec![];
     for sched in schedules {
-        let locs = ScheduleMvt::from_select(&*db, "WHERE parent_sched = $1", &[&sched.id])?;
-        let desc = if locs.len() >= 2 {
-            let s1 = MsnEntry::from_select(&*db, "WHERE tiploc = $1",
-                                           &[&locs[0].tiploc])?;
-            let s2 = MsnEntry::from_select(&*db, "WHERE tiploc = $1",
-                                           &[&locs.last().unwrap().tiploc])?;
-            format!("{} {} → {}", 
-                    locs[0].time.format("%H:%M"),
-                    s1.first().map(|x| &x.name).unwrap_or(&locs[0].tiploc),
-                    s2.first().map(|x| &x.name).unwrap_or(&locs.last().unwrap().tiploc))
+        let locs = ScheduleMvt::from_select(&*db, "WHERE parent_sched = $1 ORDER BY time ASC", &[&sched.id])?;
+        let orig_dest = if locs.len() >= 2 {
+            let orig_tiploc = &locs[0].tiploc;
+            let dest_tiploc = &locs.last().unwrap().tiploc;
+            let orig = tiploc_to_readable(&*db, orig_tiploc)?;
+            let dest = tiploc_to_readable(&*db, dest_tiploc)?;
+            let time = locs[0].time.format("%H:%M").to_string();
+            Some(ScheduleOrigDest {
+                orig_tiploc: orig_tiploc.to_owned(),
+                dest_tiploc: dest_tiploc.to_owned(),
+                orig, dest, time
+            })
         } 
         else {
-            "Cancellation or empty schedule".into()
+            None
         };
         rows.push(ScheduleRow {
             id: sched.id.to_string(),
             uid: sched.uid.clone(),
             stp: format!("{:?}", sched.stp_indicator),
-            desc,
+            orig_dest,
+            geo_generation: sched.geo_generation,
             start_date: sched.start_date.format("%Y-%m-%d").to_string(),
             end_date: sched.end_date.format("%Y-%m-%d").to_string(),
             days: sched.days.to_string()
