@@ -26,6 +26,7 @@ use rocket::response::NamedFile;
 pub mod tmpl;
 pub mod qb;
 pub mod schedules;
+pub mod schedule;
 pub mod mapping;
 use tmpl::TemplateContext;
 
@@ -54,6 +55,7 @@ fn main() {
         .mount("/", routes![
                index, 
                map,
+               schedule::schedule,
                schedules::schedules_qs,
                schedules::schedules_noqs,
                mapping::geo_ways, 

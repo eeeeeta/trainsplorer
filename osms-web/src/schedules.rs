@@ -3,9 +3,16 @@ use rocket_contrib::Template;
 use pool::DbConn;
 use qb::QueryBuilder;
 use tmpl::TemplateContext;
-use osms_db::db::DbType;
+use osms_db::db::*;
 use osms_db::ntrod::types::*;
 
+pub fn tiploc_to_readable<T: GenericConnection>(conn: &T, tl: &str) -> Result<String> {
+    let msn = MsnEntry::from_select(conn, "WHERE tiploc = $1", &[&tl])?;
+    Ok(match msn.into_iter().nth(0) {
+        Some(e) => e.name,
+        None => format!("[TIPLOC {}]", tl)
+    })
+}
 #[derive(Serialize, FromForm, Default, Clone)]
 pub struct ScheduleOptions {
     pagination: Option<i32>,
