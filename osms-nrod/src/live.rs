@@ -117,6 +117,7 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
         let id = tmvt.insert_self(conn)?;
         did_something = true;
         debug!("Registered train movement #{}.", id);
+        break;
     }
     if !did_something {
         bail!("didn't do anything useful!");
