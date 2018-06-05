@@ -24,11 +24,11 @@ pub struct ScheduleMvtDesc {
 }
 #[get("/schedule/<id>")]
 fn schedule(db: DbConn, id: i32) -> Result<Template> {
-    let sched = Schedule::from_select(&*db, "WHERE id = $1 ORDER BY time ASC", &[&id])?
+    let sched = Schedule::from_select(&*db, "WHERE id = $1", &[&id])?
         .into_iter()
         .nth(0)
         .ok_or(format_err!("no schedule found"))?;
-    let movements = ScheduleMvt::from_select(&*db, "WHERE parent_sched = $1", &[&id])?;
+    let movements = ScheduleMvt::from_select(&*db, "WHERE parent_sched = $1 ORDER BY time ASC", &[&id])?;
     let mut descs = vec![];
     for mvt in movements {
         let action = match mvt.action {
