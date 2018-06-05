@@ -157,6 +157,11 @@ starts_path INT REFERENCES station_paths ON DELETE RESTRICT,
 ends_path INT REFERENCES station_paths ON DELETE RESTRICT
 "#
     }
+    fn indexes() -> Vec<&'static str> {
+        vec![
+            "schedule_movements_parent_sched ON schedule_movements (parent_sched)"
+        ]
+    }
     fn from_row(row: &Row) -> Self {
         Self {
             id: row.get(0),
@@ -221,6 +226,7 @@ terminated BOOL NOT NULL DEFAULT false
     }
     fn indexes() -> Vec<&'static str> {
         vec![
+            "trains_parent_sched ON trains (parent_sched)",
             "trains_trust_id ON trains (trust_id)"
         ]
     }
@@ -279,6 +285,11 @@ time TIME NOT NULL,
 source VARCHAR NOT NULL
         "#
     }
+    fn indexes() -> Vec<&'static str> {
+        vec![
+            "train_movements_parent_mvt_parent_train ON train_movements (parent_mvt, parent_train)"
+        ]
+    }
     fn from_row(row: &Row) -> Self {
         Self {
             id: row.get(0),
@@ -323,6 +334,11 @@ name VARCHAR NOT NULL,
 cate INT NOT NULL,
 crs VARCHAR NOT NULL
 "#
+    }
+    fn indexes() -> Vec<&'static str> {
+        vec![
+            "msn_entries_tiploc ON msn_entries (tiploc)"
+        ]
     }
     fn from_row(row: &Row) -> Self {
         Self {

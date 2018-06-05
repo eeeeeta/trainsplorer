@@ -27,7 +27,7 @@
 			</td>
 			<td>
 				{{#if this.live_source}}
-					{{this.time_live}}
+				        {{this.live_source}}
 				{{/if}}
 			</td>
 			<td>
@@ -44,4 +44,12 @@
 		</tr>
 	{{/each}}
 </table>
+{{#if body.trains}}
+<h3>Trains running to this schedule</h3>
+<ul>
+	{{#each body.trains}}
+	<li><a href="/train/{{this.id}}">{{this.date}} (#{{this.id}})</a></li>
+	{{/each}}
+</ul>
+{{/if}}
 {{> footer }}

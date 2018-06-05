@@ -57,6 +57,7 @@ fn main() {
                index, 
                map,
                schedule::schedule,
+               schedule::train,
                schedules::schedules_qs,
                schedules::schedules_noqs,
                mapping::geo_ways, 

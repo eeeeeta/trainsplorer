@@ -12,15 +12,28 @@ use rocket::request::{self, FromRequest};
 use rocket::{Request, State, Outcome};
 
 pub type Pool = r2d2::Pool<PostgresConnectionManager>;
+type Conn = <PostgresConnectionManager as r2d2::ManageConnection>::Connection;
 
+#[derive(Debug)]
+pub struct AppNameSetter;
+impl<E> r2d2::CustomizeConnection<Conn, E> for AppNameSetter {
+    fn on_acquire(&self, conn: &mut Conn) -> Result<(), E> {
+        // FIXME: this unwrap isn't that great
+        conn.execute("SET application_name TO 'osms-web';", &[]).unwrap();
+        Ok(())
+    }
+}
 pub fn attach_db(rocket: Rocket) -> Rocket {
-    let config = r2d2::Config::default();
+    let config = r2d2::config::Builder::new()
+        .connection_customizer(Box::new(AppNameSetter))
+        .build();
     let manager = {
         let url = rocket.config().get_str("database_url")
             .expect("'database_url' in config");
         PostgresConnectionManager::new(url, TlsMode::None).unwrap()
     };
-    rocket.manage(r2d2::Pool::new(config, manager).expect("db pool"))
+    let pool = r2d2::Pool::new(config, manager).expect("db pool");
+    rocket.manage(pool)
 }
 
 pub struct DbConn(pub r2d2::PooledConnection<PostgresConnectionManager>);

@@ -242,6 +242,7 @@ fn main() {
     }
     info!("Connecting to database...");
     let conn = Connection::connect(conf.database_url, TlsMode::None).unwrap();
+    conn.execute("SET application_name TO 'osms-nrod';", &[]).unwrap();
     info!("Running client...");
     let mut core = Core::new().unwrap();
     let hdl = core.handle();

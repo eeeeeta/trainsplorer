@@ -4,6 +4,7 @@ use pool::DbConn;
 use qb::QueryBuilder;
 use tmpl::TemplateContext;
 use osms_db::db::*;
+use osms_db::util;
 use osms_db::ntrod::types::*;
 
 pub fn tiploc_to_readable<T: GenericConnection>(conn: &T, tl: &str) -> Result<String> {
@@ -62,7 +63,8 @@ pub struct ScheduleRow {
     start_date: String,
     end_date: String,
     days: String,
-    geo_generation: i32
+    geo_generation: i32,
+    n_trains: i64
 }
 #[derive(Serialize)]
 pub struct ScheduleView {
@@ -130,6 +132,7 @@ fn schedules(db: DbConn, opts: ScheduleOptions) -> Result<Template> {
         else {
             None
         };
+        let n_trains = util::count(&*db, "FROM trains WHERE parent_sched = $1", &[&sched.id])?;
         rows.push(ScheduleRow {
             id: sched.id.to_string(),
             uid: sched.uid.clone(),
@@ -138,7 +141,8 @@ fn schedules(db: DbConn, opts: ScheduleOptions) -> Result<Template> {
             geo_generation: sched.geo_generation,
             start_date: sched.start_date.format("%Y-%m-%d").to_string(),
             end_date: sched.end_date.format("%Y-%m-%d").to_string(),
-            days: sched.days.to_string()
+            days: sched.days.to_string(),
+            n_trains
         })
     }
     Ok(Template::render("schedules", TemplateContext {
