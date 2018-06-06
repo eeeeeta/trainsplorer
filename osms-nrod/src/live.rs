@@ -67,7 +67,7 @@ pub fn process_activation<T: GenericConnection>(conn: &T, a: Activation) -> Resu
 }
 pub fn process_cancellation<T: GenericConnection>(conn: &T, c: Cancellation) -> Result<()> {
     debug!("Processing cancellation of train {}...", c.train_id);
-    conn.execute("UPDATE trains SET cancelled = true WHERE trust_id = $1", &[&c.train_id])?;
+    conn.execute("UPDATE trains SET cancelled = true WHERE trust_id = $1 AND date = $2", &[&c.train_id, &c.dep_timestamp.date()])?;
     debug!("Train cancelled.");
     Ok(())
 }
@@ -75,13 +75,13 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
     debug!("Processing movement of train {} at STANOX {}...", m.train_id, m.loc_stanox);
     if m.train_terminated {
         debug!("Train has terminated.");
-        conn.execute("UPDATE trains SET terminated = true WHERE trust_id = $1", &[&m.train_id])?;
+        conn.execute("UPDATE trains SET terminated = true WHERE trust_id = $1 AND (date = $2 OR date = ($2 - interval '1 day'))", &[&m.train_id, &m.actual_timestamp.date()])?;
     }
     if m.offroute_ind {
         debug!("Train #{} off route.", m.train_id);
         return Ok(());
     }
-    let trains = Train::from_select(conn, "WHERE trust_id = $1", &[&m.train_id])?;
+    let trains = Train::from_select(conn, "WHERE trust_id = $1 AND (date = $2 OR date = ($2 - interval '1 day'))", &[&m.train_id, &m.actual_timestamp.date()])?;
     let train = match trains.into_iter().nth(0) {
         Some(t) => t,
         None => bail!("No train found for ID {}", m.train_id)

@@ -217,18 +217,19 @@ impl DbType for Train {
         r#"
 id SERIAL PRIMARY KEY,
 parent_sched INT NOT NULL REFERENCES schedules ON DELETE CASCADE,
-trust_id VARCHAR NOT NULL UNIQUE,
+trust_id VARCHAR NOT NULL,
 date DATE NOT NULL,
 signalling_id VARCHAR NOT NULL,
 cancelled BOOL NOT NULL DEFAULT false,
-terminated BOOL NOT NULL DEFAULT false
+terminated BOOL NOT NULL DEFAULT false,
+UNIQUE(trust_id, date)
 "#
     }
     fn indexes() -> Vec<&'static str> {
         vec![
             "trains_parent_sched ON trains (parent_sched)",
             "trains_date ON trains (date)",
-            "trains_trust_id ON trains (trust_id)"
+            "trains_trust_id_date ON trains (trust_id, date)"
         ]
     }
     fn from_row(row: &Row) -> Self {
