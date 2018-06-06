@@ -105,9 +105,6 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
     if mvts.len() == 0 {
         bail!("no movements for sched {}, actions {:?}, tiplocs {:?}", train.parent_sched, acceptable_actions, tiplocs);
     }
-    if mvts.len() > 1 {
-        bail!("ambiguous movement for sched {}, actions {:?}, tiplocs {:?}", train.parent_sched, acceptable_actions, tiplocs);
-    }
     let mvt = mvts.into_iter().nth(0).unwrap();
     let tmvt = TrainMvt {
         id: -1,

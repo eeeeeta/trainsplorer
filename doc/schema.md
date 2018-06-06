@@ -2,6 +2,12 @@
 
 (document still *very much* WIP; in future, this will actually be helpful)
 
+## todo (perf)
+
+- we amass a whole crapton (like, 19 million) train and schedule mvts over time.
+  this is less than great for perf.
+  - partial indexing? partitioning? denormalisation?
+
 ## todo (osms-web)
 
 - make the map display station paths as well / toggle different layers being displayed
