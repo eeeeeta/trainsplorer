@@ -101,7 +101,7 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
     let acceptable_actions = vec![2, action];
     debug!("Mapped STANOX {} to TIPLOCs {:?}", m.loc_stanox, tiplocs);
     debug!("Querying for movements - parent_sched = {}, tiplocs = {:?}, actions = {:?}", train.parent_sched, tiplocs, acceptable_actions);
-    let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = ANY($2) AND action = ANY($3) AND NOT EXISTS(SELECT * FROM train_movements WHERE parent_mvt = schedule_movements.id) ORDER BY time ASC", &[&train.parent_sched, &tiplocs, &acceptable_actions])?;
+    let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = ANY($2) AND action = ANY($3) AND NOT EXISTS(SELECT * FROM train_movements WHERE parent_mvt = schedule_movements.id AND parent_train = $4) ORDER BY time ASC", &[&train.parent_sched, &tiplocs, &acceptable_actions, &train.id])?;
     if mvts.len() == 0 {
         bail!("no movements for sched {}, actions {:?}, tiplocs {:?}", train.parent_sched, acceptable_actions, tiplocs);
     }
