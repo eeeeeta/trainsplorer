@@ -93,35 +93,30 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
         debug!("No TIPLOC found for STANOX {}", m.loc_stanox);
         return Ok(());
     }
+    let action = match m.event_type {
+        EventType::Arrival => 0,
+        EventType::Destination => 0,
+        EventType::Departure => 1
+    };
+    let acceptable_actions = vec![2, action];
     debug!("Mapped STANOX {} to TIPLOCs {:?}", m.loc_stanox, tiplocs);
-    let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = ANY($2)", &[&train.parent_sched, &tiplocs])?;
-    let mut did_something = false;
-    for mvt in mvts {
-        match (mvt.action, m.event_type) {
-            (0, EventType::Arrival) => {},
-            (0, EventType::Destination) => {},
-            (2, _) => {},
-            (1, EventType::Departure) => {}
-            (x, y) => {
-                debug!("Mismatched movement: mvt.action {} event_type {:?}", x, y);
-                continue;
-            }
-        }
-        let tmvt = TrainMvt {
-            id: -1,
-            parent_train: train.id,
-            parent_mvt: mvt.id,
-            time: m.actual_timestamp.time(),
-            source: "TRUST".into()
-        };
-        let id = tmvt.insert_self(conn)?;
-        did_something = true;
-        debug!("Registered train movement #{}.", id);
-        break;
+    debug!("Querying for movements - parent_sched = {}, tiplocs = {:?}, actions = {:?}", train.parent_sched, tiplocs, acceptable_actions);
+    let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = ANY($2) AND action = ANY($3) AND NOT EXISTS(SELECT * FROM train_movements WHERE parent_mvt = schedule.movements.id) ORDER BY time ASC", &[&train.parent_sched, &tiplocs, &acceptable_actions])?;
+    if mvts.len() == 0 {
+        bail!("no movements for sched {}, actions {:?}, tiplocs {:?}", train.parent_sched, acceptable_actions, tiplocs);
     }
-    if !did_something {
-        bail!("didn't do anything useful!");
+    if mvts.len() > 1 {
+        bail!("ambiguous movement for sched {}, actions {:?}, tiplocs {:?}", train.parent_sched, acceptable_actions, tiplocs);
     }
-    debug!("Train movement processed.");
+    let mvt = mvts.into_iter().nth(0).unwrap();
+    let tmvt = TrainMvt {
+        id: -1,
+        parent_train: train.id,
+        parent_mvt: mvt.id,
+        time: m.actual_timestamp.time(),
+        source: "TRUST".into()
+    };
+    let id = tmvt.insert_self(conn)?;
+    debug!("Registered train movement #{}.", id);
     Ok(())
 }
