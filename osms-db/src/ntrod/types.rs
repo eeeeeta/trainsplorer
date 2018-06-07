@@ -284,7 +284,8 @@ id SERIAL PRIMARY KEY,
 parent_train INT NOT NULL REFERENCES trains ON DELETE CASCADE,
 parent_mvt INT NOT NULL REFERENCES schedule_movements ON DELETE CASCADE,
 time TIME NOT NULL,
-source VARCHAR NOT NULL
+source VARCHAR NOT NULL,
+UNIQUE(parent_train, parent_mvt)
         "#
     }
     fn indexes() -> Vec<&'static str> {

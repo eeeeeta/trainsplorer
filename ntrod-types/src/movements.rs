@@ -1,6 +1,7 @@
 use chrono::*;
 use super::cif::*;
 use super::fns::*;
+use serde_json::Value;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MvtHeader {
@@ -87,7 +88,9 @@ pub enum MvtBody {
     Movement(Movement),
     Reinstatement(Reinstatement),
     ChangeOfOrigin(ChangeOfOrigin),
-    ChangeOfIdentity(ChangeOfIdentity)
+    ChangeOfIdentity(ChangeOfIdentity),
+    ChangeOfLocation(ChangeOfLocation),
+    Unknown(Value)
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Activation {
@@ -265,6 +268,27 @@ pub struct ChangeOfIdentity {
     pub revised_train_id: String,
     #[serde(deserialize_with = "non_empty_str")]
     pub train_service_code: String,
+    #[serde(deserialize_with = "parse_ts")]
+    pub event_timestamp: NaiveDateTime
+}
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ChangeOfLocation {
+    #[serde(deserialize_with = "non_empty_str")]
+    pub train_id: String,
+    #[serde(deserialize_with = "non_empty_str_opt")]
+    pub current_train_id: Option<String>,
+    #[serde(deserialize_with = "parse_ts")]
+    pub dep_timestamp: NaiveDateTime,
+    #[serde(deserialize_with = "non_empty_str")]
+    pub loc_stanox: String,
+    #[serde(deserialize_with = "non_empty_str_opt")]
+    pub original_loc_stanox: Option<String>,
+    #[serde(deserialize_with = "parse_ts_opt")]
+    pub original_loc_timestamp: Option<NaiveDateTime>,
+    #[serde(deserialize_with = "non_empty_str")]
+    pub train_service_code: String,
+    #[serde(deserialize_with = "non_empty_str_opt")]
+    pub train_file_address: Option<String>,
     #[serde(deserialize_with = "parse_ts")]
     pub event_timestamp: NaiveDateTime
 }

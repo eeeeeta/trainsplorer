@@ -13,8 +13,12 @@ pub fn process_ntrod_event<T: GenericConnection>(conn: &T, r: Record) -> Result<
         MvtBody::Activation(a) => process_activation(conn, a)?,
         MvtBody::Cancellation(a) => process_cancellation(conn, a)?,
         MvtBody::Movement(a) => process_movement(conn, a)?,
+        MvtBody::Unknown(v) => {
+            warn!("Got unknown value: {:?}", v);
+            bail!("Unknown value received");
+        },
         _ => {
-            warn!("Don't know/care about this type of message yet!");
+            warn!("Don't know/care about message type {} yet!", header.msg_type);
             bail!("Unimplemented message type");
         }
     }

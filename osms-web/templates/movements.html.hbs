@@ -11,7 +11,7 @@
 		</tr>
 	</thead>
 		{{#each body.mvts}}
-		<tr>
+		<tr {{#if this.canx}}class="movements-row-cancelled"{{/if}}>
 			<td>
 				{{#if this.parent_sched}}
 					<a href="/schedule/{{this.parent_sched}}">→</a>
@@ -26,12 +26,16 @@
 				{{#if this.live}}
 					<abbr title="This movement actually happened at the time stated">✅</abbr>
 				{{else}}
-					{{#if this.prepped}}
-						<abbr title="The train has been activated, but hasn't reached this station yet">🔴</abbr>
+					{{#if this.canx}}
+						<abbr title="This train was cancelled">❌</abbr>
+					{{else}}
+						{{#if this.prepped}}
+							<abbr title="The train has been activated, but hasn't reached this station yet">🔴</abbr>
+						{{/if}}
 					{{/if}}
 				{{/if}}
 			</td>
-			<td>
+			<td class="movements-cell-time">
 				{{this.time}}
 			</td>
 			<td>

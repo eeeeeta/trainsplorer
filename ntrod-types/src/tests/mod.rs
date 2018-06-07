@@ -26,6 +26,7 @@ mktest! {
     parse_movements_various_1, "movements_various_1.json", movements::Records,
     parse_movements_various_2, "movements_various_2.json", movements::Records,
     parse_movements_various_3, "movements_various_3.json", movements::Records,
+    parse_movements_various_4, "movements_various_4.json", movements::Records,
     parse_movements_0005, "movements_0005.json", movements::Reinstatement,
     parse_movements_0003, "movements_0003.json", movements::Movement,
     parse_movements_0003_2, "movements_0003_2.json", movements::Movement,

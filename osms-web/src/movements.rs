@@ -18,6 +18,7 @@ pub struct MovementDesc {
     parent_train: Option<i32>,
     live: bool,
     prepped: bool,
+    canx: bool,
     action: String,
     time: String,
     #[serde(skip_serializing)]
@@ -50,6 +51,7 @@ fn movements(db: DbConn, station: String, date: String, time: String) -> Result<
         let mut _time = mvt.time;
         let mut live = false;
         let mut prepped = false;
+        let mut canx = false;
         for tmvt in train_mvts.iter() {
             if tmvt.parent_mvt == mvt.id {
                 parent_train = Some(tmvt.parent_train);
@@ -61,6 +63,12 @@ fn movements(db: DbConn, station: String, date: String, time: String) -> Result<
             for train in Train::from_select(&*db, "WHERE parent_sched = $1 AND date = $2", &[&mvt.parent_sched, &date])? {
                 parent_train = Some(train.id);
                 prepped = true;
+                canx = train.cancelled;
+            }
+        }
+        else {
+            for train in Train::from_select(&*db, "WHERE id = $1", &[&parent_train.unwrap()])? {
+                canx = train.cancelled;
             }
         }
         descs.push(MovementDesc {
@@ -70,6 +78,7 @@ fn movements(db: DbConn, station: String, date: String, time: String) -> Result<
             _time,
             live,
             prepped,
+            canx,
             action: action.into(),
             orig_dest
         });

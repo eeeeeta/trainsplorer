@@ -2,7 +2,6 @@ extern crate stomp;
 extern crate serde_json;
 extern crate osms_db;
 extern crate ntrod_types;
-extern crate postgres;
 #[macro_use] extern crate log;
 extern crate toml;
 extern crate fern;
@@ -12,6 +11,9 @@ extern crate tokio_core;
 #[macro_use] extern crate failure;
 extern crate cadence;
 extern crate chrono;
+extern crate r2d2;
+extern crate r2d2_postgres;
+extern crate crossbeam_channel;
 
 use stomp::session::{SessionEvent, Session};
 use stomp::header::Header;
@@ -28,10 +30,11 @@ use std::time::Duration;
 use futures::*;
 use cadence::prelude::*;
 use cadence::{StatsdClient, QueuingMetricSink, BufferedUdpMetricSink, DEFAULT_PORT};
+use std::sync::Arc;
+use crossbeam_channel::{Sender, Receiver};
 
 use ntrod_types::movements::{Records, MvtBody};
-use postgres::{Connection, TlsMode};
-use std::borrow::Cow;
+use r2d2_postgres::{PostgresConnectionManager, TlsMode};
 
 mod live;
 
@@ -42,6 +45,7 @@ pub struct Config {
     statsd_url: Option<String>,
     username: String,
     password: String,
+    n_threads: u32,
     #[serde(default)]
     log_level_general: Option<String>,
     #[serde(default)]
@@ -53,24 +57,35 @@ pub struct Config {
 }
 pub struct NtrodProcessor {
     sess: Session,
-    conn: Connection,
     hdl: Handle,
     timeout: Option<Timeout>,
     timeout_ms: u64,
-    metrics: Option<StatsdClient>
+    tx: Sender<String>
 }
-impl NtrodProcessor {
+pub struct NtrodWorker {
+    metrics: Option<Arc<StatsdClient>>,
+    pool: r2d2::Pool<PostgresConnectionManager>,
+    rx: Receiver<String> 
+}
+impl NtrodWorker {
     fn incr(&mut self, dest: &str) {
-        if let Some(ref mut metrics) = self.metrics {
-            if let Err(e) = metrics.incr(dest) {
+        if let Some(ref mut m) = self.metrics {
+            if let Err(e) = m.incr(dest) {
                 error!("failed to update metrics: {:?}", e);
             }
         }
     }
-    fn on_ntrod_data(&mut self, st: Cow<str>) {
+    fn run(&mut self) {
+        loop {
+            let data = self.rx.recv().unwrap();
+            self.on_ntrod_data(data);
+        }
+    }
+    fn on_ntrod_data(&mut self, st: String) {
         use self::MvtBody::*;
 
         self.incr("message_batch.recv");
+        let conn = self.pool.get().unwrap();
         let recs: Result<Records, _> = serde_json::from_str(&st);
         match recs {
             Ok(r) => {
@@ -83,10 +98,12 @@ impl NtrodProcessor {
                         Movement(_) => "messages_movement",
                         Reinstatement(_) => "messages_reinstatement",
                         ChangeOfOrigin(_) => "messages_change_of_origin",
-                        ChangeOfIdentity(_) => "messages_change_of_identity"
+                        ChangeOfIdentity(_) => "messages_change_of_identity",
+                        ChangeOfLocation(_) => "messages_change_of_location",
+                        Unknown(_) => "messages_unknown"
                     };
                     self.incr(&format!("{}.recv", dest));
-                    match live::process_ntrod_event(&self.conn, record) {
+                    match live::process_ntrod_event(&*conn, record) {
                         Err(e) => {
                             self.incr("messages.fail");
                             self.incr(&format!("{}.fail", dest));
@@ -142,7 +159,7 @@ impl Future for NtrodProcessor {
                 Message { destination, frame, .. } => {
                     if destination == "/topic/TRAIN_MVT_ALL_TOC" {
                         let st = String::from_utf8_lossy(&frame.body);
-                        self.on_ntrod_data(st);
+                        self.tx.send(st.into()).unwrap();
                     }
                     self.sess.acknowledge_frame(&frame, AckOrNack::Ack);
                 },
@@ -160,42 +177,17 @@ impl Future for NtrodProcessor {
         Ok(Async::NotReady)
     }
 }
-/*
-fn on_message(hdl: &mut LoginHandler, _: &mut Session<LoginHandler>, fr: &Frame) -> AckOrNack {
-    let st = String::from_utf8_lossy(&fr.body);
-    let recs: Result<Records, _> = serde_json::from_str(&st);
-    match recs {
-        Ok(r) => {
-            for record in r {
-                match live::process_ntrod_event(&hdl.0, record) {
-                    Err(e) => {
-                        error!("Error processing: {}", e);
-                    },
-                    _ => {
-                    }
-                }
-            }
-        },
-        Err(e) => {
-            error!("### PARSE ERROR ###\nerr: {}\ndata: {}", e, &st);
-        }
-    }
-    AckOrNack::Ack
-}
-struct LoginHandler(Connection);
-impl Handler for LoginHandler {
-    fn on_connected(&mut self, sess: &mut Session<Self>, _: &Frame) {
-        info!("Connection established.");
-        sess.subscription("/topic/TRAIN_MVT_ALL_TOC", on_message).start().unwrap();
-    }
-    fn on_error(&mut self, _: &mut Session<Self>, frame: &Frame) {
-        error!("Whoops: {}", frame);
-    }
-    fn on_disconnected(&mut self, _: &mut Session<Self>) {
-        warn!("Disconnected.")
+type Conn = <PostgresConnectionManager as r2d2::ManageConnection>::Connection;
+
+#[derive(Debug)]
+pub struct AppNameSetter;
+impl<E> r2d2::CustomizeConnection<Conn, E> for AppNameSetter {
+    fn on_acquire(&self, conn: &mut Conn) -> Result<(), E> {
+        // FIXME: this unwrap isn't that great, it's a copypasta from osms-web
+        conn.execute("SET application_name TO 'osms-nrod';", &[]).unwrap();
+        Ok(())
     }
 }
-*/
 fn main() {
     println!("osms-nrod starting");
     let args = env::args().skip(1).collect::<Vec<_>>();
@@ -238,12 +230,15 @@ fn main() {
         let host = (url as &str, DEFAULT_PORT);
         let udp_sink = BufferedUdpMetricSink::from(host, socket).unwrap();
         let queuing_sink = QueuingMetricSink::from(udp_sink);
-        metrics = Some(StatsdClient::from_sink("ntrod", queuing_sink));
+        metrics = Some(Arc::new(StatsdClient::from_sink("ntrod", queuing_sink)));
     }
     info!("Connecting to database...");
-    let conn = Connection::connect(conf.database_url, TlsMode::None).unwrap();
-    conn.execute("SET application_name TO 'osms-nrod';", &[]).unwrap();
-    info!("Running client...");
+    let manager = PostgresConnectionManager::new(conf.database_url, TlsMode::None).unwrap();
+    let pool = r2d2::Pool::builder()
+        .connection_customizer(Box::new(AppNameSetter))
+        .build(manager)
+        .unwrap();
+    info!("Initialising session...");
     let mut core = Core::new().unwrap();
     let hdl = core.handle();
     let nrod_url = conf.nrod_url.as_ref().map(|x| x as &str).unwrap_or("datafeeds.networkrail.co.uk");
@@ -253,6 +248,20 @@ fn main() {
         .with(HeartBeat(5_000, 2_000))
         .start(hdl.clone())
         .unwrap();
-    let p = NtrodProcessor { conn, sess, hdl, timeout: None, timeout_ms: 1000, metrics };
+    let (tx, rx) = crossbeam_channel::unbounded();
+    info!("Spawning {} worker threads...", conf.n_threads);
+    for n in 0..conf.n_threads {
+        let mut worker = NtrodWorker {
+            pool: pool.clone(),
+            metrics: metrics.clone(),
+            rx: rx.clone()
+        };
+        ::std::thread::spawn(move || {
+            info!("Worker thread {} running.", n);
+            worker.run();
+        });
+    }
+    info!("Running client...");
+    let p = NtrodProcessor { tx, sess, hdl, timeout: None, timeout_ms: 1000 };
     core.run(p).unwrap();
 }
