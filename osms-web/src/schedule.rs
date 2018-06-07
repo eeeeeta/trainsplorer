@@ -67,6 +67,12 @@ fn train(db: DbConn, id: i32) -> Result<Template> {
                 trig = true;
             }
         }
+        let live_source = live_source.map(|x| {
+            match x {
+                0 => "TRUST",
+                _ => "???"
+            }.into()
+        });
         descs.push(ScheduleMvtDesc {
             action,
             location,
