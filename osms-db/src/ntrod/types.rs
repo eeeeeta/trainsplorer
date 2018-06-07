@@ -103,10 +103,9 @@ impl Schedule {
                 highest = (sched.id, sched.stp_indicator);
             }
             else if sched.stp_indicator == highest.1 && !sched.stp_indicator.is_cancellation() {
-                warn!("Inconsistency: schedule #{} has a STP indicator equal to #{}",
+                error!("Inconsistency: schedule #{} has a STP indicator equal to #{}",
                        sched.id, highest.0);
-                // FIXME FIXME FIXME
-                //return Err(OsmsError::DatabaseInconsistency("STP indicators equal"));
+                return Err(OsmsError::DatabaseInconsistency("STP indicators equal"));
             }
         }
         Ok(highest.0 == self.id)
