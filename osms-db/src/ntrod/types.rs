@@ -271,8 +271,10 @@ pub struct TrainMvt {
     pub parent_mvt: i32,
     /// The updated time.
     pub time: NaiveTime,
-    /// Source of this update.
-    pub source: String
+    /// Source of this update - one of:
+    ///
+    /// - 0: TRUST live update
+    pub source: i32
 }
 impl DbType for TrainMvt {
     fn table_name() -> &'static str {
@@ -284,8 +286,7 @@ id SERIAL PRIMARY KEY,
 parent_train INT NOT NULL REFERENCES trains ON DELETE CASCADE,
 parent_mvt INT NOT NULL REFERENCES schedule_movements ON DELETE CASCADE,
 time TIME NOT NULL,
-source VARCHAR NOT NULL,
-UNIQUE(parent_train, parent_mvt)
+source INT NOT NULL
         "#
     }
     fn indexes() -> Vec<&'static str> {
