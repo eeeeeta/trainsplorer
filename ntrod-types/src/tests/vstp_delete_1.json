@@ -1,0 +1,27 @@
+{
+    "VSTPCIFMsgV1": {
+        "classification": "industry",
+        "timestamp": "1528394990000",
+        "owner": "Network Rail",
+        "originMsgId": "2018-06-07T18:09:50-00:00vstp.networkrail.co.uk",
+        "Sender": {
+            "organisation": "Network Rail",
+            "application": "TSIA",
+            "component": "TSIA",
+            "userID": "QRP9107",
+            "sessionID": "C603500"
+        },
+        "schedule": {
+            "schedule_id": "",
+            "transaction_type": "Delete",
+            "schedule_start_date": "2018-06-07",
+            "schedule_end_date": "2018-06-07",
+            "schedule_days_runs": "0001000",
+            "CIF_bank_holiday_running": " ",
+            "CIF_train_uid": " 06455",
+            "train_status": " ",
+            "CIF_stp_indicator": "N",
+            "schedule_segment": [null]
+        }
+    }
+}

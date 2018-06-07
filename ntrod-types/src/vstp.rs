@@ -1,4 +1,4 @@
-use super::schedule::{CreateOrDelete, YesOrNo, Days};
+use super::schedule::{YesOrNo, Days};
 use super::cif::*;
 use super::fns::*;
 use chrono::*;
@@ -20,22 +20,47 @@ pub struct VstpMessage {
     pub origin_msg_id: String,
     pub schedule: VstpScheduleRecord
 }
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+pub enum CreateType {
+    Create
+}
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+pub enum DeleteType {
+    Delete
+}
 #[derive(Deserialize, Debug)]
-pub struct VstpScheduleRecord {
-    #[serde(rename = "CIF_train_uid", deserialize_with = "non_empty_str")]
-    pub train_uid: String,
-    pub transaction_type: CreateOrDelete,
-    pub schedule_start_date: NaiveDate,
-    pub schedule_end_date: NaiveDate,
-    #[serde(deserialize_with = "parse_days")]
-    pub schedule_days_runs: Days,
-    #[serde(rename = "CIF_bank_holiday_running")]
-    pub bank_holiday_running: Option<String>,
-    pub train_status: TrainStatus,
-    #[serde(rename = "CIF_stp_indicator")]
-    pub stp_indicator: StpIndicator,
-    pub applicable_timetable: YesOrNo,
-    pub schedule_segment: Vec<VstpScheduleSegment>
+#[serde(untagged)]
+pub enum VstpScheduleRecord {
+    Create {
+        #[serde(rename = "CIF_train_uid", deserialize_with = "non_empty_str")]
+        train_uid: String,
+        transaction_type: CreateType,
+        schedule_start_date: NaiveDate,
+        schedule_end_date: NaiveDate,
+        #[serde(deserialize_with = "parse_days")]
+        schedule_days_runs: Days,
+        #[serde(rename = "CIF_bank_holiday_running")]
+        bank_holiday_running: Option<String>,
+        train_status: TrainStatus,
+        #[serde(rename = "CIF_stp_indicator")]
+        stp_indicator: StpIndicator,
+        applicable_timetable: YesOrNo,
+        schedule_segment: Vec<VstpScheduleSegment>
+    },
+    Delete {
+        #[serde(rename = "CIF_train_uid", deserialize_with = "non_empty_str")]
+        train_uid: String,
+        transaction_type: DeleteType,
+        schedule_start_date: NaiveDate,
+        schedule_end_date: NaiveDate,
+        #[serde(deserialize_with = "parse_days")]
+        schedule_days_runs: Days,
+        #[serde(rename = "CIF_bank_holiday_running")]
+        bank_holiday_running: Option<String>,
+        train_status: TrainStatus,
+        #[serde(rename = "CIF_stp_indicator")]
+        stp_indicator: StpIndicator,
+    }
 }
 #[derive(Deserialize, Clone, Debug)]
 pub struct VstpScheduleSegment {

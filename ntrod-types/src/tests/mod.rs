@@ -23,6 +23,7 @@ mktest! {
     parse_timetable_v1, "timetable_v1.json", schedule::Record,
     parse_tiploc_v1, "tiploc_v1.json", schedule::Record,
     parse_vstp_v1, "vstp_v1.json", vstp::Record,
+    parse_vstp_delete_1, "vstp_delete_1.json", vstp::Record,
     parse_vstp_201806070750, "vstp-201806070750.json", vstp::Record,
     parse_vstp_originating_1, "vstp_originating_1.json", vstp::VstpLocationRecordOriginating,
     parse_vstp_terminating_1, "vstp_terminating_1.json", vstp::VstpLocationRecordTerminating,
