@@ -7,16 +7,12 @@ use osms_db::db::{DbType, InsertableDbType, GenericConnection};
 type Result<T> = ::std::result::Result<T, ::failure::Error>;
 
 pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()> {
-    use ntrod_types::schedule::*;
+    let trans = conn.transaction()?;
     use ntrod_types::vstp::*;
     use ntrod_types::vstp::VstpLocationRecord::*;
 
     let VstpRecord::V1(msg) = r;
     info!("Processing VSTP message id {} (UID {}, start {}, stp_indicator {:?})", msg.origin_msg_id, msg.schedule.train_uid, msg.schedule.schedule_start_date, msg.schedule.stp_indicator);
-    if let YesOrNo::N = msg.schedule.applicable_timetable {
-        debug!("Not applicable.");
-        return Ok(());
-    }
     let VstpScheduleRecord {
         train_uid,
         schedule_start_date,
@@ -43,7 +39,7 @@ pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()>
         geo_generation: 0,
         id: -1
     };
-    let sid = sched.insert_self(conn)?;
+    let sid = sched.insert_self(&trans)?;
     let mut mvts = vec![];
     for loc in schedule_location {
         match loc {
@@ -70,9 +66,10 @@ pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()>
             ends_path: None,
             tiploc, time, action, origterm
         };
-        mvt.insert_self(conn)?;
+        mvt.insert_self(&trans)?;
     }
-
+    trans.commit()?;
+    debug!("Schedule inserted as #{}.", sid);
     Ok(())
 }
 pub fn process_ntrod_event<T: GenericConnection>(conn: &T, r: Record) -> Result<()> {

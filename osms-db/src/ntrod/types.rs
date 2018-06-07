@@ -58,12 +58,6 @@ UNIQUE(uid, start_date, stp_indicator)
 impl InsertableDbType for Schedule {
     type Id = i32;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
-        for row in &conn.query(
-            "SELECT id FROM schedules
-             WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3",
-                               &[&self.uid, &self.start_date, &self.stp_indicator])? {
-            return Ok(row.get(0));
-        }
         let qry = conn.query(
             "INSERT INTO schedules
              (uid, start_date, end_date, days, stp_indicator, signalling_id)

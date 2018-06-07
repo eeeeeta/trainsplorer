@@ -204,12 +204,18 @@ pub fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord
     use ntrod_types::schedule::LocationRecord::*;
 
     if let CreateOrDelete::Delete = rec.transaction_type {
+        debug!("apply_schedule_record: deleting schedules (UID {}, start {}, stp_indicator {:?})",
+        rec.train_uid, rec.schedule_start_date, rec.stp_indicator);
         conn.execute("DELETE FROM schedules
                           WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3",
                           &[&rec.train_uid, &rec.schedule_start_date.naive_utc(), &rec.stp_indicator])?;
         return Ok(());
     }
-    if let YesOrNo::N = rec.applicable_timetable {
+    let prev = Schedule::from_select(conn, "WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3",
+                                     &[&rec.train_uid, &rec.schedule_start_date.naive_utc(), &rec.stp_indicator])?;
+    if prev.len() > 0 {
+        debug!("apply_schedule_record: duplicate record, not inserting (UID {}, start {}, stp_indicator {:?})",
+        rec.train_uid, rec.schedule_start_date, rec.stp_indicator);
         return Ok(());
     }
     debug!("apply_schedule_record: inserting record (UID {}, start {}, stp_indicator {:?})",
