@@ -3,12 +3,12 @@ use super::cif::*;
 use super::fns::*;
 use chrono::*;
 
-#[derive(Serialize, Deserialize, Debug, is_enum_variant)]
+#[derive(Deserialize, Debug, is_enum_variant)]
 pub enum Record {
     #[serde(rename = "VSTPCIFMsgV1")]
     V1(VstpMessage)
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct VstpMessage {
     #[serde(deserialize_with = "non_empty_str")]
     pub timestamp: String,
@@ -20,7 +20,7 @@ pub struct VstpMessage {
     pub origin_msg_id: String,
     pub schedule: VstpScheduleRecord
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct VstpScheduleRecord {
     #[serde(rename = "CIF_train_uid", deserialize_with = "non_empty_str")]
     pub train_uid: String,
@@ -37,7 +37,7 @@ pub struct VstpScheduleRecord {
     pub applicable_timetable: YesOrNo,
     pub schedule_segment: Vec<VstpScheduleSegment>
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct VstpScheduleSegment {
     #[serde(rename = "CIF_train_category")]
     pub train_category: TrainCategory,
@@ -65,4 +65,112 @@ pub struct VstpScheduleSegment {
     pub catering_code: Option<String>,
     #[serde(rename = "CIF_service_branding", deserialize_with = "non_empty_str_opt")]
     pub service_branding: Option<String>,
+    pub schedule_location: Vec<VstpLocationRecord>
+}
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct VstpObnoxiousLocationTiploc {
+    #[serde(deserialize_with = "non_empty_str")]
+    pub tiploc_id: String
+}
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct VstpObnoxiousLocation {
+    pub tiploc: VstpObnoxiousLocationTiploc
+}
+#[derive(Deserialize, Clone, Debug)]
+pub struct VstpLocationRecordPass {
+    #[serde(deserialize_with = "parse_vstp_time_force")]
+    pub scheduled_pass_time: NaiveTime,
+    #[serde(rename = "CIF_platform", deserialize_with = "non_empty_str_opt")]
+    pub platform: Option<String>,
+    #[serde(rename = "CIF_line", deserialize_with = "non_empty_str_opt")]
+    pub line: Option<String>,
+    #[serde(rename = "CIF_path", deserialize_with = "non_empty_str_opt")]
+    pub path: Option<String>,
+    #[serde(rename = "CIF_activity", deserialize_with = "non_empty_str_opt")]
+    pub activity: Option<String>,
+    #[serde(rename = "CIF_engineering_allowance", deserialize_with = "non_empty_str_opt")]
+    pub engineering_allowance: Option<String>,
+    #[serde(rename = "CIF_pathing_allowance", deserialize_with = "non_empty_str_opt")]
+    pub pathing_allowance: Option<String>,
+    #[serde(rename = "CIF_performance_allowance", deserialize_with = "non_empty_str_opt")]
+    pub performance_allowance: Option<String>,
+    pub location: VstpObnoxiousLocation
+}
+#[derive(Deserialize, Clone, Debug)]
+pub struct VstpLocationRecordIntermediate {
+    #[serde(deserialize_with = "parse_vstp_time_force")]
+    pub scheduled_departure_time: NaiveTime,
+    #[serde(deserialize_with = "parse_vstp_time")]
+    pub public_departure_time: Option<NaiveTime>,
+    #[serde(deserialize_with = "parse_vstp_time_force")]
+    pub scheduled_arrival_time: NaiveTime,
+    #[serde(deserialize_with = "parse_vstp_time")]
+    pub public_arrival_time: Option<NaiveTime>,
+    #[serde(rename = "CIF_platform", deserialize_with = "non_empty_str_opt")]
+    pub platform: Option<String>,
+    #[serde(rename = "CIF_line", deserialize_with = "non_empty_str_opt")]
+    pub line: Option<String>,
+    #[serde(rename = "CIF_path", deserialize_with = "non_empty_str_opt")]
+    pub path: Option<String>,
+    #[serde(rename = "CIF_activity", deserialize_with = "non_empty_str_opt")]
+    pub activity: Option<String>,
+    #[serde(rename = "CIF_engineering_allowance", deserialize_with = "non_empty_str_opt")]
+    pub engineering_allowance: Option<String>,
+    #[serde(rename = "CIF_pathing_allowance", deserialize_with = "non_empty_str_opt")]
+    pub pathing_allowance: Option<String>,
+    #[serde(rename = "CIF_performance_allowance", deserialize_with = "non_empty_str_opt")]
+    pub performance_allowance: Option<String>,
+    pub location: VstpObnoxiousLocation
+}
+#[derive(Deserialize, Clone, Debug)]
+pub struct VstpLocationRecordOriginating {
+    #[serde(deserialize_with = "parse_vstp_time_force")]
+    pub scheduled_departure_time: NaiveTime,
+    #[serde(deserialize_with = "parse_vstp_time")]
+    pub public_departure_time: Option<NaiveTime>,
+    #[serde(rename = "CIF_platform", deserialize_with = "non_empty_str_opt")]
+    pub platform: Option<String>,
+    #[serde(rename = "CIF_line", deserialize_with = "non_empty_str_opt")]
+    pub line: Option<String>,
+    #[serde(rename = "CIF_path", deserialize_with = "non_empty_str_opt")]
+    pub path: Option<String>,
+    #[serde(rename = "CIF_activity", deserialize_with = "non_empty_str_opt")]
+    pub activity: Option<String>,
+    #[serde(rename = "CIF_engineering_allowance", deserialize_with = "non_empty_str_opt")]
+    pub engineering_allowance: Option<String>,
+    #[serde(rename = "CIF_pathing_allowance", deserialize_with = "non_empty_str_opt")]
+    pub pathing_allowance: Option<String>,
+    #[serde(rename = "CIF_performance_allowance", deserialize_with = "non_empty_str_opt")]
+    pub performance_allowance: Option<String>,
+    pub location: VstpObnoxiousLocation
+}
+#[derive(Deserialize, Clone, Debug)]
+pub struct VstpLocationRecordTerminating {
+    #[serde(deserialize_with = "parse_vstp_time_force")]
+    pub scheduled_arrival_time: NaiveTime,
+    #[serde(deserialize_with = "parse_vstp_time")]
+    pub public_arrival_time: Option<NaiveTime>,
+    #[serde(rename = "CIF_platform", deserialize_with = "non_empty_str_opt")]
+    pub platform: Option<String>,
+    #[serde(rename = "CIF_line", deserialize_with = "non_empty_str_opt")]
+    pub line: Option<String>,
+    #[serde(rename = "CIF_path", deserialize_with = "non_empty_str_opt")]
+    pub path: Option<String>,
+    #[serde(rename = "CIF_activity", deserialize_with = "non_empty_str_opt")]
+    pub activity: Option<String>,
+    #[serde(rename = "CIF_engineering_allowance", deserialize_with = "non_empty_str_opt")]
+    pub engineering_allowance: Option<String>,
+    #[serde(rename = "CIF_pathing_allowance", deserialize_with = "non_empty_str_opt")]
+    pub pathing_allowance: Option<String>,
+    #[serde(rename = "CIF_performance_allowance", deserialize_with = "non_empty_str_opt")]
+    pub performance_allowance: Option<String>,
+    pub location: VstpObnoxiousLocation
+}
+#[derive(Deserialize, Clone, Debug, is_enum_variant)]
+#[serde(untagged)]
+pub enum VstpLocationRecord {
+    Pass(VstpLocationRecordPass),
+    Intermediate(VstpLocationRecordIntermediate),
+    Originating(VstpLocationRecordOriginating),
+    Terminating(VstpLocationRecordTerminating)
 }

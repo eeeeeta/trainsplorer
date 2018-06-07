@@ -1,10 +1,80 @@
 use ntrod_types::movements::{Activation, Cancellation, Movement, Record, MvtBody, EventType};
 use ntrod_types::reference::CorpusEntry;
+use ntrod_types::vstp::Record as VstpRecord;
 use osms_db::ntrod::types::*;
 use osms_db::db::{DbType, InsertableDbType, GenericConnection};
 
 type Result<T> = ::std::result::Result<T, ::failure::Error>;
 
+pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()> {
+    use ntrod_types::schedule::*;
+    use ntrod_types::vstp::*;
+    use ntrod_types::vstp::VstpLocationRecord::*;
+
+    let VstpRecord::V1(msg) = r;
+    info!("Processing VSTP message id {} (UID {}, start {}, stp_indicator {:?})", msg.origin_msg_id, msg.schedule.train_uid, msg.schedule.schedule_start_date, msg.schedule.stp_indicator);
+    if let YesOrNo::N = msg.schedule.applicable_timetable {
+        debug!("Not applicable.");
+        return Ok(());
+    }
+    let VstpScheduleRecord {
+        train_uid,
+        schedule_start_date,
+        schedule_end_date,
+        schedule_days_runs,
+        stp_indicator,
+        schedule_segment,
+        ..
+    } = msg.schedule;
+    let schedule_segment = schedule_segment.into_iter().nth(0)
+        .ok_or(format_err!("no schedule segment"))?;
+    let VstpScheduleSegment {
+        schedule_location,
+        signalling_id,
+        ..
+    } = schedule_segment;
+    let sched = Schedule {
+        uid: train_uid,
+        start_date: schedule_start_date,
+        end_date: schedule_end_date,
+        days: schedule_days_runs,
+        stp_indicator,
+        signalling_id,
+        geo_generation: 0,
+        id: -1
+    };
+    let sid = sched.insert_self(conn)?;
+    let mut mvts = vec![];
+    for loc in schedule_location {
+        match loc {
+            Originating(VstpLocationRecordOriginating { location, scheduled_departure_time, .. }) => {
+                mvts.push((location.tiploc.tiploc_id, scheduled_departure_time, 1, true));
+            },
+            Intermediate(VstpLocationRecordIntermediate { location, scheduled_arrival_time, scheduled_departure_time, .. }) => {
+                mvts.push((location.tiploc.tiploc_id.clone(), scheduled_arrival_time, 0, false));
+                mvts.push((location.tiploc.tiploc_id, scheduled_departure_time, 1, false));
+            },
+            Pass(VstpLocationRecordPass { location, scheduled_pass_time, .. }) => {
+                mvts.push((location.tiploc.tiploc_id, scheduled_pass_time, 2, false));
+            },
+            Terminating(VstpLocationRecordTerminating { location, scheduled_arrival_time, .. }) => {
+                mvts.push((location.tiploc.tiploc_id, scheduled_arrival_time, 0, true));
+            }
+        }
+    }
+    for (tiploc, time, action, origterm) in mvts {
+        let mvt = ScheduleMvt {
+            parent_sched: sid,
+            id: -1,
+            starts_path: None,
+            ends_path: None,
+            tiploc, time, action, origterm
+        };
+        mvt.insert_self(conn)?;
+    }
+
+    Ok(())
+}
 pub fn process_ntrod_event<T: GenericConnection>(conn: &T, r: Record) -> Result<()> {
     let Record { header, body } = r;
     debug!("Processing message type {} from system {} (source {})",

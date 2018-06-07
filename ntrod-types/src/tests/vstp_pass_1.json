@@ -1,0 +1,19 @@
+{
+                    "scheduled_arrival_time": "      ",
+                    "scheduled_departure_time": "      ",
+                    "scheduled_pass_time": "182030",
+                    "public_arrival_time": "      ",
+                    "public_departure_time": "      ",
+                    "CIF_platform": "",
+                    "CIF_line": "",
+                    "CIF_path": "",
+                    "CIF_activity": "",
+                    "CIF_engineering_allowance": "",
+                    "CIF_pathing_allowance": "",
+                    "CIF_performance_allowance": "",
+                    "location": {
+                        "tiploc": {
+                            "tiploc_id": "ESJLEDS"
+                        }
+                    }
+                }

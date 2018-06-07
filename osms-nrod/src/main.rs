@@ -34,6 +34,7 @@ use std::sync::Arc;
 use crossbeam_channel::{Sender, Receiver};
 
 use ntrod_types::movements::{Records, MvtBody};
+use ntrod_types::vstp::Record as VstpRecord;
 use r2d2_postgres::{PostgresConnectionManager, TlsMode};
 
 mod live;
@@ -55,17 +56,21 @@ pub struct Config {
     #[serde(default)]
     nrod_port: Option<u16>
 }
+pub enum WorkerMessage {
+    Movement(String),
+    Vstp(String)
+}
 pub struct NtrodProcessor {
     sess: Session,
     hdl: Handle,
     timeout: Option<Timeout>,
     timeout_ms: u64,
-    tx: Sender<String>
+    tx: Sender<WorkerMessage>
 }
 pub struct NtrodWorker {
     metrics: Option<Arc<StatsdClient>>,
     pool: r2d2::Pool<PostgresConnectionManager>,
-    rx: Receiver<String> 
+    rx: Receiver<WorkerMessage> 
 }
 impl NtrodWorker {
     fn incr(&mut self, dest: &str) {
@@ -78,10 +83,36 @@ impl NtrodWorker {
     fn run(&mut self) {
         loop {
             let data = self.rx.recv().unwrap();
-            self.on_ntrod_data(data);
+            match data {
+                WorkerMessage::Movement(data) => self.on_movement(data),
+                WorkerMessage::Vstp(data) => self.on_vstp(data)
+            }
         }
     }
-    fn on_ntrod_data(&mut self, st: String) {
+    fn on_vstp(&mut self, st: String) {
+        self.incr("vstp.recv");
+        let conn = self.pool.get().unwrap();
+        let msg: Result<VstpRecord, _> = serde_json::from_str(&st);
+        match msg {
+            Ok(record) => {
+                self.incr("vstp.parsed");
+                match live::process_vstp(&*conn, record) {
+                    Err(e) => {
+                        self.incr("vstp.fail");
+                        error!("Error processing: {}", e);
+                    },
+                    _ => {
+                        self.incr("vstp.processed");
+                    }
+                }
+            },
+            Err(e) => {
+                self.incr("vstp.parse_errors");
+                error!("### VSTP PARSE ERROR ###\nerr: {}\ndata: {}", e, &st);
+            }
+        }
+    }
+    fn on_movement(&mut self, st: String) {
         use self::MvtBody::*;
 
         self.incr("message_batch.recv");
@@ -151,6 +182,9 @@ impl Future for NtrodProcessor {
                     self.sess.subscription("/topic/TRAIN_MVT_ALL_TOC")
                         .with(Header::new("activemq.subscriptionName", "osms-nrod"))
                         .start();
+                    self.sess.subscription("/topic/VSTP_ALL")
+                        .with(Header::new("activemq.subscriptionName", "osms-nrod-vstp"))
+                        .start();
                 },
                 ErrorFrame(fr) => {
                     error!("Error frame, reconnecting: {:?}", fr);
@@ -159,7 +193,11 @@ impl Future for NtrodProcessor {
                 Message { destination, frame, .. } => {
                     if destination == "/topic/TRAIN_MVT_ALL_TOC" {
                         let st = String::from_utf8_lossy(&frame.body);
-                        self.tx.send(st.into()).unwrap();
+                        self.tx.send(WorkerMessage::Movement(st.into())).unwrap();
+                    }
+                    if destination == "/topic/VSTP_ALL" {
+                        let st = String::from_utf8_lossy(&frame.body);
+                        self.tx.send(WorkerMessage::Vstp(st.into())).unwrap();
                     }
                     self.sess.acknowledge_frame(&frame, AckOrNack::Ack);
                 },

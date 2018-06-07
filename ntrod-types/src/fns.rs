@@ -7,6 +7,24 @@ use std::str::FromStr;
 use super::schedule::Days;
 use super::cif::StpIndicator;
 
+pub fn parse_vstp_time<'de, D>(d: D) -> Result<Option<NaiveTime>, D::Error> where D: Deserializer<'de> {
+    Deserialize::deserialize(d)
+        .map(|x: Option<String>| {
+            if let Some(x) = x {
+                if let Ok(x) = NaiveTime::parse_from_str(x.trim(), "%H%M%S") {
+                    return Some(x);
+                }
+            }
+            None
+        })
+}
+pub fn parse_vstp_time_force<'de, D>(d: D) -> Result<NaiveTime, D::Error> where D: Deserializer<'de> {
+    let x: String = Deserialize::deserialize(d)?;
+    match NaiveTime::parse_from_str(x.trim(), "%H%M%S") {
+        Ok(res) => Ok(res),
+        Err(e) => Err(de::Error::custom(format!("failed to parse a VSTP time {}: {}", x, e)))
+    }
+}
 pub fn str_to_time(x: &str) -> Option<NaiveTime> {
     let half = x.contains("H");
     let x = x.replace("H", "");
