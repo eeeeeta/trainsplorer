@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css?family=Source+Sans+Pro');
+@import url('https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700');
 
 $toolkit-font-stack: "Source Sans Pro";
 $toolkit-font-stack-tabular: $toolkit-font-stack;
@@ -9,6 +9,9 @@ $nta-light: $toolkit-font-stack;
 
 body {
   font-family: $toolkit-font-stack;
+}
+strong, b {
+  font-weight: 700;
 }
 @media (min-width: 641px) {
   #ts-tiploc-autocomplete {
