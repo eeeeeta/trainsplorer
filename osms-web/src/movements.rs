@@ -9,13 +9,14 @@ use rocket::response::{Flash, Redirect};
 use rocket::request::Form;
 use rocket_contrib::Json;
 use std::collections::{BTreeMap, HashMap};
-
+use super::MovementSearchView;
 use schedules;
 use schedule;
 
 #[derive(Serialize)]
 pub struct MovementsView {
-    mvts: Vec<MovementDesc>
+    mvts: Vec<MovementDesc>,
+    mvt_search: MovementSearchView
 }
 #[derive(Serialize)]
 pub struct MovementDesc {
@@ -58,7 +59,7 @@ fn validate_movement_params(mvtp: MovementParams) -> Result<(String, String, Str
         .map_err(|e| format_err!("Error parsing time: {}", e))?;
     Ok((tiploc, date, time))
 }
-#[post("/", data = "<mvtp>")]
+#[post("/movements", data = "<mvtp>")]
 fn post_index_movements(mvtp: Form<MovementParams>) -> ::std::result::Result<Redirect, Flash<Redirect>> {
     match validate_movement_params(mvtp.into_inner()) {
         Ok((tiploc, date, time)) => {
@@ -147,7 +148,7 @@ fn movements(db: DbConn, station: String, date: String, time: String) -> Result<
         .into_iter()
         .map(|x| x.tiploc)
         .collect::<Vec<_>>();
-    tiplocs.push(station);
+    tiplocs.push(station.clone());
     let date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")?;
     let time = NaiveTime::parse_from_str(&time, "%H:%M")?;
     let wd: i32 = date.weekday().number_from_monday() as _;
@@ -207,7 +208,13 @@ fn movements(db: DbConn, station: String, date: String, time: String) -> Result<
     Ok(Template::render("movements", TemplateContext {
         title: "Movement search".into(),
         body: MovementsView {
-            mvts: descs
+            mvts: descs,
+            mvt_search: MovementSearchView {
+                error: None,
+                station: Some(station),
+                date: date.format("%Y-%m-%d").to_string(),
+                time: time.format("%H:%M").to_string()
+            }
         }
     }))
 }

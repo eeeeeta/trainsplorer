@@ -40,11 +40,17 @@ pub struct NotFoundView {
     uri: String
 }
 #[derive(Serialize)]
-pub struct FormView {
+pub struct MovementSearchView {
     error: Option<String>,
+    station: Option<String>,
     date: String,
     time: String
 }
+#[derive(Serialize)]
+pub struct IndexView {
+    mvt_search: MovementSearchView
+}
+
 #[error(500)]
 fn ise() -> Template {
     Template::render("ise", TemplateContext::title("500"))
@@ -73,10 +79,13 @@ fn index(fm: Option<FlashMessage>) -> Template {
     let time = now.format("%H:%M").to_string();
     let tctx = TemplateContext {
         title: "Home".into(),
-        body: FormView {
-            error: fm.map(|x| x.msg().to_string()),
-            date,
-            time
+        body: IndexView {
+            mvt_search: MovementSearchView {
+                error: fm.map(|x| x.msg().to_string()),
+                station: None,
+                date,
+                time
+            }
         }
     };
     Template::render("index", tctx)

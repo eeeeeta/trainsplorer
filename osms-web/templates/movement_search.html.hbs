@@ -1,0 +1,55 @@
+<script src="/js/autocomplete.js"></script>
+<form action="/movements" method="post">
+	<legend>
+		<h1 class="heading-medium">
+			Search for trains
+		</h1>
+	</legend>
+	{{#if body.mvt_search.error}}
+		<div class="error-summary" role="alert" aria-labelledby="error-summary-heading-example-1" tabindex="-1">
+
+			<h2 class="heading-medium error-summary-heading" id="error-summary-heading-example-1">
+				Invalid data provided
+			</h2>
+
+			<p>
+			{{body.mvt_search.error}}
+			</p>
+		</div>
+	{{/if}}
+	<div class="form-group">
+		<label class="form-label" for="ts-tiploc">
+			Location
+			<span class="form-hint" id="ts-tiploc-verbiage">
+				Type a TIPLOC or CRS code.
+				<br>
+				Example: 'STPANCI' for St Pancras Int'l.
+				<br>
+				(Turn on JavaScript for an interactive autocomplete system.)
+			</span>
+		</label>
+		<div id="ts-tiploc-autocomplete">
+			<input class="form-control" id="ts-tiploc" type="text" name="ts-tiploc" value="{{#if body.mvt_search.station}}{{body.mvt_search.station}}{{/if}}" required></input>
+		</div>
+	</div>
+	<div class="form-group">
+		<label class="form-label" for="ts-date">
+			Date
+			<span class="form-hint">
+				YYYY-MM-DD (ISO 8601) format.
+			</span>
+		</label>
+		<input class="form-control" id="ts-date" type="text" name="ts-date" value="{{body.mvt_search.date}}" required></input>
+	</div>
+	<div class="form-group">
+		<label class="form-label" for="ts-time">
+			Time
+			<span class="form-hint">
+				HH:MM format.
+			</span>
+		</label>
+		<input class="form-control" id="ts-time" type="text" name="ts-time" value="{{body.mvt_search.time}}" required></input>
+	</div>
+	<input class="button" type="submit" value="Find trains">
+</form>
+

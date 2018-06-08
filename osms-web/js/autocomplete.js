@@ -18,6 +18,8 @@ function suggestionTemplate(result) {
 	return "<strong>" + result.name + "</strong> <small><i>(" + result.code_type + " code " + result.code + ")</i></small>";
 }
 window.onload = function() {
+	var input = document.querySelector("#ts-tiploc");
+	var value = input.value ? input.value : "";
 	var auto = document.querySelector("#ts-tiploc-autocomplete");
 	auto.innerHTML = "";
 	var verbiage = document.querySelector("#ts-tiploc-verbiage");
@@ -27,6 +29,7 @@ window.onload = function() {
 		id: 'ts-tiploc',
 		name: 'ts-tiploc',
 		required: true,
+		defaultValue: value,
 		minLength: 3,
 		autoselect: true,
 		confirmOnBlur: false,
