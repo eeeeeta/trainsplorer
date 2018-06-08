@@ -23,6 +23,8 @@ use rocket_contrib::Template;
 use rocket::fairing::AdHoc;
 use std::path::{Path, PathBuf};
 use rocket::response::NamedFile;
+use rocket::request::{Request, FlashMessage};
+use chrono::*;
 
 pub mod tmpl;
 pub mod qb;
@@ -33,7 +35,29 @@ pub mod movements;
 use tmpl::TemplateContext;
 
 pub type Result<T> = ::std::result::Result<T, failure::Error>;
-
+#[derive(Serialize)]
+pub struct NotFoundView {
+    uri: String
+}
+#[derive(Serialize)]
+pub struct FormView {
+    error: Option<String>,
+    date: String,
+    time: String
+}
+#[error(500)]
+fn ise() -> Template {
+    Template::render("ise", TemplateContext::title("500"))
+}
+#[error(404)]
+fn not_found(req: &Request) -> Template {
+    Template::render("not_found", TemplateContext {
+        title: "404".into(),
+        body: NotFoundView {
+            uri: req.uri().to_string()
+        }
+    })
+}
 #[get("/<path..>", rank = 5)]
 fn file_static(path: PathBuf) -> Option<NamedFile> {
     NamedFile::open(Path::new("static/").join(path)).ok()
@@ -43,8 +67,19 @@ fn map() -> Template {
     Template::render("map", TemplateContext::title("Slippy map"))
 }
 #[get("/")]
-fn index() -> Template {
-    Template::render("index", TemplateContext::title("Home"))
+fn index(fm: Option<FlashMessage>) -> Template {
+    let now = Local::now();
+    let date = now.format("%Y-%m-%d").to_string();
+    let time = now.format("%H:%M").to_string();
+    let tctx = TemplateContext {
+        title: "Home".into(),
+        body: FormView {
+            error: fm.map(|x| x.msg().to_string()),
+            date,
+            time
+        }
+    };
+    Template::render("index", tctx)
 }
 
 fn main() {
@@ -54,10 +89,13 @@ fn main() {
             Ok(pool::attach_db(rocket))
         }))
         .attach(Template::fairing())
+        .catch(errors![not_found, ise])
         .mount("/", routes![
                index, 
                map,
+               movements::post_index_movements,
                movements::movements,
+               movements::station_suggestions,
                schedule::schedule,
                schedule::train,
                schedules::schedules_qs,

@@ -75,8 +75,9 @@ pub trait InsertableDbType: DbType {
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<Self::Id>;
 }
 pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
-    debug!("initialize_database: enabling PostGIS...");
+    debug!("initialize_database: enabling extensions...");
     conn.execute("CREATE EXTENSION IF NOT EXISTS postgis", &[])?;
+    conn.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm", &[])?;
     debug!("initialize_database: making types...");
     conn.execute(ntrod_types::schedule::Days::create_type(), &[])?;
     conn.execute(ntrod_types::cif::StpIndicator::create_type(), &[])?;

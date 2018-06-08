@@ -313,7 +313,8 @@ impl InsertableDbType for TrainMvt {
         Ok(ret.expect("No id in TrainMvt::insert?!"))
     }
 }
-
+// NB: If you change this, change the brittle SELECT
+// in the station_suggestions() function in osms-web!!
 #[derive(Debug, Clone)]
 pub struct MsnEntry {
     pub tiploc: String,
@@ -335,7 +336,10 @@ crs VARCHAR NOT NULL
     }
     fn indexes() -> Vec<&'static str> {
         vec![
-            "msn_entries_tiploc ON msn_entries (tiploc)"
+            "msn_entries_tiploc ON msn_entries (tiploc)",
+            "msn_entries_tiploc_trgm ON msn_entries USING gin (tiploc gin_trgm_ops)",
+            "msn_entries_name_trgm ON msn_entries USING gin (name gin_trgm_ops)",
+            "msn_entries_crs_trgm ON msn_entries USING gin (crs gin_trgm_ops)",
         ]
     }
     fn from_row(row: &Row) -> Self {
@@ -454,6 +458,8 @@ impl DbType for CorpusEntry {
     fn table_name() -> &'static str {
         "corpus_entries"
     }
+    // NB: If you change this, change the brittle SELECT
+    // in the station_suggestions() function in osms-web!!
     fn table_desc() -> &'static str {
         r#"
 stanox VARCHAR,
@@ -468,7 +474,10 @@ nlcdesc16 VARCHAR
     fn indexes() -> Vec<&'static str> {
         vec![
             "corpus_entries_stanox ON corpus_entries (stanox)",
-            "corpus_entries_tiploc ON corpus_entries (tiploc)"
+            "corpus_entries_tiploc ON corpus_entries (tiploc)",
+            "corpus_entries_nlcdesc_trgm ON corpus_entries USING gin (nlcdesc gin_trgm_ops)",
+            "corpus_entries_tiploc_trgm ON corpus_entries USING gin (tiploc gin_trgm_ops)",
+            "corpus_entries_crs_trgm ON corpus_entries USING gin (crs gin_trgm_ops)",
         ]
     }
     fn from_row(row: &Row) -> Self {

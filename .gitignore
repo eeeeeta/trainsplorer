@@ -14,3 +14,6 @@ Rocket.toml
 *.csv
 *.msn
 *.o5m
+node_modules/
+osms-web/static/sass/*
+osms-web/static/js/*
