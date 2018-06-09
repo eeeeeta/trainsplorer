@@ -21,7 +21,7 @@ pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()>
         } => {
             info!("Processing VSTP DELETE message id {} (UID {}, start {}, stp_indicator {:?})", msg.origin_msg_id, train_uid, schedule_start_date, stp_indicator);
             trans.execute("DELETE FROM schedules
-                          WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3",
+                          WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3 AND source = 1",
                           &[&train_uid, &schedule_start_date, &stp_indicator])?;
         },
         VstpScheduleRecord::Create {
