@@ -225,7 +225,7 @@ pub fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord
             if prev.len() > 0 {
                 debug!("apply_schedule_record: duplicate record, not inserting (UID {}, start {}, stp_indicator {:?})",
                 train_uid, schedule_start_date, stp_indicator);
-                conn.execute("UPDATE schedules WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3 AND source = 0 SET file_metaseq = $4",
+                conn.execute("UPDATE schedules SET file_metaseq = $4 WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3 AND source = 0",
                              &[&train_uid, &schedule_start_date.naive_utc(), &stp_indicator, &Some(metaseq)])?;
                 return Ok(());
             }
