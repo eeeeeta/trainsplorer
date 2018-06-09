@@ -199,88 +199,94 @@ pub fn corpus_entries<R: Read, T: GenericConnection>(conn: &T, file: R) -> Resul
     debug!("corpus_entries: inserted {} entries", inserted);
     Ok(())
 }
-pub fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord) -> Result<()> {
+pub fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, metaseq: i32) -> Result<()> {
     use ntrod_types::schedule::*;
     use ntrod_types::schedule::LocationRecord::*;
-
-    if let CreateOrDelete::Delete = rec.transaction_type {
-        debug!("apply_schedule_record: deleting schedules (UID {}, start {}, stp_indicator {:?})",
-        rec.train_uid, rec.schedule_start_date, rec.stp_indicator);
-        conn.execute("DELETE FROM schedules
-                          WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3",
-                          &[&rec.train_uid, &rec.schedule_start_date.naive_utc(), &rec.stp_indicator])?;
-        return Ok(());
-    }
-    let prev = Schedule::from_select(conn, "WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3",
-                                     &[&rec.train_uid, &rec.schedule_start_date.naive_utc(), &rec.stp_indicator])?;
-    if prev.len() > 0 {
-        debug!("apply_schedule_record: duplicate record, not inserting (UID {}, start {}, stp_indicator {:?})",
-        rec.train_uid, rec.schedule_start_date, rec.stp_indicator);
-        return Ok(());
-    }
-    debug!("apply_schedule_record: inserting record (UID {}, start {}, stp_indicator {:?})",
-    rec.train_uid, rec.schedule_start_date, rec.stp_indicator);
-    let ScheduleRecord {
-        train_uid,
-        schedule_start_date,
-        schedule_end_date,
-        schedule_days_runs,
-        stp_indicator,
-        schedule_segment,
-        ..
-    } = rec;
-    let ScheduleSegment {
-        schedule_location,
-        signalling_id,
-        ..
-    } = schedule_segment;
-    let sched = Schedule {
-        uid: train_uid,
-        start_date: schedule_start_date.naive_utc(),
-        end_date: schedule_end_date.naive_utc(),
-        days: schedule_days_runs,
-        stp_indicator,
-        signalling_id,
-        geo_generation: 0,
-        id: -1
-    };
-    let sid = sched.insert_self(conn)?;
-    let mut mvts = vec![];
-    for loc in schedule_location {
-        match loc {
-            Originating { tiploc_code, departure, .. } => {
-                mvts.push((tiploc_code, departure, 1, true));
-            },
-            Intermediate { tiploc_code, arrival, departure, .. } => {
-                mvts.push((tiploc_code.clone(), arrival, 0, false));
-                mvts.push((tiploc_code, departure, 1, false));
-            },
-            Pass { tiploc_code, pass, .. } => {
-                mvts.push((tiploc_code, pass, 2, false));
-            },
-            Terminating { tiploc_code, arrival, .. } => {
-                mvts.push((tiploc_code, arrival, 0, true));
+    match rec {
+        ScheduleRecord::Delete { train_uid, schedule_start_date, stp_indicator, ..} => {
+            debug!("apply_schedule_record: deleting schedules (UID {}, start {}, stp_indicator {:?})",
+            train_uid, schedule_start_date, stp_indicator);
+            conn.execute("DELETE FROM schedules
+                          WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3 AND source = 0",
+                          &[&train_uid, &schedule_start_date.naive_utc(), &stp_indicator])?;
+            Ok(())
+        },
+        ScheduleRecord::Create {
+            train_uid,
+            schedule_start_date,
+            schedule_end_date,
+            schedule_days_runs,
+            stp_indicator,
+            schedule_segment,
+            ..
+        } => {
+            let prev = Schedule::from_select(conn, "WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3",
+                                             &[&train_uid, &schedule_start_date.naive_utc(), &stp_indicator])?;
+            if prev.len() > 0 {
+                debug!("apply_schedule_record: duplicate record, not inserting (UID {}, start {}, stp_indicator {:?})",
+                train_uid, schedule_start_date, stp_indicator);
+                conn.execute("UPDATE schedules WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3 AND source = 0 SET file_metaseq = $4",
+                             &[&train_uid, &schedule_start_date.naive_utc(), &stp_indicator, &Some(metaseq)])?;
+                return Ok(());
             }
+            debug!("apply_schedule_record: inserting record (UID {}, start {}, stp_indicator {:?})",
+            train_uid, schedule_start_date, stp_indicator);
+            let ScheduleSegment {
+                schedule_location,
+                signalling_id,
+                ..
+            } = schedule_segment;
+            let sched = Schedule {
+                uid: train_uid,
+                start_date: schedule_start_date.naive_utc(),
+                end_date: schedule_end_date.naive_utc(),
+                days: schedule_days_runs,
+                stp_indicator,
+                signalling_id,
+                source: 0,
+                file_metaseq: Some(metaseq),
+                geo_generation: 0,
+                id: -1
+            };
+            let sid = sched.insert_self(conn)?;
+            let mut mvts = vec![];
+            for loc in schedule_location {
+                match loc {
+                    Originating { tiploc_code, departure, .. } => {
+                        mvts.push((tiploc_code, departure, 1, true));
+                    },
+                    Intermediate { tiploc_code, arrival, departure, .. } => {
+                        mvts.push((tiploc_code.clone(), arrival, 0, false));
+                        mvts.push((tiploc_code, departure, 1, false));
+                    },
+                    Pass { tiploc_code, pass, .. } => {
+                        mvts.push((tiploc_code, pass, 2, false));
+                    },
+                    Terminating { tiploc_code, arrival, .. } => {
+                        mvts.push((tiploc_code, arrival, 0, true));
+                    }
+                }
+            }
+            for (tiploc, time, action, origterm) in mvts {
+                let mvt = ScheduleMvt {
+                    parent_sched: sid,
+                    id: -1,
+                    starts_path: None,
+                    ends_path: None,
+                    tiploc, time, action, origterm
+                };
+                mvt.insert_self(conn)?;
+            }
+            Ok(())
         }
     }
-    for (tiploc, time, action, origterm) in mvts {
-        let mvt = ScheduleMvt {
-            parent_sched: sid,
-            id: -1,
-            starts_path: None,
-            ends_path: None,
-            tiploc, time, action, origterm
-        };
-        mvt.insert_self(conn)?;
-    }
-    Ok(())
 }
-pub fn apply_schedule_records<R: Read, T: GenericConnection>(conn: &T, file: R, restrict_atoc: Option<&str>) -> Result<()> {
+pub fn apply_schedule_records<R: Read, T: GenericConnection>(conn: &T, file: R) -> Result<()> {
     debug!("apply_schedule_records: running...");
     let mut inserted = 0;
     let trans = conn.transaction()?;
     let rdr = BufReader::new(file);
-    let mut verified = false;
+    let mut metaseq = None;
     for line in rdr.lines() {
         let line = line?;
         let rec: ::std::result::Result<schedule::Record, _> = ::serde_json::from_str(&line);
@@ -294,17 +300,14 @@ pub fn apply_schedule_records<R: Read, T: GenericConnection>(conn: &T, file: R, 
         };
         match rec {
             schedule::Record::Schedule(rec) => {
-                if !verified {
+                if let Some(ms) = metaseq {
+                    apply_schedule_record(&trans, rec, ms)?;
+                    inserted += 1;
+                }
+                else {
                     error!("apply_schedule_records: file contained no Timetable record!");
                     return Err(OsmsError::InvalidScheduleFile.into());
                 }
-                if let Some(atc) = restrict_atoc {
-                    if !rec.atoc_code.as_ref().map(|x| x == atc).unwrap_or(false) {
-                        continue;
-                    }
-                }
-                apply_schedule_record(&trans, rec)?;
-                inserted += 1;
             },
             schedule::Record::Timetable(rec) => {
                 debug!("apply_schedule_records: this is a {}-type timetable (seq {}) from {} (ts: {})",
@@ -327,9 +330,9 @@ pub fn apply_schedule_records<R: Read, T: GenericConnection>(conn: &T, file: R, 
                     metatype: rec.metadata.ty.clone(),
                     metaseq: rec.metadata.sequence as _
                 };
+                metaseq = Some(rec.metadata.sequence as i32);
                 file.insert_self(&trans)?;
                 debug!("apply_schedule_records: timetable OK");
-                verified = true;
             },
             _ => {}
         }

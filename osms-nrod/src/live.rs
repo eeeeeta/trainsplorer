@@ -1,4 +1,4 @@
-use ntrod_types::movements::{Activation, Cancellation, Movement, Record, MvtBody, EventType};
+use ntrod_types::movements::{Activation, Cancellation, Movement, Record, MvtBody, EventType, ScheduleSource};
 use ntrod_types::reference::CorpusEntry;
 use ntrod_types::vstp::Record as VstpRecord;
 use osms_db::ntrod::types::*;
@@ -48,6 +48,8 @@ pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()>
                 days: schedule_days_runs,
                 stp_indicator,
                 signalling_id,
+                source: 1,
+                file_metaseq: None,
                 geo_generation: 0,
                 id: -1
             };
@@ -107,13 +109,17 @@ pub fn process_ntrod_event<T: GenericConnection>(conn: &T, r: Record) -> Result<
 }
 pub fn process_activation<T: GenericConnection>(conn: &T, a: Activation) -> Result<()> {
     debug!("Processing activation of train {}...", a.train_id);
+    let src = match a.schedule_source {
+        ScheduleSource::CifItps => 0,
+        ScheduleSource::VstpTops => 1,
+    };
     let scheds = Schedule::from_select(conn,
-        "WHERE uid = $1 AND stp_indicator = $2 AND start_date = $3",
-        &[&a.train_uid, &a.schedule_type, &a.schedule_start_date])?;
+        "WHERE uid = $1 AND stp_indicator = $2 AND start_date = $3 AND source = $4",
+        &[&a.train_uid, &a.schedule_type, &a.schedule_start_date, &src])?;
     if scheds.len() == 0 {
         warn!("Failed to find a schedule.");
-        bail!("Failed to find a schedule (UID {}, start {}, stp_indicator {:?})",
-              a.train_uid, a.schedule_start_date, a.schedule_type);
+        bail!("Failed to find a schedule (UID {}, start {}, stp_indicator {:?}, src {})",
+              a.train_uid, a.schedule_start_date, a.schedule_type, src);
     }
     let mut auth_schedule: Option<Schedule> = None;
     for sched in scheds {

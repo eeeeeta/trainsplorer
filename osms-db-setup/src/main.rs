@@ -117,21 +117,9 @@ fn run() -> Result<(), Error> {
                     .about("Performs operations related to scheduling. Run 'init' once after completing 'setup', then run 'update' daily.")
                     .setting(AppSettings::SubcommandRequired)
                     .subcommand(SubCommand::with_name("init")
-                                .about("Downloads and imports the set of ALL Network Rail schedules. Run to initialise the database.")
-                                .arg(Arg::with_name("limit-toc")
-                                     .short("t")
-                                     .long("limit-toc")
-                                     .value_name("TOC")
-                                     .takes_value(true)
-                                     .help("Limit import to a given Train Operating Company (TOC)")))
+                                .about("Downloads and imports the set of ALL Network Rail schedules. Run to initialise the database."))
                     .subcommand(SubCommand::with_name("update")
-                                .about("Downloads and imports today's schedule update file.")
-                                .arg(Arg::with_name("limit-toc")
-                                     .short("t")
-                                     .long("limit-toc")
-                                     .value_name("TOC")
-                                     .takes_value(true)
-                                     .help("Limit import to a given Train Operating Company (TOC)")))
+                                .about("Downloads and imports today's schedule update file."))
                     .subcommand(SubCommand::with_name("ways")
                                 .about("Makes schedule ways for unprocessed schedules."))
         )
@@ -238,7 +226,7 @@ fn run() -> Result<(), Error> {
         },
         ("schedule", Some(opts)) => {
             match opts.subcommand() {
-                ("init", Some(opts)) => {
+                ("init", _) => {
                     let conn = pool.get().unwrap();
                     info!("Downloading & importing CIF_ALL_FULL_DAILY...");
                     let data = download("https://datafeeds.networkrail.co.uk/ntrod/CifFileAuthenticate?type=CIF_ALL_FULL_DAILY&day=toc-full",
@@ -246,9 +234,9 @@ fn run() -> Result<(), Error> {
                     let data = BufReader::new(data);
                     let data = GzDecoder::new(data)
                         .context(err_msg("couldn't start gunzipping schedule data file"))?;
-                    make::apply_schedule_records(&*conn, data, opts.value_of("limit_toc"))?;
+                    make::apply_schedule_records(&*conn, data)?;
                 },
-                ("update", Some(opts)) => {
+                ("update", _) => {
                     use chrono::*;
                     let conn = pool.get().unwrap();
                     let time = Utc::now();
@@ -268,7 +256,7 @@ fn run() -> Result<(), Error> {
                     let data = BufReader::new(data);
                     let data = GzDecoder::new(data)
                         .context(err_msg("couldn't start gunzipping schedule data file"))?;
-                    make::apply_schedule_records(&*conn, data, opts.value_of("limit_toc"))?;
+                    make::apply_schedule_records(&*conn, data)?;
                 },
                 ("ways", _) => {
                     make::geo_process_schedules(&pool, conf.threads)?;

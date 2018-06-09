@@ -19,6 +19,8 @@ mktest! {
     parse_schedule_v1_4, "schedule_v1_4.json", schedule::Record,
     parse_schedule_v1_5, "schedule_v1_5.json", schedule::Record,
     parse_schedule_v1_6, "schedule_v1_6.json", schedule::Record,
+    parse_schedule_delete_1, "schedule_delete_1.json", schedule::Record,
+    parse_schedule_assoc_delete_1, "schedule_assoc_delete_1.json", schedule::Record,
     parse_association_v1, "association_v1.json", schedule::Record,
     parse_timetable_v1, "timetable_v1.json", schedule::Record,
     parse_tiploc_v1, "tiploc_v1.json", schedule::Record,

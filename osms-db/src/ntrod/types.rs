@@ -22,8 +22,17 @@ pub struct Schedule {
     pub days: Days,
     /// STP indicator from NROD.
     pub stp_indicator: StpIndicator,
+    /// Signalling ID / headcode. Blank for freight services.
     pub signalling_id: Option<String>,
-    pub geo_generation: i32
+    pub geo_generation: i32,
+    /// Source - one of:
+    ///
+    /// - 0 for schedules from CIF/ITPS
+    /// - 1 for schedules from VSTP/TOPS
+    pub source: i32,
+    /// The sequence number of the file this was imported from,
+    /// if imported from CIF/ITPS
+    pub file_metaseq: Option<i32>
 }
 impl DbType for Schedule {
     fn table_name() -> &'static str {
@@ -39,7 +48,9 @@ days "Days" NOT NULL,
 stp_indicator "StpIndicator" NOT NULL,
 signalling_id VARCHAR,
 geo_generation INT NOT NULL DEFAULT 0,
-UNIQUE(uid, start_date, stp_indicator)
+source INT NOT NULL DEFAULT 0,
+file_metaseq INT,
+UNIQUE(uid, start_date, stp_indicator, source)
 "#
     }
     fn from_row(row: &Row) -> Self {
@@ -52,6 +63,8 @@ UNIQUE(uid, start_date, stp_indicator)
             stp_indicator: row.get(5),
             signalling_id: row.get(6),
             geo_generation: row.get(7),
+            source: row.get(8),
+            file_metaseq: row.get(9),
         }
     }
 }

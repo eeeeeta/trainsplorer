@@ -1,4 +1,4 @@
-use super::schedule::{YesOrNo, Days};
+use super::schedule::{YesOrNo, Days, CreateType, DeleteType};
 use super::cif::*;
 use super::fns::*;
 use chrono::*;
@@ -19,14 +19,6 @@ pub struct VstpMessage {
     #[serde(rename = "originMsgId", deserialize_with = "non_empty_str")]
     pub origin_msg_id: String,
     pub schedule: VstpScheduleRecord
-}
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
-pub enum CreateType {
-    Create
-}
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
-pub enum DeleteType {
-    Delete
 }
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]

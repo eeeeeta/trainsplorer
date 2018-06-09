@@ -147,6 +147,15 @@ pub enum DateIndicator {
     #[serde(rename = "P")]
     PrevMidnight
 }
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+pub enum CreateType {
+    Create
+}
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+pub enum DeleteType {
+    Delete
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]
 pub struct Sender {
@@ -174,25 +183,44 @@ pub struct TimetableRecord {
     #[serde(rename = "Metadata")]
     pub metadata: TimetableMetadata
 }
+// FIXMEs (c.f. schedule_assoc_delete_1.json):
+// - the DateTime isn't parsed like the other ones; why?
+// - diagram_type field is strangely missing
 #[derive(Deserialize, Clone, Debug)]
-pub struct AssociationRecord {
-    pub transaction_type: CreateOrDelete,
-    #[serde(deserialize_with = "non_empty_str")]
-    pub main_train_uid: String,
-    #[serde(deserialize_with = "non_empty_str")]
-    pub assoc_train_uid: String,
-    pub assoc_start_date: DateTime<Utc>,
-    pub assoc_end_date: DateTime<Utc>,
-    #[serde(deserialize_with = "parse_days")]
-    pub assoc_days: Days,
-    pub category: AssociationType,
-    pub location: String,
-    #[serde(deserialize_with = "non_empty_str_opt")]
-    pub base_location_suffix: Option<String>,
-    #[serde(deserialize_with = "non_empty_str_opt")]
-    pub assoc_location_suffix: Option<String>,
-    #[serde(rename = "CIF_stp_indicator")]
-    pub stp_indicator: StpIndicator,
+#[serde(untagged)]
+pub enum AssociationRecord {
+    Create {
+        transaction_type: CreateType,
+        #[serde(deserialize_with = "non_empty_str")]
+        main_train_uid: String,
+        #[serde(deserialize_with = "non_empty_str")]
+        assoc_train_uid: String,
+        assoc_start_date: DateTime<Utc>,
+        assoc_end_date: DateTime<Utc>,
+        #[serde(deserialize_with = "parse_days")]
+        assoc_days: Days,
+        category: AssociationType,
+        location: String,
+        #[serde(deserialize_with = "non_empty_str_opt")]
+        base_location_suffix: Option<String>,
+        #[serde(deserialize_with = "non_empty_str_opt")]
+        assoc_location_suffix: Option<String>,
+        #[serde(rename = "CIF_stp_indicator")]
+        stp_indicator: StpIndicator,
+    },
+    Delete {
+        transaction_type: DeleteType,
+        #[serde(deserialize_with = "non_empty_str")]
+        main_train_uid: String,
+        #[serde(deserialize_with = "non_empty_str")]
+        assoc_train_uid: String,
+        assoc_start_date: DateTime<Utc>,
+        location: String,
+        #[serde(deserialize_with = "non_empty_str_opt")]
+        base_location_suffix: Option<String>,
+        #[serde(rename = "CIF_stp_indicator")]
+        stp_indicator: StpIndicator,
+    }
 }
 #[derive(Deserialize, Clone, Debug)]
 pub struct ScheduleSegment {
@@ -242,26 +270,38 @@ pub struct TiplocRecord {
     pub tps_description: Option<String>
 }
 #[derive(Deserialize, Clone, Debug)]
-pub struct ScheduleRecord {
-    #[serde(rename = "CIF_train_uid", deserialize_with = "non_empty_str")]
-    pub train_uid: String,
-    pub transaction_type: CreateOrDelete,
-    #[serde(deserialize_with = "naive_date_to_london")]
-    pub schedule_start_date: Date<Tz>,
-    #[serde(deserialize_with = "naive_date_to_london")]
-    pub schedule_end_date: Date<Tz>,
-    #[serde(deserialize_with = "parse_days")]
-    pub schedule_days_runs: Days,
-    #[serde(rename = "CIF_bank_holiday_running", deserialize_with = "non_empty_str_opt")]
-    pub bank_holiday_running: Option<String>,
-    pub train_status: TrainStatus,
-    #[serde(rename = "CIF_stp_indicator")]
-    pub stp_indicator: StpIndicator,
-    #[serde(default)]
-    pub applicable_timetable: YesOrNo,
-    #[serde(default, deserialize_with = "non_empty_str_opt")]
-    pub atoc_code: Option<String>,
-    pub schedule_segment: ScheduleSegment,
+#[serde(untagged)]
+pub enum ScheduleRecord {
+    Create {
+        #[serde(rename = "CIF_train_uid", deserialize_with = "non_empty_str")]
+        train_uid: String,
+        transaction_type: CreateType,
+        #[serde(deserialize_with = "naive_date_to_london")]
+        schedule_start_date: Date<Tz>,
+        #[serde(deserialize_with = "naive_date_to_london")]
+        schedule_end_date: Date<Tz>,
+        #[serde(deserialize_with = "parse_days")]
+        schedule_days_runs: Days,
+        #[serde(rename = "CIF_bank_holiday_running", deserialize_with = "non_empty_str_opt")]
+        bank_holiday_running: Option<String>,
+        train_status: TrainStatus,
+        #[serde(rename = "CIF_stp_indicator")]
+        stp_indicator: StpIndicator,
+        #[serde(default)]
+        applicable_timetable: YesOrNo,
+        #[serde(default, deserialize_with = "non_empty_str_opt")]
+        atoc_code: Option<String>,
+        schedule_segment: ScheduleSegment,
+    },
+    Delete {
+        #[serde(rename = "CIF_train_uid", deserialize_with = "non_empty_str")]
+        train_uid: String,
+        transaction_type: DeleteType,
+        #[serde(deserialize_with = "naive_date_to_london")]
+        schedule_start_date: Date<Tz>,
+        #[serde(rename = "CIF_stp_indicator")]
+        stp_indicator: StpIndicator,
+    }
 }
 #[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub enum OriginatingLocation {
