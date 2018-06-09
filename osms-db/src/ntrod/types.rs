@@ -166,7 +166,10 @@ ends_path INT REFERENCES station_paths ON DELETE RESTRICT
     }
     fn indexes() -> Vec<&'static str> {
         vec![
-            "schedule_movements_parent_sched ON schedule_movements (parent_sched)"
+            "schedule_movements_parent_sched ON schedule_movements (parent_sched)",
+            "schedule_movements_tiploc ON schedule_movements (tiploc)",
+            "schedule_movements_time ON schedule_movements (time)",
+            "schedule_movements_tiploc_time ON schedule_movements (tiploc, time)",
         ]
     }
     fn from_row(row: &Row) -> Self {
