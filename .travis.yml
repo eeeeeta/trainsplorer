@@ -6,8 +6,15 @@ notifications:
     on_success: change
     on_failure: always
     on_start: never
-rust:
-  - nightly
-script:
-  - cargo build --verbose --all
-  - cargo test --verbose --all
+matrix:
+  include:
+    - rust: nightly
+      script:
+      - cargo build --verbose --all
+      - cargo test --verbose --all
+    - rust: stable
+      script:
+      - cargo build --verbose --all --exclude osms-web
+      - cargo test --verbose --all --exclude osms-web
+  allow_failures:
+    - rust: nightly
