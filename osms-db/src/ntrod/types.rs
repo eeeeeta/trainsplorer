@@ -73,11 +73,11 @@ impl InsertableDbType for Schedule {
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
         let qry = conn.query(
             "INSERT INTO schedules
-             (uid, start_date, end_date, days, stp_indicator, signalling_id)
-             VALUES ($1, $2, $3, $4, $5, $6)
+             (uid, start_date, end_date, days, stp_indicator, signalling_id, geo_generation, source, file_metaseq)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
              RETURNING id",
             &[&self.uid, &self.start_date, &self.end_date, &self.days, &self.stp_indicator,
-              &self.signalling_id])?;
+              &self.signalling_id, &self.geo_generation, &self.source, &self.file_metaseq])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))
