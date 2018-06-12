@@ -348,12 +348,12 @@ pub fn geo_process_schedules(pool: &DbPool, n_threads: usize) -> Result<()> {
     use osms_db::osm;
 
     let n_schedules = util::count(&*pool.get().unwrap(), "FROM schedules WHERE geo_generation = 0", &[])?;
-    let mut threads = vec![];
+    let mut threads: Vec<::std::thread::JoinHandle<()>> = vec![];
     let processed = Arc::new(AtomicUsize::new(0));
     debug!("geo_process_schedules: {} schedules to process", n_schedules);
     for n in 0..n_threads {
         let pool = pool.clone();
-        let proc = processed.clone();
+        let p = processed.clone();
         debug!("geo_process_schedules: starting thread {}", n);
         threads.push(::std::thread::spawn(move || {
             let conn = pool.get().unwrap();
@@ -369,7 +369,7 @@ pub fn geo_process_schedules(pool: &DbPool, n_threads: usize) -> Result<()> {
                 osm::geo_process_schedule(&*conn2, sched).unwrap();
                 trans.execute("UPDATE schedules SET geo_generation = 1 WHERE id = $1", &[&id]).unwrap();
                 trans.commit().unwrap();
-                let cnt = proc.fetch_add(1, Ordering::Relaxed);
+                let cnt = p.fetch_add(1, Ordering::Relaxed);
                 debug!("geo_process_schedules: {} of {} schedules processed ({:.02}%)", cnt, n_schedules, ((cnt as f32 / n_schedules as f32) * 100.0f32));
             }
             debug!("geo_process_schedules: thread {} done", n);
