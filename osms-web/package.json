@@ -10,7 +10,7 @@
     "govuk_template_mustache": "^0.24.0"
   },
   "devDependencies": {
-    "gulp": "^3.9.1",
+    "gulp": "^4.0.0",
     "gulp-cssimport": "^6.0.1",
     "gulp-js-import": "^1.0.6",
     "gulp-sass": "^4.0.1"

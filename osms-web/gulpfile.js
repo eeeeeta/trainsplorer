@@ -23,4 +23,4 @@ gulp.task('js', () => {
     .pipe(jsImport({hideConsole: true}))
     .pipe(gulp.dest('./static/js/'));
 });
-gulp.task('default', ['sass', 'js']);
+gulp.task('default', gulp.parallel('sass', 'js'));
