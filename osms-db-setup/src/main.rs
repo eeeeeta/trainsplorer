@@ -282,5 +282,6 @@ fn main() {
         else {
             error!("backtrace: {}", e.backtrace());
         }
+        ::std::process::exit(1);
     }
 }
