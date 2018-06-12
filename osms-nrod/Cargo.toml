@@ -30,4 +30,4 @@ path = "../ntrod-types"
 path = "../osms-db"
 
 [dependencies.stomp]
-git = "https://github.com/eeeeeta/stomp-rs"
+git = "https://github.com/zslayton/stomp-rs"
