@@ -1,0 +1,5 @@
+database_url = "postgresql://postgres@localhost/osm_test"
+require_tls = false
+threads = 1
+nrod_user = "blargh"
+nrod_pass = "blargh"

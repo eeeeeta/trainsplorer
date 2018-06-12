@@ -6,17 +6,24 @@ notifications:
     on_success: change
     on_failure: always
     on_start: never
+services:
+  - postgresql
+before_script:
+  - psql -c 'CREATE DATABASE osm_test;' -U postgres
+  - cp osms-db-setup/config.toml.travis osms-db-setup/config.toml
 matrix:
   include:
     - rust: nightly
       script:
         - cargo build --verbose --all
         - cargo test --verbose --all
+        - cargo run -p osms-db-setup -- setup init
     - rust: stable
       cache: cargo
       script:
         - cargo build --verbose --all --exclude osms-web
         - cargo test --verbose --all --exclude osms-web
+        - cargo run -p osms-db-setup -- setup init
     - language: node_js
       node_js:
         - node
