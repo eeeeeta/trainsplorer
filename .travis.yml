@@ -13,6 +13,7 @@ matrix:
         - cargo build --verbose --all
         - cargo test --verbose --all
     - rust: stable
+      cache: cargo
       script:
         - cargo build --verbose --all --exclude osms-web
         - cargo test --verbose --all --exclude osms-web
