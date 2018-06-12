@@ -1,3 +1,5 @@
+@import '../node_modules/leaflet/dist/leaflet.js';
+@import '../node_modules/leaflet-draw/dist/leaflet.draw.js';
 function on_each_way(feature, layer) {
 	if (feature.properties && feature.properties.p1 && feature.properties.p2) {
 		layer.bindPopup("Link " + feature.properties.p1 + " <-> " +
@@ -58,8 +60,8 @@ function confirm_correction(poly, input, div) {
 		return;
 	}
 	var data = {
-		poly: poly.toGeoJSON(),
-		name: input.value
+		"poly": poly.toGeoJSON(),
+		"name": input.value
 	};
 	fetch("/geo/correct_station", {
 		body: JSON.stringify(data),

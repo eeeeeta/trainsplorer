@@ -17,3 +17,4 @@ Rocket.toml
 node_modules/
 osms-web/static/sass/*
 osms-web/static/js/*
+osms-web/static/ext/*

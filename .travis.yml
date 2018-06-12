@@ -24,3 +24,4 @@ matrix:
         - cd osms-web && npm install && npx gulp
   allow_failures:
     - rust: nightly
+  fast_finish: true
