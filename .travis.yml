@@ -19,9 +19,7 @@ matrix:
     - language: node_js
       node_js:
         - node
-      before_script:
-        - npm install -g gulp-cli
       script:
-        - cd osms-web && gulp
+        - cd osms-web && npm install && npx gulp
   allow_failures:
     - rust: nightly
