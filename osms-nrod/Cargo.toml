@@ -2,6 +2,7 @@
 authors = ["eeeeeta <eeeeeta@users.noreply.github.com>"]
 name = "osms-nrod"
 version = "0.1.0"
+license = "AGPL-3.0"
 
 [dependencies]
 cadence = "0.12.2"
