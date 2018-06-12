@@ -28,7 +28,7 @@ path = "../ntrod-types"
 version = "0.6"
 
 [dependencies.postgres]
-features = ["with-chrono"]
+features = ["with-chrono", "with-serde_json"]
 version = "0.15"
 
 [dev-dependencies]

@@ -3,8 +3,9 @@ use ntrod_types::reference::CorpusEntry;
 use ntrod_types::vstp::Record as VstpRecord;
 use osms_db::ntrod::types::*;
 use osms_db::db::{DbType, InsertableDbType, GenericConnection};
+use errors::NrodError;
 
-type Result<T> = ::std::result::Result<T, ::failure::Error>;
+type Result<T> = ::std::result::Result<T, NrodError>;
 
 pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()> {
     let trans = conn.transaction()?;
@@ -35,7 +36,7 @@ pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()>
         } => {
             info!("Processing VSTP CREATE message id {} (UID {}, start {}, stp_indicator {:?})", msg.origin_msg_id, train_uid, schedule_start_date, stp_indicator);
             let schedule_segment = schedule_segment.into_iter().nth(0)
-                .ok_or(format_err!("no schedule segment"))?;
+                .ok_or(NrodError::NoScheduleSegment)?;
             let VstpScheduleSegment {
                 schedule_location,
                 signalling_id,
@@ -97,12 +98,10 @@ pub fn process_ntrod_event<T: GenericConnection>(conn: &T, r: Record) -> Result<
         MvtBody::Cancellation(a) => process_cancellation(conn, a)?,
         MvtBody::Movement(a) => process_movement(conn, a)?,
         MvtBody::Unknown(v) => {
-            warn!("Got unknown value: {:?}", v);
-            bail!("Unknown value received");
+            return Err(NrodError::UnknownMvtBody(v));
         },
         _ => {
-            warn!("Don't know/care about message type {} yet!", header.msg_type);
-            bail!("Unimplemented message type");
+            return Err(NrodError::UnimplementedMessageType(header.msg_type));
         }
     }
     Ok(())
@@ -117,9 +116,15 @@ pub fn process_activation<T: GenericConnection>(conn: &T, a: Activation) -> Resu
         "WHERE uid = $1 AND stp_indicator = $2 AND start_date = $3 AND source = $4",
         &[&a.train_uid, &a.schedule_type, &a.schedule_start_date, &src])?;
     if scheds.len() == 0 {
-        warn!("Failed to find a schedule.");
-        bail!("Failed to find a schedule (UID {}, start {}, stp_indicator {:?}, src {})",
-              a.train_uid, a.schedule_start_date, a.schedule_type, src);
+        debug!("Failed to find a schedule.");
+        return Err(NrodError::NoSchedules {
+            train_uid: a.train_uid,
+            start_date: a.schedule_start_date,
+            stp_indicator: a.schedule_type,
+            source: src,
+            train_id: a.train_id,
+            date: a.origin_dep_timestamp.date()
+        });
     }
     let mut auth_schedule: Option<Schedule> = None;
     for sched in scheds {
@@ -128,9 +133,7 @@ pub fn process_activation<T: GenericConnection>(conn: &T, a: Activation) -> Resu
         }
         else {
             if auth_schedule.is_some() {
-                error!("Schedules #{} and #{} are both authoritative!",
-                       sched.id, auth_schedule.as_ref().unwrap().id);
-                bail!("Two authoritative schedules");
+                return Err(NrodError::TwoAuthoritativeSchedules(sched.id, auth_schedule.as_ref().unwrap().id));
             }
             auth_schedule = Some(sched);
         }
@@ -139,9 +142,7 @@ pub fn process_activation<T: GenericConnection>(conn: &T, a: Activation) -> Resu
         sch
     }
     else {
-        error!("No schedules are authoritative (UID {}, start {}, stp_indicator {:?})",
-        a.train_uid, a.schedule_start_date, a.schedule_type);
-        bail!("No authoritative schedules");
+        return Err(NrodError::NoAuthoritativeSchedules(a.train_uid, a.schedule_start_date, a.schedule_type, src));
     };
     let train = Train {
         id: -1,
@@ -175,7 +176,7 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
     let trains = Train::from_select(conn, "WHERE trust_id = $1 AND (date = $2 OR date = ($2 - interval '1 day'))", &[&m.train_id, &m.actual_timestamp.date()])?;
     let train = match trains.into_iter().nth(0) {
         Some(t) => t,
-        None => bail!("No train found for ID {}", m.train_id)
+        None => return Err(NrodError::NoTrainFound(m.train_id, m.actual_timestamp.date())),
     };
     let entries = CorpusEntry::from_select(conn, "WHERE stanox = $1 AND tiploc IS NOT NULL",
                                            &[&m.loc_stanox])?;
@@ -194,7 +195,7 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
     debug!("Querying for movements - parent_sched = {}, tiplocs = {:?}, actions = {:?}", train.parent_sched, tiplocs, acceptable_actions);
     let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = ANY($2) AND action = ANY($3) AND COALESCE(time = $4, TRUE) ORDER BY time ASC", &[&train.parent_sched, &tiplocs, &acceptable_actions, &m.planned_timestamp.map(|x| x.time())])?;
     if mvts.len() == 0 {
-        bail!("no movements for sched {}, actions {:?}, tiplocs {:?}, time {:?}", train.parent_sched, acceptable_actions, tiplocs, m.planned_timestamp.map(|x| x.time()));
+        return Err(NrodError::NoMovementsFound(train.parent_sched, acceptable_actions, tiplocs, m.planned_timestamp.map(|x| x.time())));
     }
     let mvt = mvts.into_iter().nth(0).unwrap();
     let tmvt = TrainMvt {

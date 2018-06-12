@@ -99,6 +99,7 @@ pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
     StationOverride::make_table(conn)?;
     ProblematicStation::make_table(conn)?;
     StationNavigationProblem::make_table(conn)?;
+    PendingMessage::make_table(conn)?;
     ntrod_types::reference::CorpusEntry::make_table(conn)?;
     Ok(())
 }

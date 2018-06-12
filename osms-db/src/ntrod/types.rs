@@ -4,6 +4,7 @@ use ntrod_types::schedule::*;
 use ntrod_types::cif::*;
 use chrono::*;
 use errors::*;
+use serde_json::Value;
 
 pub use ntrod_types::reference::CorpusEntry;
 
@@ -425,7 +426,57 @@ impl InsertableDbType for NaptanEntry {
         Ok(())
     }
 }
-
+/// A message from TRUST that we can't process yet, because we don't have the schedule data.
+#[derive(Debug, Clone)]
+pub struct PendingMessage {
+    pub id: i32,
+    /// Message type - one of:
+    ///
+    /// - 0: activation
+    /// - 1: cancellation
+    /// - 2: movement
+    pub kind: i32,
+    /// Which TRUST train ID this applies to.
+    pub train_id: String,
+    /// Date this message was received.
+    pub date: NaiveDate,
+    /// JSON message data.
+    pub data: Value
+}
+impl DbType for PendingMessage {
+    fn table_name() -> &'static str {
+        "pending_messages"
+    }
+    fn table_desc() -> &'static str {
+        r#"
+id SERIAL PRIMARY KEY,
+kind INT NOT NULL,
+train_id VARCHAR NOT NULL,
+date DATE NOT NULL,
+data JSON NOT NULL,
+UNIQUE(train_id, date)
+"#
+    }
+    fn from_row(row: &Row) -> Self {
+        Self {
+            id: row.get(0),
+            kind: row.get(1),
+            train_id: row.get(2),
+            date: row.get(3),
+            data: row.get(4),
+        }
+    }
+}
+impl InsertableDbType for PendingMessage {
+    type Id = ();
+    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<()> {
+        conn.execute("INSERT INTO pending_messages
+                      (id, kind, train_id, date, data)
+                      VALUES ($1, $2, $3)",
+                     &[&self.id, &self.kind, &self.train_id, &self.date, &self.data])?;
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ScheduleFile {

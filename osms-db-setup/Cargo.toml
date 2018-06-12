@@ -41,5 +41,5 @@ path = "../ntrod-types"
 path = "../osms-db"
 
 [dependencies.postgres]
-features = ["with-native-tls"]
+features = ["with-native-tls", "with-serde_json"]
 version = "0.15"

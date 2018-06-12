@@ -1,6 +1,6 @@
 extern crate stomp;
 extern crate serde_json;
-extern crate osms_db;
+#[macro_use] extern crate osms_db;
 extern crate ntrod_types;
 #[macro_use] extern crate log;
 extern crate toml;
@@ -37,6 +37,7 @@ use ntrod_types::movements::{Records, MvtBody};
 use ntrod_types::vstp::Record as VstpRecord;
 use r2d2_postgres::{PostgresConnectionManager, TlsMode};
 
+mod errors;
 mod live;
 
 #[derive(Deserialize)]
