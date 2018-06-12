@@ -10,11 +10,18 @@ matrix:
   include:
     - rust: nightly
       script:
-      - cargo build --verbose --all
-      - cargo test --verbose --all
+        - cargo build --verbose --all
+        - cargo test --verbose --all
     - rust: stable
       script:
-      - cargo build --verbose --all --exclude osms-web
-      - cargo test --verbose --all --exclude osms-web
+        - cargo build --verbose --all --exclude osms-web
+        - cargo test --verbose --all --exclude osms-web
+    - language: node_js
+      node_js:
+        - node
+      before_script:
+        - npm install -g gulp-cli
+      script:
+        - cd osms-web && gulp
   allow_failures:
     - rust: nightly
