@@ -317,6 +317,7 @@ fn run() -> Result<(), Error> {
         },
         ("migration", Some(opts)) => {
             let conn = pool.get().unwrap();
+            migration::initialize_migrations(&*conn)?;
             match opts.subcommand() {
                 ("list", _) => {
                     use db::DbType;
@@ -331,7 +332,7 @@ fn run() -> Result<(), Error> {
                     }
                 },
                 ("run", _) => {
-                    migration::initialize_migrations(&*conn)?;
+                    db::initialize_database(&*conn)?;
                 },
                 (_, None) => panic!("invalid subcommand"),
                 (a, Some(opts)) => {

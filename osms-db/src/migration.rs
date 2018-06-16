@@ -91,6 +91,9 @@ pub fn initialize_migrations<T: GenericConnection>(conn: &T) -> Result<()> {
         id INT UNIQUE NOT NULL,
         timestamp TIMESTAMP NOT NULL
     )"#, &[])?;
+    Ok(())
+}
+pub fn run_pending_migrations<T: GenericConnection>(conn: &T) -> Result<()> {
     let mut last_migration = get_last_migration(conn)?
         .unwrap_or(::std::i32::MIN);
     debug!("last migration ID = {}", last_migration);

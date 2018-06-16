@@ -44,5 +44,6 @@ pub trait InsertableDbType: DbType {
 }
 pub fn initialize_database<T: GenericConnection>(conn: &T) -> Result<()> {
     migration::initialize_migrations(conn)?;
+    migration::run_pending_migrations(conn)?;
     Ok(())
 }
