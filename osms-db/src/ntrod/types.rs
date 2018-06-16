@@ -4,7 +4,6 @@ use ntrod_types::schedule::*;
 use ntrod_types::cif::*;
 use chrono::*;
 use errors::*;
-use serde_json::Value;
 
 pub use ntrod_types::reference::CorpusEntry;
 
@@ -38,21 +37,6 @@ pub struct Schedule {
 impl DbType for Schedule {
     fn table_name() -> &'static str {
         "schedules"
-    }
-    fn table_desc() -> &'static str {
-        r#"
-id SERIAL PRIMARY KEY,
-uid VARCHAR NOT NULL,
-start_date DATE NOT NULL,
-end_date DATE NOT NULL,
-days "Days" NOT NULL,
-stp_indicator "StpIndicator" NOT NULL,
-signalling_id VARCHAR,
-geo_generation INT NOT NULL DEFAULT 0,
-source INT NOT NULL DEFAULT 0,
-file_metaseq INT,
-UNIQUE(uid, start_date, stp_indicator, source)
-"#
     }
     fn from_row(row: &Row) -> Self {
         Self {
@@ -160,26 +144,6 @@ impl DbType for ScheduleMvt {
     fn table_name() -> &'static str {
         "schedule_movements"
     }
-    fn table_desc() -> &'static str {
-        r#"
-id SERIAL PRIMARY KEY,
-parent_sched INT NOT NULL REFERENCES schedules ON DELETE CASCADE,
-tiploc VARCHAR NOT NULL,
-action INT NOT NULL,
-origterm BOOL NOT NULL,
-time TIME NOT NULL,
-starts_path INT REFERENCES station_paths ON DELETE RESTRICT,
-ends_path INT REFERENCES station_paths ON DELETE RESTRICT
-"#
-    }
-    fn indexes() -> Vec<&'static str> {
-        vec![
-            "schedule_movements_parent_sched ON schedule_movements (parent_sched)",
-            "schedule_movements_tiploc ON schedule_movements (tiploc)",
-            "schedule_movements_time ON schedule_movements (time)",
-            "schedule_movements_tiploc_time ON schedule_movements (tiploc, time)",
-        ]
-    }
     fn from_row(row: &Row) -> Self {
         Self {
             id: row.get(0),
@@ -231,25 +195,6 @@ impl DbType for Train {
     fn table_name() -> &'static str {
         "trains"
     }
-    fn table_desc() -> &'static str {
-        r#"
-id SERIAL PRIMARY KEY,
-parent_sched INT NOT NULL REFERENCES schedules ON DELETE CASCADE,
-trust_id VARCHAR NOT NULL,
-date DATE NOT NULL,
-signalling_id VARCHAR NOT NULL,
-cancelled BOOL NOT NULL DEFAULT false,
-terminated BOOL NOT NULL DEFAULT false,
-UNIQUE(trust_id, date)
-"#
-    }
-    fn indexes() -> Vec<&'static str> {
-        vec![
-            "trains_parent_sched ON trains (parent_sched)",
-            "trains_date ON trains (date)",
-            "trains_trust_id_date ON trains (trust_id, date)"
-        ]
-    }
     fn from_row(row: &Row) -> Self {
         Self {
             id: row.get(0),
@@ -298,20 +243,6 @@ impl DbType for TrainMvt {
     fn table_name() -> &'static str {
         "train_movements"
     }
-    fn table_desc() -> &'static str {
-        r#"
-id SERIAL PRIMARY KEY,
-parent_train INT NOT NULL REFERENCES trains ON DELETE CASCADE,
-parent_mvt INT NOT NULL REFERENCES schedule_movements ON DELETE CASCADE,
-time TIME NOT NULL,
-source INT NOT NULL
-        "#
-    }
-    fn indexes() -> Vec<&'static str> {
-        vec![
-            "train_movements_parent_mvt_parent_train ON train_movements (parent_mvt, parent_train)"
-        ]
-    }
     fn from_row(row: &Row) -> Self {
         Self {
             id: row.get(0),
@@ -350,22 +281,6 @@ impl DbType for MsnEntry {
     fn table_name() -> &'static str {
         "msn_entries"
     }
-    fn table_desc() -> &'static str {
-        r#"
-tiploc VARCHAR NOT NULL,
-name VARCHAR NOT NULL,
-cate INT NOT NULL,
-crs VARCHAR NOT NULL
-"#
-    }
-    fn indexes() -> Vec<&'static str> {
-        vec![
-            "msn_entries_tiploc ON msn_entries (tiploc)",
-            "msn_entries_tiploc_trgm ON msn_entries USING gin (tiploc gin_trgm_ops)",
-            "msn_entries_name_trgm ON msn_entries USING gin (name gin_trgm_ops)",
-            "msn_entries_crs_trgm ON msn_entries USING gin (crs gin_trgm_ops)",
-        ]
-    }
     fn from_row(row: &Row) -> Self {
         Self {
             tiploc: row.get(0),
@@ -397,15 +312,6 @@ impl DbType for NaptanEntry {
     fn table_name() -> &'static str {
         "naptan_entries"
     }
-    fn table_desc() -> &'static str {
-        r#"
-atco VARCHAR UNIQUE NOT NULL,
-tiploc VARCHAR PRIMARY KEY,
-crs VARCHAR NOT NULL,
-name VARCHAR NOT NULL,
-loc geometry NOT NULL
-"#
-    }
     fn from_row(row: &Row) -> Self {
         Self {
             atco: row.get(0),
@@ -426,6 +332,7 @@ impl InsertableDbType for NaptanEntry {
         Ok(())
     }
 }
+/*
 /// A message from TRUST that we can't process yet, because we don't have the schedule data.
 #[derive(Debug, Clone)]
 pub struct PendingMessage {
@@ -477,7 +384,7 @@ impl InsertableDbType for PendingMessage {
         Ok(())
     }
 }
-
+*/
 #[derive(Debug, Clone)]
 pub struct ScheduleFile {
     pub id: i32,
@@ -488,14 +395,6 @@ pub struct ScheduleFile {
 impl DbType for ScheduleFile {
     fn table_name() -> &'static str {
         "schedule_files"
-    }
-    fn table_desc() -> &'static str {
-        r#"
-id SERIAL PRIMARY KEY,
-timestamp BIGINT UNIQUE NOT NULL,
-metatype VARCHAR NOT NULL,
-metaseq INT NOT NULL
-"#
     }
     fn from_row(row: &Row) -> Self {
         Self {
@@ -531,28 +430,6 @@ impl InsertableDbType for CorpusEntry {
 impl DbType for CorpusEntry {
     fn table_name() -> &'static str {
         "corpus_entries"
-    }
-    // NB: If you change this, change the brittle SELECT
-    // in the station_suggestions() function in osms-web!!
-    fn table_desc() -> &'static str {
-        r#"
-stanox VARCHAR,
-uic VARCHAR,
-crs VARCHAR,
-tiploc VARCHAR,
-nlc VARCHAR,
-nlcdesc VARCHAR,
-nlcdesc16 VARCHAR
-"#
-    }
-    fn indexes() -> Vec<&'static str> {
-        vec![
-            "corpus_entries_stanox ON corpus_entries (stanox)",
-            "corpus_entries_tiploc ON corpus_entries (tiploc)",
-            "corpus_entries_nlcdesc_trgm ON corpus_entries USING gin (nlcdesc gin_trgm_ops)",
-            "corpus_entries_tiploc_trgm ON corpus_entries USING gin (tiploc gin_trgm_ops)",
-            "corpus_entries_crs_trgm ON corpus_entries USING gin (crs gin_trgm_ops)",
-        ]
     }
     fn from_row(row: &Row) -> Self {
         Self {

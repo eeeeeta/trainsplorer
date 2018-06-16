@@ -21,6 +21,12 @@ pub enum OsmsError {
     InvalidScheduleFile,
     #[fail(display = "Schedule file has already been inserted")]
     ScheduleFileExists,
+    #[fail(display = "The schema in the database is too new for this version of osms-db to understand")]
+    DatabaseTooNew,
+    #[fail(display = "Migration {} isn't the last migration, but an attempt to apply or undo it was made (or it's already been applied and can't be applied again)", _0)]
+    MigrationOutOfOrder(i32),
+    #[fail(display = "Migration {} can't be undone, as it hasn't been applied!", _0)]
+    MigrationNotApplied(i32),
     #[fail(display = "Navigation problem exists for query: {}", _0)]
     NavProblem(String),
     #[fail(display = "Bad schedule file import request: {}", _0)]

@@ -15,6 +15,7 @@ extern crate crossbeam;
 #[macro_use] extern crate serde_derive;
 
 #[macro_use] pub mod util;
+pub mod migration;
 pub mod errors;
 pub mod db;
 pub mod osm;

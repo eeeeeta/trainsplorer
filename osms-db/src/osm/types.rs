@@ -15,24 +15,6 @@ impl DbType for Node {
     fn table_name() -> &'static str {
         "nodes"
     }
-    fn table_desc() -> &'static str {
-        r#"
-id BIGSERIAL PRIMARY KEY,
-location geometry NOT NULL,
-graph_part INT NOT NULL DEFAULT 0,
-parent_crossing INT REFERENCES crossings ON DELETE RESTRICT,
-orig_osm_id BIGINT,
-osm_was_crossing BOOL NOT NULL DEFAULT false
-"#
-    }
-    fn indexes() -> Vec<&'static str> {
-        vec![
-            "nodes_id ON nodes (id)",
-            "nodes_location ON nodes (location)",
-            "nodes_geom ON nodes USING GIST (location)",
-            "nodes_orig_osm_id ON nodes (orig_osm_id)"
-        ]
-    }
     fn from_row(row: &Row) -> Self {
         Self {
             id: row.get(0),
@@ -84,14 +66,6 @@ impl DbType for Station {
     fn table_name() -> &'static str {
         "stations"
     }
-    fn table_desc() -> &'static str {
-        r#"
-id SERIAL PRIMARY KEY,
-nr_ref VARCHAR NOT NULL,
-point BIGINT NOT NULL REFERENCES nodes ON DELETE CASCADE,
-area geometry NOT NULL
-"#
-    }
     fn from_row(row: &Row) -> Self {
         Self {
             id: row.get(0),
@@ -125,13 +99,6 @@ impl DbType for StationOverride {
     fn table_name() -> &'static str {
         "station_overrides"
     }
-    fn table_desc() -> &'static str {
-        r#"
-id SERIAL PRIMARY KEY,
-nr_ref VARCHAR NOT NULL,
-area geometry NOT NULL
-"#
-    }
     fn from_row(row: &Row) -> Self {
         Self {
             id: row.get(0),
@@ -158,16 +125,6 @@ pub struct StationNavigationProblem {
 impl DbType for StationNavigationProblem {
     fn table_name() -> &'static str {
         "station_navigation_problems"
-    }
-    fn table_desc() -> &'static str {
-        r#"
-id SERIAL PRIMARY KEY,
-geo_generation INT NOT NULL,
-origin INT NOT NULL REFERENCES stations ON DELETE CASCADE,
-destination INT NOT NULL REFERENCES stations ON DELETE CASCADE,
-descrip VARCHAR NOT NULL,
-UNIQUE(geo_generation, origin, destination)
-"#
     }
     fn from_row(row: &Row) -> Self {
         Self {
@@ -200,14 +157,6 @@ impl DbType for ProblematicStation {
     fn table_name() -> &'static str {
         "problematic_stations"
     }
-    fn table_desc() -> &'static str {
-        r#"
-id SERIAL PRIMARY KEY,
-nr_ref VARCHAR NOT NULL,
-area geometry NOT NULL,
-defect INT NOT NULL
-"#
-    }
     fn from_row(row: &Row) -> Self {
         Self {
             id: row.get(0),
@@ -234,22 +183,6 @@ pub struct Link {
 impl DbType for Link {
     fn table_name() -> &'static str {
         "links"
-    }
-    fn indexes() -> Vec<&'static str> {
-        vec![
-            "links_p1 ON links (p1)",
-            "links_p2 ON links (p2)",
-            "links_geom ON links USING GIST (way)"
-        ]
-    }
-    fn table_desc() -> &'static str {
-        r#"
-p1 BIGINT NOT NULL REFERENCES nodes ON DELETE CASCADE,
-p2 BIGINT NOT NULL REFERENCES nodes ON DELETE CASCADE,
-way geometry NOT NULL,
-distance REAL NOT NULL,
-UNIQUE(p1, p2)
-"#
     }
     fn from_row(row: &Row) -> Self {
         Self {
@@ -281,19 +214,6 @@ pub struct StationPath {
 impl DbType for StationPath {
     fn table_name() -> &'static str {
         "station_paths"
-    }
-    fn table_desc() -> &'static str {
-        r#"
-s1 INT NOT NULL REFERENCES stations ON DELETE RESTRICT,
-s2 INT NOT NULL REFERENCES stations ON DELETE RESTRICT,
-way geometry NOT NULL,
-nodes BIGINT[] NOT NULL,
-crossings INT[] NOT NULL,
-crossing_locations DOUBLE PRECISION[] NOT NULL,
-id SERIAL PRIMARY KEY,
-UNIQUE(s1, s2),
-CHECK(cardinality(crossings) = cardinality(crossing_locations))
-"#
     }
     fn from_row(row: &Row) -> Self {
         Self {
@@ -332,13 +252,6 @@ pub struct Crossing {
 impl DbType for Crossing {
     fn table_name() -> &'static str {
         "crossings"
-    }
-    fn table_desc() -> &'static str {
-        r#"
-id SERIAL PRIMARY KEY,
-name VARCHAR,
-area geometry NOT NULL
-"#
     }
     fn from_row(row: &Row) -> Self {
         Self {

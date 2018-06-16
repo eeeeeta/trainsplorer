@@ -123,6 +123,50 @@ fn run() -> Result<(), Error> {
                     .subcommand(SubCommand::with_name("ways")
                                 .about("Makes schedule ways for unprocessed schedules."))
         )
+        .subcommand(SubCommand::with_name("migration")
+                    .about("Performs (potentially dangerous!) operations related to database migrations.")
+                    .setting(AppSettings::SubcommandRequired)
+                    .subcommand(SubCommand::with_name("list")
+                                .about("List all the available migrations."))
+                    .subcommand(SubCommand::with_name("run")
+                                .about("Apply any unapplied migrations."))
+                    .subcommand(SubCommand::with_name("apply")
+                                .about("Apply a migration.")
+                                .arg(Arg::with_name("migration")
+                                     .short("m")
+                                     .long("migration")
+                                     .value_name("ID")
+                                     .help("ID of the migration to use.")
+                                     .required(true)
+                                     .takes_value(true)))
+                    .subcommand(SubCommand::with_name("undo")
+                                .about("Undo a migration.")
+                                .arg(Arg::with_name("migration")
+                                     .short("m")
+                                     .long("migration")
+                                     .value_name("ID")
+                                     .help("ID of the migration to use.")
+                                     .required(true)
+                                     .takes_value(true)))
+                    .subcommand(SubCommand::with_name("fudge")
+                                .about("Pretend as if a migration was applied, whilst doing nothing (DANGEROUS!)")
+                                .arg(Arg::with_name("migration")
+                                     .short("m")
+                                     .long("migration")
+                                     .value_name("ID")
+                                     .help("ID of the migration to use.")
+                                     .required(true)
+                                     .takes_value(true)))
+                    .subcommand(SubCommand::with_name("unfudge")
+                                .about("Pretend as if a migration was undone, whilst doing nothing (DANGEROUS!)")
+                                .arg(Arg::with_name("migration")
+                                     .short("m")
+                                     .long("migration")
+                                     .value_name("ID")
+                                     .help("ID of the migration to use.")
+                                     .required(true)
+                                     .takes_value(true)))
+        )
         .get_matches();
     let mut disp = fern::Dispatch::new()
         .format(|out, msg, record| {
@@ -228,6 +272,8 @@ fn run() -> Result<(), Error> {
             match opts.subcommand() {
                 ("init", _) => {
                     let conn = pool.get().unwrap();
+                    info!("Initialising database types & relations...");
+                    db::initialize_database(&*pool.get().unwrap())?;
                     info!("Downloading & importing CIF_ALL_FULL_DAILY...");
                     let data = download("https://datafeeds.networkrail.co.uk/ntrod/CifFileAuthenticate?type=CIF_ALL_FULL_DAILY&day=toc-full",
                                         &mut cli, &conf.nrod_user, &conf.nrod_pass)?;
@@ -239,6 +285,8 @@ fn run() -> Result<(), Error> {
                 ("update", _) => {
                     use chrono::*;
                     let conn = pool.get().unwrap();
+                    info!("Initialising database types & relations...");
+                    db::initialize_database(&*pool.get().unwrap())?;
                     let time = Utc::now();
                     let weekd = time.weekday().pred();
                     let file = match weekd {
@@ -259,9 +307,68 @@ fn run() -> Result<(), Error> {
                     make::apply_schedule_records(&*conn, data)?;
                 },
                 ("ways", _) => {
+                    let conn = pool.get().unwrap();
+                    info!("Initialising database types & relations...");
+                    db::initialize_database(&*pool.get().unwrap())?;
                     make::geo_process_schedules(&pool, conf.threads)?;
                 },
                 (x, _) => panic!("Invalid schedule subcommand {}", x)
+            }
+        },
+        ("migration", Some(opts)) => {
+            let conn = pool.get().unwrap();
+            match opts.subcommand() {
+                ("list", _) => {
+                    use db::DbType;
+
+                    println!("database migrations (* = applied):\n");
+                    for m in migration::MIGRATIONS.iter() {
+                        print!("[{}] {}", m.id, m.name);
+                        if migration::MigrationEntry::from_select(&*conn, "WHERE id = $1", &[&m.id])?.len() > 0 {
+                            print!(" (*)");
+                        }
+                        println!();
+                    }
+                },
+                ("run", _) => {
+                    migration::initialize_migrations(&*conn)?;
+                },
+                (_, None) => panic!("invalid subcommand"),
+                (a, Some(opts)) => {
+                    let mid = opts.value_of("migration").unwrap();
+                    let mid = mid.parse::<i32>()?;
+                    match a {
+                        x @ "apply" | x @ "undo" => {
+                            if let Ok(elem) = migration::MIGRATIONS.binary_search_by_key(&mid, |m| m.id) {
+                                let elem = &migration::MIGRATIONS[elem];
+                                if x == "apply" {
+                                    elem.up(&*conn)?;
+                                }
+                                else {
+                                    elem.down(&*conn)?;
+                                }
+                            }
+                            else {
+                                error!("no such migration");
+                                return Err(format_err!("no such migration"));
+                            }
+                        },
+                        "fudge" => {
+                            use db::InsertableDbType;
+
+                            warn!("I hope you know what you're doing. If not, run `unfudge` after this finishes.");
+                            migration::MigrationEntry {
+                                id: mid,
+                                timestamp: ::chrono::Utc::now().naive_utc()
+                            }.insert_self(&*conn)?;
+                        },
+                        "unfudge" => {
+                            warn!("I hope you know what you're doing.");
+                            conn.execute("DELETE FROM migration_entries WHERE id = $1", &[&mid])?;
+                        },
+                        x => panic!("Invalid migration subcommand {}", x)
+                    }
+                }
             }
         },
         (x, _) => panic!("Invalid subcommand {}", x)
