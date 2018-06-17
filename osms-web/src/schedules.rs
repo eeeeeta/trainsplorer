@@ -46,7 +46,7 @@ impl ScheduleOptions {
         ser.finish()
     }
 }
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct ScheduleOrigDest {
     time: String,
     orig: String,

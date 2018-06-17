@@ -1,0 +1,70 @@
+{{> header}}
+<table>
+	<thead>
+		<tr>
+			<th><abbr title="Parent schedule">Sch</abbr></th>
+			<th><abbr title="Parent train">Trn</abbr></th>
+			<th>Action</th>
+			<th><abbr title="Live data?">Lv</abbr></th>
+			<th>Origin</th>
+			<th>Action</th>
+			<th><abbr title="Live data?">Lv</abbr></th>
+			<th>Destination</th>
+		</tr>
+	</thead>
+	{{#each body.conns}}
+		<tr {{#if this.origin.canx}}class="movements-row-cancelled"{{/if}}>
+				<td>
+					{{#if this.origin.parent_sched}}
+						<a href="/schedule/{{this.origin.parent_sched}}">→</a>
+					{{/if}}
+				</td>
+				<td>
+					{{#if this.origin.parent_train}}
+						<a href="/train/{{this.origin.parent_train}}">→</a>
+					{{/if}}
+				</td>
+				<td>
+					{{this.origin.action}}
+				</td>
+				<td>
+					{{#if this.origin.live}}
+						<abbr title="This movement actually happened at the time stated">✅</abbr>
+					{{else}}
+						{{#if this.origin.canx}}
+							<abbr title="This train was cancelled">❌</abbr>
+						{{else}}
+							{{#if this.origin.prepped}}
+								<abbr title="The train has been activated, but hasn't reached this.origin station yet">🔴</abbr>
+							{{/if}}
+						{{/if}}
+					{{/if}}
+				</td>
+
+				<td class="movements-cell-time">
+					{{this.origin.time}}
+				</td>
+				<td>
+					{{this.destination.action}}
+				</td>
+				<td>
+					{{#if this.destination.live}}
+						<abbr title="This movement actually happened at the time stated">✅</abbr>
+					{{else}}
+						{{#if this.destination.canx}}
+							<abbr title="This train was cancelled">❌</abbr>
+						{{else}}
+							{{#if this.destination.prepped}}
+								<abbr title="The train has been activated, but hasn't reached this.destination station yet">🔴</abbr>
+							{{/if}}
+						{{/if}}
+					{{/if}}
+				</td>
+
+				<td class="movements-cell-time">
+					{{this.destination.time}}
+				</td>
+		</tr>
+	{{/each}}
+</table>
+{{> footer}}

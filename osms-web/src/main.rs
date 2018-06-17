@@ -104,6 +104,7 @@ fn main() {
                map,
                movements::post_index_movements,
                movements::movements,
+               movements::connections,
                movements::station_suggestions,
                schedule::schedule,
                schedule::train,
