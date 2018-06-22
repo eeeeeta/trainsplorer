@@ -1,11 +1,11 @@
 language: rust
 notifications:
-  webhooks:
-    urls:
-      - "https://scalar.vector.im/api/neb/services/hooks/dHJhdmlzLWNpLyU0MGV0YSUzQXRoZXRhLmV1Lm9yZy8lMjFOVHNReUdldUllb1JPbEtZRHolM0F0aGV0YS5ldS5vcmc"
+  irc:
+    channels:
+      - "chat.freenode.net#osm-signal"
     on_success: change
     on_failure: always
-    on_start: never
+    use_notice: true
 services:
   - postgresql
 addons:

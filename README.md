@@ -2,7 +2,7 @@ osm-signal
 ==========
 
 [![Build Status](https://travis-ci.org/eeeeeta/osm-signal.svg?branch=master)](https://travis-ci.org/eeeeeta/osm-signal)
-[![Matrix chatroom: #osm-signal:theta.eu.org](https://img.shields.io/badge/matrix%20chat-%23osm--signal%3Atheta.eu.org-blue.svg)](https://matrix.to/#/#osm-signal:theta.eu.org)
+[![IRC chat @ #osm-signal on freenode](https://img.shields.io/badge/irc-%23osm--signal%20on%20freenode-blue.svg)](https://matrix.to/#/#freenode_#osm-signal:matrix.org)
 ![GNU AGPLv3 licensed](https://www.gnu.org/graphics/agplv3-155x51.png)
 
 ## What is this?
@@ -14,8 +14,8 @@ a live map of train locations (approximately, that is), predictions on level cro
 to find out which trains are going to pass any location on the railway at any given time. It's all written in
 [Rust](https://www.rust-lang.org/en-US/) as well, because Rust is cool.
 
-However, it's very much not done yet! Watch this space for further stuff! Also, feel free to join the [chatroom](https://matrix.to/#/#osm-signal:theta.eu.org)
-if empty chatrooms with the guy who wrote this thing and a whole bunch of robots are your thing.
+However, it's very much not done yet! Watch this space for further stuff! Also, feel free to join the [chatroom](https://matrix.to/#/#freenode_#osm-signal:matrix.org)
+(#osm-signal on chat.freenode.net), if empty chatrooms with the guy who wrote this thing and a whole bunch of robots are your thing.
 
 ## What are all these moving parts?
 
