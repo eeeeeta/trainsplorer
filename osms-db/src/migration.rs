@@ -71,8 +71,8 @@ macro_rules! migration {
         Migration {
             id: $id,
             name: $name,
-            up: include_str!(concat!("../migrations/", $id, "_", $name, "_up.sql")),
-            down: include_str!(concat!("../migrations/", $id, "_", $name, "_down.sql")),
+            up: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/", $id, "_", $name, "_up.sql")),
+            down: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/", $id, "_", $name, "_down.sql")),
         }
     }
 }
