@@ -1,5 +1,6 @@
 Dockerfile
-docker.sh
+*.yml
+*.sh
 .git*
 **/target*
 **/*.rs.bk

@@ -43,18 +43,18 @@ RUN ~/.cargo/bin/cargo build --all
 
 FROM debian:stable-slim AS osms-nrod
 WORKDIR /osm-signal
-RUN apt-get update && apt-get install -y libssl1.1
+RUN apt-get update && apt-get install -y libssl1.1 ca-certificates
 COPY --from=osms-builder /osm-signal/target/debug/osms-nrod /osm-signal
 ENTRYPOINT ["/osm-signal/osms-nrod"]
 
 FROM debian:stable-slim AS osms-web
 WORKDIR /osm-signal
-RUN apt-get update && apt-get install -y libssl1.1
+RUN apt-get update && apt-get install -y libssl1.1 ca-certificates
 COPY --from=osms-builder /osm-signal/target/debug/osms-web /osm-signal
 ENTRYPOINT ["/osm-signal/osms-web"]
 
 FROM debian:stable-slim AS osms-db-setup
 WORKDIR /osm-signal
-RUN apt-get update && apt-get install -y libssl1.1
+RUN apt-get update && apt-get install -y libssl1.1 ca-certificates
 COPY --from=osms-builder /osm-signal/target/debug/osms-db-setup /osm-signal
 ENTRYPOINT ["/osm-signal/osms-db-setup"]

@@ -1,4 +1,5 @@
 target/
+deploy_config.yml
 **/*.rs.bk
 *.pbf
 *.gpx

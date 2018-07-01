@@ -1,6 +1,6 @@
 extern crate osms_db;
 extern crate fern;
-extern crate toml;
+extern crate envy;
 extern crate r2d2;
 extern crate r2d2_postgres;
 extern crate flate2;
@@ -23,7 +23,7 @@ extern crate serde_json;
 
 use clap::{Arg, App, SubCommand, AppSettings};
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::{BufReader};
 use r2d2_postgres::{TlsMode, PostgresConnectionManager};
 use postgres::tls::native_tls::NativeTls;
 use osms_db::*;
@@ -35,7 +35,7 @@ use reqwest::header::{Authorization, Basic};
 
 pub mod make;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Config {
     database_url: String,
     nrod_user: String,
@@ -59,12 +59,6 @@ fn run() -> Result<(), Error> {
         .author("eta <https://theta.eu.org>")
         .about("Sets up and administers the database for the osm-signal project.")
         .setting(AppSettings::SubcommandRequired)
-        .arg(Arg::with_name("config")
-             .short("c")
-             .long("config")
-             .value_name("FILE")
-             .help("Path to a configuration file (default 'config.toml')")
-             .takes_value(true))
         .arg(Arg::with_name("logfile")
              .short("l")
              .long("logfile")
@@ -188,17 +182,9 @@ fn run() -> Result<(), Error> {
         .apply()
         .unwrap();
     info!("osms-db-setup tool starting");
-    let path = matches.value_of("config").unwrap_or("config.toml");
     let mut cli = Client::new();
-    info!("Loading config from file {}...", path);
-    let mut file = File::open(path)
-        .context(err_msg("couldn't open config file"))?;
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)
-        .context(err_msg("error reading from config file"))?;
-    info!("Parsing config...");
-    let conf: Config = toml::de::from_str(&contents)
-        .context(err_msg("invalid config"))?;
+    info!("Loading config...");
+    let conf: Config = envy::from_env()?;
     info!("Connecting to Postgres...");
     let r2c = r2d2::Config::default();
     let tls = if conf.require_tls {
