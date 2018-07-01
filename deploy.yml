@@ -95,3 +95,46 @@ spec:
             configMapKeyRef:
               key: "n_threads"
               name: "osms-nrod-config"
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: osms-db-setup-database-update
+spec:
+  schedule: "0 7 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: "osms-db-setup"
+            image: "gcr.io/osm-signal/osms-db-setup:initial"
+            args: ["schedule", "update"]
+            env:
+              - name: "database_url"
+                valueFrom:
+                  configMapKeyRef:
+                    key: "database_url"
+                    name: "osms-nrod-config"
+              - name: "nrod_user"
+                valueFrom:
+                  configMapKeyRef:
+                    key: "username"
+                    name: "osms-nrod-config"
+              - name: "nrod_pass"
+                valueFrom:
+                  configMapKeyRef:
+                    key: "password"
+                    name: "osms-nrod-config"
+              - name: "require_tls"
+                valueFrom:
+                  configMapKeyRef:
+                    key: "require_tls"
+                    name: "osms-nrod-config"
+              - name: "threads"
+                valueFrom:
+                  configMapKeyRef:
+                    key: "n_threads"
+                    name: "osms-nrod-config"
+          restartPolicy: OnFailure
+
