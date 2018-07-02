@@ -199,7 +199,7 @@ pub fn corpus_entries<R: Read, T: GenericConnection>(conn: &T, file: R) -> Resul
     debug!("corpus_entries: inserted {} entries", inserted);
     Ok(())
 }
-pub fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, metaseq: i32) -> Result<()> {
+fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, metaseq: i32) -> Result<()> {
     use ntrod_types::schedule::*;
     use ntrod_types::schedule::LocationRecord::*;
     match rec {
@@ -337,6 +337,7 @@ pub fn apply_schedule_records<R: Read, T: GenericConnection>(conn: &T, file: R) 
             _ => {}
         }
     }
+    trans.execute("NOTIFY osms_schedule_updates;", &[])?;
     trans.commit()?;
     debug!("apply_schedule_records: applied {} entries", inserted);
     Ok(())

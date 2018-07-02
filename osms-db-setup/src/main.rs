@@ -19,6 +19,7 @@ extern crate reqwest;
 extern crate csv;
 extern crate atoc_msn;
 extern crate ntrod_types;
+extern crate fallible_iterator;
 extern crate serde_json;
 
 use clap::{Arg, App, SubCommand, AppSettings};
@@ -32,6 +33,7 @@ use osmpbfreader::OsmPbfReader;
 use failure::{Error, ResultExt, err_msg};
 use reqwest::{Response, Client};
 use reqwest::header::{Authorization, Basic};
+use fallible_iterator::FallibleIterator;
 
 pub mod make;
 
@@ -293,9 +295,24 @@ fn run() -> Result<(), Error> {
                     make::apply_schedule_records(&*conn, data)?;
                 },
                 ("ways", _) => {
+                    let conn = pool.get().unwrap();
                     info!("Initialising database types & relations...");
-                    db::initialize_database(&*pool.get().unwrap())?;
+                    db::initialize_database(&*conn)?;
                     make::geo_process_schedules(&pool, conf.n_threads)?;
+                },
+                ("listener", _) => {
+                    let conn = pool.get().unwrap();
+                    info!("Initialising database types & relations...");
+                    db::initialize_database(&*conn)?;
+                    info!("Listening for notifications...");
+                    conn.execute("LISTEN osms_schedule_updates;", &[])?;
+                    let notifs = conn.notifications();
+                    let mut iter = notifs.blocking_iter();
+                    while let Some(notif) = iter.next()? {
+                        info!("Got notification from pid {} with payload '{}'; updating...", notif.process_id, notif.payload);
+                        make::geo_process_schedules(&pool, conf.n_threads)?;
+                        info!("Finished processing notification");
+                    }
                 },
                 (x, _) => panic!("Invalid schedule subcommand {}", x)
             }
