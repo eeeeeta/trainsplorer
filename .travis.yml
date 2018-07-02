@@ -8,8 +8,6 @@ notifications:
     use_notice: true
 services:
   - postgresql
-cache:
-  timeout: 1000
 addons:
   postgresql: 9.6
   apt:
@@ -25,7 +23,9 @@ matrix:
         - cargo test --verbose --all
         - source osms-db-setup/setup-travis.sh && cargo run -p osms-db-setup -- setup init
     - rust: stable
-      cache: cargo
+      cache:
+        cargo: true
+        timeout: 1000
       script:
         - cargo build --verbose --all --exclude osms-web
         - cargo test --verbose --all --exclude osms-web
