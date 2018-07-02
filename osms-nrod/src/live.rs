@@ -86,6 +86,7 @@ pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()>
             }
         }
     }
+    trans.execute("NOTIFY osms_schedule_updates;", &[])?;
     trans.commit()?;
     Ok(())
 }
