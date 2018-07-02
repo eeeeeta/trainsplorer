@@ -21,13 +21,13 @@ matrix:
       script:
         - cargo build --verbose --all
         - cargo test --verbose --all
-        - cargo run -p osms-db-setup -- -c osms-db-setup/config.toml.travis setup init
+        - source osms-db-setup/setup-travis.sh && cargo run -p osms-db-setup -- setup init
     - rust: stable
       cache: cargo
       script:
         - cargo build --verbose --all --exclude osms-web
         - cargo test --verbose --all --exclude osms-web
-        - cargo run -p osms-db-setup -- -c osms-db-setup/config.toml.travis setup init
+        - source osms-db-setup/setup-travis.sh && cargo run -p osms-db-setup -- setup init
     - language: node_js
       node_js:
         - node
