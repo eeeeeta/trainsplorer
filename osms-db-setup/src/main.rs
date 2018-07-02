@@ -38,10 +38,10 @@ pub mod make;
 #[derive(Deserialize, Debug)]
 pub struct Config {
     database_url: String,
-    nrod_user: String,
-    nrod_pass: String,
+    username: String,
+    password: String,
     require_tls: bool,
-    threads: usize,
+    n_threads: usize,
 }
 fn download(url: &str, cli: &mut Client, user: &str, pass: &str) -> Result<Response, Error> {
     let creds = Basic {
@@ -212,7 +212,7 @@ fn run() -> Result<(), Error> {
                         File::open(opts.value_of_os("mapdata").unwrap())
                             .context(err_msg("couldn't open map data file"))?
                     ));
-                    let mut ctx = make::ImportContext::new(&mut map, &pool, conf.threads);
+                    let mut ctx = make::ImportContext::new(&mut map, &pool, conf.n_threads);
 
                     info!("Initialising database types & relations...");
                     db::initialize_database(&*pool.get().unwrap())?;
@@ -262,7 +262,7 @@ fn run() -> Result<(), Error> {
                     db::initialize_database(&*pool.get().unwrap())?;
                     info!("Downloading & importing CIF_ALL_FULL_DAILY...");
                     let data = download("https://datafeeds.networkrail.co.uk/ntrod/CifFileAuthenticate?type=CIF_ALL_FULL_DAILY&day=toc-full",
-                                        &mut cli, &conf.nrod_user, &conf.nrod_pass)?;
+                                        &mut cli, &conf.username, &conf.password)?;
                     let data = BufReader::new(data);
                     let data = GzDecoder::new(data)
                         .context(err_msg("couldn't start gunzipping schedule data file"))?;
@@ -286,17 +286,16 @@ fn run() -> Result<(), Error> {
                     };
                     info!("Downloading and importing CIF_ALL_UPDATE_DAILY {}...", file);
                     let data = download(&format!("https://datafeeds.networkrail.co.uk/ntrod/CifFileAuthenticate?type=CIF_ALL_UPDATE_DAILY&day={}", file),
-                                        &mut cli, &conf.nrod_user, &conf.nrod_pass)?;
+                                        &mut cli, &conf.username, &conf.password)?;
                     let data = BufReader::new(data);
                     let data = GzDecoder::new(data)
                         .context(err_msg("couldn't start gunzipping schedule data file"))?;
                     make::apply_schedule_records(&*conn, data)?;
                 },
                 ("ways", _) => {
-                    let conn = pool.get().unwrap();
                     info!("Initialising database types & relations...");
                     db::initialize_database(&*pool.get().unwrap())?;
-                    make::geo_process_schedules(&pool, conf.threads)?;
+                    make::geo_process_schedules(&pool, conf.n_threads)?;
                 },
                 (x, _) => panic!("Invalid schedule subcommand {}", x)
             }
