@@ -306,6 +306,8 @@ fn run() -> Result<(), Error> {
                     let conn = pool.get().unwrap();
                     info!("Initialising database types & relations...");
                     db::initialize_database(&*conn)?;
+                    info!("Doing first run...");
+                    make::geo_process_schedules(&pool, conf.n_threads)?;
                     info!("Listening for notifications...");
                     conn.execute("LISTEN osms_schedule_updates;", &[])?;
                     let notifs = conn.notifications();
