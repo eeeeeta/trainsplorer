@@ -116,6 +116,8 @@ fn run() -> Result<(), Error> {
                                 .about("Downloads and imports the set of ALL Network Rail schedules. Run to initialise the database."))
                     .subcommand(SubCommand::with_name("update")
                                 .about("Downloads and imports today's schedule update file."))
+                    .subcommand(SubCommand::with_name("listener")
+                                .about("Starts a long-running listener that makes new schedule ways every time schedules are changed."))
                     .subcommand(SubCommand::with_name("ways")
                                 .about("Makes schedule ways for unprocessed schedules."))
         )
