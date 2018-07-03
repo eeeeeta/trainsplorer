@@ -1,0 +1,23 @@
+[package]
+name = "osms-darwin"
+version = "0.1.0"
+authors = ["eeeeeta <eeeeeta@users.noreply.github.com>"]
+
+[dependencies]
+failure = "0.1"
+futures = "0.1"
+tokio-core = "0.1"
+failure_derive = "0.1"
+xml-rs = "0.8"
+flate2 = "1.0"
+envy = "0.3.2"
+serde = "1.0"
+log = "0.3.8"
+fern = "0.4"
+serde_derive = "1.0"
+
+[dependencies.osms-db]
+path = "../osms-db"
+
+[dependencies.stomp]
+git = "https://github.com/eeeeeta/stomp-rs"
