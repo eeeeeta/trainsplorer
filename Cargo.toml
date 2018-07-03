@@ -1,5 +1,5 @@
 [workspace]
-members = ["./osms-db", "./national-rail-departures", "./osms-nrod", "./ntrod-types", "./osms-db-setup", "./osms-web", "./atoc-msn", "./osms-darwin", "./darwin-types"]
+members = ["./osms-db", "./osms-nrod", "./ntrod-types", "./osms-db-setup", "./osms-web", "./atoc-msn", "./osms-darwin", "./darwin-types"]
 
 [profile.dev]
 panic = "abort"

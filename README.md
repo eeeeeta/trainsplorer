@@ -22,8 +22,6 @@ However, it's very much not done yet! Watch this space for further stuff! Also, 
 This repository contains many individual Rust crates. Here's a short overview of what they do:
 
 - `atoc-msn`: parses the Master Station Names (MSN) file from the [Rail Delivery Group](http://data.atoc.org)'s Industry Data dataset
-- `national-rail-departures`: a false start which parsed data from National Rail Enquiries' departure boards. It isn't currently
-  being used, and probably doesn't work any more. You're welcome to try and use it, though.
 - `ntrod-types`: parses data from the [Network Rail open data feeds](https://wiki.openraildata.com/index.php/About_the_Network_Rail_feeds),
   specifically the SCHEDULE, Train Movements, reference data, and VSTP feeds
 - `osms-db`: the main database library for the project; handles storing data into and retrieving data from a PostgreSQL database, as
