@@ -8,6 +8,7 @@ extern crate futures;
 extern crate tokio_core;
 #[macro_use] extern crate failure;
 extern crate flate2;
+extern crate darwin_types;
 
 mod conf;
 use conf::DarwinConfig;
@@ -69,6 +70,10 @@ impl Future for DarwinProcessor {
                     match gz.read_to_string(&mut s) {
                         Ok(_) => {
                             info!("Got frame: {}", s);
+                            match darwin_types::parse_pport_document(s.as_bytes()) {
+                                Ok(doc) => info!("Parsed: {:?}", doc),
+                                Err(e) => warn!("Failed to parse: {}", e)
+                            }
                         },
                         Err(e) => {
                             warn!("Failed to deflate frame: {}", e);

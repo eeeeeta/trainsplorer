@@ -19,5 +19,8 @@ serde_derive = "1.0"
 [dependencies.osms-db]
 path = "../osms-db"
 
+[dependencies.darwin-types]
+path = "../darwin-types"
+
 [dependencies.stomp]
 git = "https://github.com/eeeeeta/stomp-rs"

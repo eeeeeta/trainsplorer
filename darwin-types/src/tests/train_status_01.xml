@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Pport xmlns="http://www.thalesgroup.com/rtti/PushPort/v12" xmlns:ns3="http://www.thalesgroup.com/rtti/PushPort/Forecasts/v2" ts="2018-07-03T10:36:17.2876403+01:00" version="12.0">
+    <uR updateOrigin="TD">
+        <TS rid="201807037932273" ssd="2018-07-03" uid="O32273">
+            <ns3:LateReason>120</ns3:LateReason>
+            <ns3:Location pta="10:32" ptd="10:32" tpl="STPXBOX" wta="10:31:30" wtd="10:32:30">
+                <ns3:arr at="10:34" src="TD" />
+                <ns3:dep at="10:35" src="TD" />
+                <ns3:plat conf="true" platsrc="A">A</ns3:plat>
+            </ns3:Location>
+            <ns3:Location pta="10:36" ptd="10:37" tpl="FRNDNLT" wta="10:36" wtd="10:37">
+                <ns3:arr et="10:39" src="Darwin" />
+                <ns3:dep et="10:40" src="Darwin" />
+                <ns3:plat platsrc="M">3</ns3:plat>
+            </ns3:Location>
+            <ns3:Location pta="10:38" ptd="10:39" tpl="CTMSLNK" wta="10:38" wtd="10:39">
+                <ns3:arr et="10:41" src="Darwin" />
+                <ns3:dep et="10:42" src="Darwin" />
+                <ns3:plat platsrc="M">2</ns3:plat>
+            </ns3:Location>
+            <ns3:Location pta="10:41" ptd="10:41" tpl="BLFR" wta="10:40:30" wtd="10:41:30">
+                <ns3:arr et="10:43" src="Darwin" />
+                <ns3:dep et="10:44" src="Darwin" />
+                <ns3:plat platsrc="M">1</ns3:plat>
+            </ns3:Location>
+            <ns3:Location tpl="CRBTLNJ" wtp="10:51">
+                <ns3:pass et="10:53" src="Darwin" /></ns3:Location>
+            <ns3:Location tpl="SURRCNJ" wtp="10:52">
+                <ns3:pass et="10:54" src="Darwin" /></ns3:Location>
+            <ns3:Location pta="10:55" ptd="10:55" tpl="DEPTFD" wta="10:54:30" wtd="10:55">
+                <ns3:arr et="10:55" src="Darwin" wet="10:56" />
+                <ns3:dep et="10:57" src="Darwin" />
+                <ns3:plat platsrc="M">2</ns3:plat>
+            </ns3:Location>
+            <ns3:Location pta="10:57" ptd="10:57" tpl="GNWH" wta="10:56:30" wtd="10:57:30">
+                <ns3:arr et="10:57" src="Darwin" wet="10:58" />
+                <ns3:dep et="10:59" src="Darwin" />
+                <ns3:plat platsrc="M">1</ns3:plat>
+            </ns3:Location>
+            <ns3:Location pta="11:00" ptd="11:00" tpl="MAZEH" wta="11:00" wtd="11:00:30">
+                <ns3:arr et="11:00" src="Darwin" wet="11:01" />
+                <ns3:dep et="11:02" src="Darwin" />
+                <ns3:plat platsrc="M">2</ns3:plat>
+            </ns3:Location>
+            <ns3:Location pta="11:02" ptd="11:02" tpl="WCOMBEP" wta="11:02" wtd="11:02:30">
+                <ns3:arr et="11:02" src="Darwin" wet="11:03" />
+                <ns3:dep et="11:04" src="Darwin" />
+                <ns3:plat platsrc="M">2</ns3:plat>
+            </ns3:Location>
+            <ns3:Location pta="11:10" ptd="11:10" tpl="WOLWCHA" wta="11:09:30" wtd="11:10:30">
+                <ns3:arr et="11:10" src="Darwin" wet="11:11" />
+                <ns3:dep et="11:11" src="Darwin" />
+                <ns3:plat platsrc="M">2</ns3:plat>
+            </ns3:Location>
+            <ns3:Location pta="11:12" ptd="11:13" tpl="PLMS" wta="11:12" wtd="11:13">
+                <ns3:arr et="11:12" src="Darwin" wet="11:13" />
+                <ns3:dep et="11:14" src="Darwin" />
+                <ns3:plat platsrc="M">2</ns3:plat>
+            </ns3:Location>
+            <ns3:Location pta="11:16" ptd="11:16" tpl="ABWD" wta="11:15:30" wtd="11:16:30">
+                <ns3:arr et="11:16" src="Darwin" />
+                <ns3:dep et="11:17" src="Darwin" />
+                <ns3:plat platsrc="M">2</ns3:plat>
+            </ns3:Location>
+            <ns3:Location pta="11:22" ptd="11:22" tpl="SLADEGN" wta="11:21:30" wtd="11:22:30">
+                <ns3:arr et="11:22" src="Darwin" />
+                <ns3:dep et="11:22" src="Darwin" />
+                <ns3:plat cisPlatsup="true" platsrc="M" platsup="true">2</ns3:plat>
+            </ns3:Location>
+            <ns3:Location tpl="DARTFDJ" wtp="11:25">
+                <ns3:pass et="11:25" src="Darwin" /></ns3:Location>
+        </TS>
+    </uR>
+</Pport>

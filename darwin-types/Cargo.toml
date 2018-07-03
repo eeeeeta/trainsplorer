@@ -1,0 +1,10 @@
+[package]
+authors = ["eeeeeta <eeeeeta@users.noreply.github.com>"]
+name = "darwin-types"
+version = "0.1.0"
+
+[dependencies]
+chrono = "0.4.4"
+failure = "0.1.1"
+failure_derive = "0.1.1"
+xml-rs = "0.8.0"
