@@ -322,7 +322,7 @@ fn main() {
     let hdl = core.handle();
     let nrod_url = conf.nrod_url.as_ref().map(|x| x as &str).unwrap_or("datafeeds.networkrail.co.uk");
     let nrod_sess = SessionBuilder::new(nrod_url, conf.nrod_port.unwrap_or(61618))
-        .with(Credentials(&conf.nrod_username, &conf.nrod_password))
+        .with(Credentials(&conf.username, &conf.password))
         .with(Header::new("client-id", "eta@theta.eu.org"))
         .with(HeartBeat(5_000, 2_000))
         .start(hdl.clone())

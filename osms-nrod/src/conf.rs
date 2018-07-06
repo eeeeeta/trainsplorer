@@ -6,8 +6,8 @@ pub struct NrodConfig {
     pub database_url: String,
     #[serde(default)]
     pub statsd_url: Option<String>,
-    pub nrod_username: String,
-    pub nrod_password: String,
+    pub username: String,
+    pub password: String,
     pub darwin_username: String,
     pub darwin_password: String,
     pub darwin_queue_name: String,
