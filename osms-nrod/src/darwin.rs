@@ -39,7 +39,7 @@ pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, rid: String, ui
         return Ok(t);
     }
     debug!("Trying to link RID {} (uid {}, start_date {}) to a train...", rid, uid, start_date);
-    let trains = Train::from_select(conn, "WHERE EXISTS(SELECT * FROM schedules WHERE uid = $1 AND id = trains.parent_train) AND date = $2", &[&uid, &start_date])?;
+    let trains = Train::from_select(conn, "WHERE EXISTS(SELECT * FROM schedules WHERE uid = $1 AND id = trains.parent_sched) AND date = $2", &[&uid, &start_date])?;
     if trains.len() > 1 {
         return Err(NrodError::AmbiguousTrains { rid, uid, start_date });
     }
