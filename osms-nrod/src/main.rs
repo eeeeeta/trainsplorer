@@ -112,7 +112,7 @@ impl NtrodWorker {
         let mut s = String::new();
         match gz.read_to_string(&mut s) {
             Ok(_) => {
-                info!("Got frame: {}", s);
+                trace!("Got frame: {}", s);
                 match darwin_types::parse_pport_document(s.as_bytes()) {
                     Ok(doc) => {
                         self.incr("darwin.parsed");
