@@ -230,7 +230,7 @@ impl Future for NtrodProcessor {
                     self.sess.reconnect().unwrap();
                 },
                 Message { destination, frame, .. } => {
-                    if self.darwin_qn.is_some() {
+                    if self.darwin_qn.is_none() {
                         debug!("Got a NTROD message addressed to {}", destination);
                         if destination == "/topic/TRAIN_MVT_ALL_TOC" {
                             let st = String::from_utf8_lossy(&frame.body);
