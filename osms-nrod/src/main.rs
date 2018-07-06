@@ -3,7 +3,7 @@ extern crate serde_json;
 #[macro_use] extern crate osms_db;
 extern crate ntrod_types;
 #[macro_use] extern crate log;
-extern crate envy;
+extern crate toml;
 extern crate fern;
 #[macro_use] extern crate serde_derive;
 extern crate futures;
@@ -23,6 +23,10 @@ use stomp::session_builder::SessionBuilder;
 use stomp::subscription::AckOrNack;
 use stomp::connection::*;
 use std::net::UdpSocket;
+use std::env;
+use std::fs::File;
+use std::io::Read;
+use std::collections::HashMap;
 use tokio_core::reactor::{Timeout, Handle, Core};
 use std::time::Duration;
 use futures::*;
@@ -37,12 +41,26 @@ use ntrod_types::vstp::Record as VstpRecord;
 use r2d2_postgres::{PostgresConnectionManager, TlsMode};
 
 mod errors;
-mod conf;
 mod live;
 mod darwin;
 
-use conf::NrodConfig;
-
+#[derive(Deserialize)]
+pub struct Config {
+    database_url: String,
+    #[serde(default)]
+    statsd_url: Option<String>,
+    username: String,
+    password: String,
+    n_threads: u32,
+    #[serde(default)]
+    log_level_general: Option<String>,
+    #[serde(default)]
+    log_level: HashMap<String, String>,
+    #[serde(default)]
+    nrod_url: Option<String>,
+    #[serde(default)]
+    nrod_port: Option<u16>
+}
 pub enum WorkerMessage {
     Movement(String),
     Vstp(String),
@@ -275,8 +293,14 @@ impl<E> r2d2::CustomizeConnection<Conn, E> for AppNameSetter {
 }
 fn main() {
     println!("osms-nrod starting");
-    println!("Loading config...");
-    let conf = NrodConfig::make().unwrap();
+    let args = env::args().skip(1).collect::<Vec<_>>();
+    let path = args.get(0).map(|x| x as &str).unwrap_or("config.toml");
+    println!("Loading config from file {}...", path);
+    let mut file = File::open(path).unwrap();
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).unwrap();
+    println!("Parsing config...");
+    let conf: Config = toml::de::from_str(&contents).unwrap();
     let log_level_g: log::LogLevelFilter = conf.log_level_general
         .as_ref()
         .map(|x| x as &str)
