@@ -267,7 +267,7 @@ impl InsertableDbType for TrainMvt {
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
         let qry = conn.query("INSERT INTO train_movements
                               (parent_train, parent_mvt, time, source, estimated)
-                              VALUES ($1, $2, $3, $4)
+                              VALUES ($1, $2, $3, $4, $5)
                               RETURNING id",
                              &[&self.parent_train, &self.parent_mvt, &self.time, &self.source, &self.estimated])?;
         let mut ret = None;
