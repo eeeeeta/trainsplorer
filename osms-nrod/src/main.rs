@@ -51,6 +51,9 @@ pub struct Config {
     statsd_url: Option<String>,
     username: String,
     password: String,
+    darwin_username: String,
+    darwin_password: String,
+    darwin_queue_name: String,
     n_threads: u32,
     #[serde(default)]
     log_level_general: Option<String>,
@@ -59,7 +62,11 @@ pub struct Config {
     #[serde(default)]
     nrod_url: Option<String>,
     #[serde(default)]
-    nrod_port: Option<u16>
+    nrod_port: Option<u16>,
+    #[serde(default)]
+    darwin_url: Option<String>,
+    #[serde(default)]
+    darwin_port: Option<u16>
 }
 pub enum WorkerMessage {
     Movement(String),
