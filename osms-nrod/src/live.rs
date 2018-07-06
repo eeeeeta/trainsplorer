@@ -152,7 +152,8 @@ pub fn process_activation<T: GenericConnection>(conn: &T, a: Activation) -> Resu
         date: a.origin_dep_timestamp.date(),
         signalling_id: a.schedule_wtt_id,
         cancelled: false,
-        terminated: false
+        terminated: false,
+        nre_id: None,
     };
     let id = train.insert_self(conn)?;
     debug!("Inserted train as #{}", id);
@@ -204,7 +205,8 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
         parent_train: train.id,
         parent_mvt: mvt.id,
         time: m.actual_timestamp.time(),
-        source: 0
+        source: 0,
+        estimated: false
     };
     let id = tmvt.insert_self(conn)?;
     debug!("Registered train movement #{}.", id);

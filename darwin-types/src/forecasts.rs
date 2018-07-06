@@ -120,7 +120,7 @@ impl XmlDeserialize for TsTimeData {
 pub struct TsLocation {
     /// TIPLOC
     pub tiploc: String,
-    /// Scheduled timing data for this location,
+    /// Scheduled timing data for this location.
     pub timings: CircularTimes,
     /// Forecast data for the arrival at this location.
     pub arr: Option<TsTimeData>,
@@ -195,7 +195,8 @@ pub struct Ts {
     pub rid: String,
     /// Train UID.
     pub uid: String,
-    /// Scheduled Start Date.
+    /// Scheduled Start Date. *[editor's note: this is the date the train runs on, NOT the
+    /// ITPS schedule's start date.]*
     pub start_date: NaiveDate,
     /// Indicates whether a train that divides is working with portions in reverse to their normal formation. The value applies to the whole train. Darwin will not validate that a divide association actually exists for this service.
     pub is_reverse_formation: bool

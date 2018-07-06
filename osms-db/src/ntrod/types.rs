@@ -189,7 +189,9 @@ pub struct Train {
     /// Whether this train was cancelled or not.
     pub cancelled: bool,
     /// Whether this train has terminated or not.
-    pub terminated: bool
+    pub terminated: bool,
+    /// A National Rail Enquiries RTTI ID for this train.
+    pub nre_id: Option<String>
 }
 impl DbType for Train {
     fn table_name() -> &'static str {
@@ -203,7 +205,8 @@ impl DbType for Train {
             date: row.get(3),
             signalling_id: row.get(4),
             cancelled: row.get(5),
-            terminated: row.get(6)
+            terminated: row.get(6),
+            nre_id: row.get(7)
         }
     }
 }
@@ -211,11 +214,11 @@ impl InsertableDbType for Train {
     type Id = i32;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
         let qry = conn.query("INSERT INTO trains
-                              (parent_sched, trust_id, date, signalling_id, cancelled, terminated)
-                              VALUES ($1, $2, $3, $4, $5, $6)
+                              (parent_sched, trust_id, date, signalling_id, cancelled, terminated, nre_id)
+                              VALUES ($1, $2, $3, $4, $5, $6, $7)
                               RETURNING id",
                              &[&self.parent_sched, &self.trust_id, &self.date,
-                               &self.signalling_id, &self.cancelled, &self.terminated])?;
+                               &self.signalling_id, &self.cancelled, &self.terminated, &self.nre_id])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))
@@ -234,10 +237,15 @@ pub struct TrainMvt {
     pub parent_mvt: i32,
     /// The updated time.
     pub time: NaiveTime,
-    /// Source of this update - one of:
+    /// Source of this update - references the movement_sources table
+    /// Could be one of:
     ///
-    /// - 0: TRUST live update
-    pub source: i32
+    /// - 0: TRUST Train Movements (built into schema)
+    /// - 1: Darwin Push Port (generic) (built into schema)
+    /// - anything else inserted into the movement_sources table
+    pub source: i32,
+    /// Whether this movement is an estimation, or an actual report.
+    pub estimated: bool,
 }
 impl DbType for TrainMvt {
     fn table_name() -> &'static str {
@@ -250,6 +258,7 @@ impl DbType for TrainMvt {
             parent_mvt: row.get(2),
             time: row.get(3),
             source: row.get(4),
+            estimated: row.get(5)
         }
     }
 }
@@ -257,15 +266,55 @@ impl InsertableDbType for TrainMvt {
     type Id = i32;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
         let qry = conn.query("INSERT INTO train_movements
-                              (parent_train, parent_mvt, time, source)
+                              (parent_train, parent_mvt, time, source, estimated)
                               VALUES ($1, $2, $3, $4)
                               RETURNING id",
-                             &[&self.parent_train, &self.parent_mvt, &self.time, &self.source])?;
+                             &[&self.parent_train, &self.parent_mvt, &self.time, &self.source, &self.estimated])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))
         }
         Ok(ret.expect("No id in TrainMvt::insert?!"))
+    }
+}
+#[derive(Debug, Clone)]
+/// A description of where a live update comes from.
+pub struct MvtSource {
+    /// Movement source ID.
+    pub id: i32,
+    /// Source type - one of:
+    ///
+    /// - 0: Network Rail Open Data
+    /// - 1: National Rail Enquiries
+    pub source_type: i32,
+    /// Source text - free-form text describing the data source.
+    pub source_text: String
+}
+impl DbType for MvtSource {
+    fn table_name() -> &'static str {
+        "movement_sources"
+    }
+    fn from_row(row: &Row) -> Self {
+        Self {
+            id: row.get(0),
+            source_type: row.get(1),
+            source_text: row.get(2),
+        }
+    }
+}
+impl InsertableDbType for MvtSource {
+    type Id = i32;
+    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
+        let qry = conn.query("INSERT INTO mvt_sources
+                              (id, source_type, source_text)
+                              VALUES ($1, $2, $3)
+                              RETURNING id",
+                             &[&self.id, &self.source_type, &self.source_text])?;
+        let mut ret = None;
+        for row in &qry {
+            ret = Some(row.get(0))
+        }
+        Ok(ret.expect("No id in MvtSource::insert?!"))
     }
 }
 // NB: If you change this, change the brittle SELECT

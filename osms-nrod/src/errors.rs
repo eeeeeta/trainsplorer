@@ -22,6 +22,20 @@ pub enum NrodError {
     UnknownMvtBody(Value),
     #[fail(display = "Message type {} is unimplemented", _0)]
     UnimplementedMessageType(String),
+    #[fail(display = "Darwin provided a forecast, but no location timings")]
+    DarwinTimingsMissing,
+    #[fail(display = "Couldn't find any trains for RID {} (UID {}, start_date {})", rid, uid, start_date)]
+    RidLinkFailed {
+        rid: String,
+        uid: String,
+        start_date: NaiveDate
+    },
+    #[fail(display = "More than one train for RID {} (UID {}, start_date {})", rid, uid, start_date)]
+    AmbiguousTrains {
+        rid: String,
+        uid: String,
+        start_date: NaiveDate
+    },
     #[fail(display = "Failed to find a schedule (UID {}, start {}, stp_indicator {:?}, src {}) when processing activation for {} on {}", train_uid, start_date, stp_indicator, source, train_id, date)]
     NoSchedules {
         train_uid: String,
@@ -37,8 +51,10 @@ pub enum NrodError {
     NoAuthoritativeSchedules(String, NaiveDate, StpIndicator, i32),
     #[fail(display = "No train found for ID {} on date {}", _0, _1)]
     NoTrainFound(String, NaiveDate),
-    #[fail(display = "Failed to find any schedule movements (sched #{}, actions {:?}, tiplocs {:?}, time {:?}", _0, _1, _2, _3)]
-    NoMovementsFound(i32, Vec<i32>, Vec<String>, Option<NaiveTime>)
+    #[fail(display = "Failed to find any schedule movements (sched #{}, actions {:?}, tiplocs {:?}, time {:?})", _0, _1, _2, _3)]
+    NoMovementsFound(i32, Vec<i32>, Vec<String>, Option<NaiveTime>),
+    #[fail(display = "Multiple errors: {:?}", _0)]
+    MultipleFailures(Vec<NrodError>)
 }
 
 impl_from_for_error! {

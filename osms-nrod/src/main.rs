@@ -14,6 +14,8 @@ extern crate chrono;
 extern crate r2d2;
 extern crate r2d2_postgres;
 extern crate crossbeam_channel;
+extern crate darwin_types;
+extern crate flate2;
 
 use stomp::session::{SessionEvent, Session};
 use stomp::header::Header;
@@ -28,6 +30,7 @@ use cadence::prelude::*;
 use cadence::{StatsdClient, QueuingMetricSink, BufferedUdpMetricSink, DEFAULT_PORT};
 use std::sync::Arc;
 use crossbeam_channel::{Sender, Receiver};
+use flate2::read::GzDecoder;
 
 use ntrod_types::movements::{Records, MvtBody};
 use ntrod_types::vstp::Record as VstpRecord;
@@ -36,27 +39,30 @@ use r2d2_postgres::{PostgresConnectionManager, TlsMode};
 mod errors;
 mod conf;
 mod live;
+mod darwin;
 
 use conf::NrodConfig;
 
 pub enum WorkerMessage {
     Movement(String),
-    Vstp(String)
+    Vstp(String),
+    Darwin(Vec<u8>)
 }
 pub struct NtrodProcessor {
     sess: Session,
     hdl: Handle,
     timeout: Option<Timeout>,
     timeout_ms: u64,
-    tx: Sender<WorkerMessage>
+    tx: Sender<WorkerMessage>,
+    darwin_qn: Option<String>
 }
 pub struct NtrodWorker {
     metrics: Option<Arc<StatsdClient>>,
-    pool: r2d2::Pool<PostgresConnectionManager>,
+    pub pool: r2d2::Pool<PostgresConnectionManager>,
     rx: Receiver<WorkerMessage> 
 }
 impl NtrodWorker {
-    fn incr(&mut self, dest: &str) {
+    pub fn incr(&mut self, dest: &str) {
         if let Some(ref mut m) = self.metrics {
             if let Err(e) = m.incr(dest) {
                 error!("failed to update metrics: {:?}", e);
@@ -68,7 +74,40 @@ impl NtrodWorker {
             let data = self.rx.recv().unwrap();
             match data {
                 WorkerMessage::Movement(data) => self.on_movement(data),
-                WorkerMessage::Vstp(data) => self.on_vstp(data)
+                WorkerMessage::Vstp(data) => self.on_vstp(data),
+                WorkerMessage::Darwin(data) => self.on_darwin(data)
+            }
+        }
+    }
+    fn on_darwin(&mut self, data: Vec<u8>) {
+        use std::io::Read;
+
+        self.incr("darwin.recv");
+        let mut gz = GzDecoder::new(&data as &[u8]);
+        let mut s = String::new();
+        match gz.read_to_string(&mut s) {
+            Ok(_) => {
+                info!("Got frame: {}", s);
+                match darwin_types::parse_pport_document(s.as_bytes()) {
+                    Ok(doc) => {
+                        self.incr("darwin.parsed");
+                        match darwin::process_darwin_pport(self, doc) {
+                            Ok(_) => self.incr("darwin.processed"),
+                            Err(e) => {
+                                error!("Failed to process pport: {}", e);
+                                self.incr("darwin.fail");
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        error!("Failed to parse Darwin doc: {}", e);
+                        self.incr("darwin.parse_errors");
+                    }
+                }
+            },
+            Err(e) => {
+                self.incr("darwin.deflate_errors");
+                error!("Failed to deflate frame: {}", e);
             }
         }
     }
@@ -137,6 +176,16 @@ impl NtrodWorker {
         }
     }
 }
+impl NtrodProcessor {
+    fn service_name(&self) -> &'static str {
+        if self.darwin_qn.is_some() {
+            "Darwin"
+        }
+        else {
+            "NTROD"
+        }
+    }
+}
 impl Future for NtrodProcessor {
     type Item = ();
     type Error = ::failure::Error;
@@ -150,7 +199,7 @@ impl Future for NtrodProcessor {
             .unwrap_or(Ok(Async::NotReady))?;
 
         if let Async::Ready(_) = tm {
-            info!("Reconnecting...");
+            info!("Reconnecting to {}...", self.service_name());
             self.sess.reconnect().unwrap();
             self.timeout = None;
         }
@@ -159,34 +208,49 @@ impl Future for NtrodProcessor {
             let ev = ev.unwrap();
             match ev {
                 Connected => {
-                    info!("Connected to NTROD!");
                     self.timeout = None;
                     self.timeout_ms = 1000;
-                    self.sess.subscription("/topic/TRAIN_MVT_ALL_TOC")
-                        .with(Header::new("activemq.subscriptionName", "osms-nrod"))
-                        .start();
-                    self.sess.subscription("/topic/VSTP_ALL")
-                        .with(Header::new("activemq.subscriptionName", "osms-nrod-vstp"))
-                        .start();
+                    if let Some(ref qn) = self.darwin_qn {
+                        info!("Connected to Darwin; subscribing...");
+                        self.sess.subscription(&format!("/queue/{}", qn))
+                            .start();
+                    }
+                    else {
+                        info!("Connected to NTROD; subscribing...");
+                        self.sess.subscription("/topic/TRAIN_MVT_ALL_TOC")
+                            .with(Header::new("activemq.subscriptionName", "osms-nrod"))
+                            .start();
+                        self.sess.subscription("/topic/VSTP_ALL")
+                            .with(Header::new("activemq.subscriptionName", "osms-nrod-vstp"))
+                            .start();
+                    }
                 },
                 ErrorFrame(fr) => {
-                    error!("Error frame, reconnecting: {:?}", fr);
+                    error!("Error frame from {}, reconnecting: {:?}", self.service_name(), fr);
                     self.sess.reconnect().unwrap();
                 },
                 Message { destination, frame, .. } => {
-                    if destination == "/topic/TRAIN_MVT_ALL_TOC" {
-                        let st = String::from_utf8_lossy(&frame.body);
-                        self.tx.send(WorkerMessage::Movement(st.into())).unwrap();
+                    if self.darwin_qn.is_some() {
+                        debug!("Got a NTROD message addressed to {}", destination);
+                        if destination == "/topic/TRAIN_MVT_ALL_TOC" {
+                            let st = String::from_utf8_lossy(&frame.body);
+                            self.tx.send(WorkerMessage::Movement(st.into())).unwrap();
+                        }
+                        if destination == "/topic/VSTP_ALL" {
+                            let st = String::from_utf8_lossy(&frame.body);
+                            self.tx.send(WorkerMessage::Vstp(st.into())).unwrap();
+                        }
+                        self.sess.acknowledge_frame(&frame, AckOrNack::Ack);
                     }
-                    if destination == "/topic/VSTP_ALL" {
-                        let st = String::from_utf8_lossy(&frame.body);
-                        self.tx.send(WorkerMessage::Vstp(st.into())).unwrap();
+                    else {
+                        self.sess.acknowledge_frame(&frame, AckOrNack::Ack);
+                        debug!("Got a Darwin message");
+                        self.tx.send(WorkerMessage::Darwin(frame.body)).unwrap();
                     }
-                    self.sess.acknowledge_frame(&frame, AckOrNack::Ack);
                 },
                 Disconnected(reason) => {
-                    error!("disconnected: {:?}", reason);
-                    error!("reconnecting in {} ms", self.timeout_ms);
+                    error!("disconnected from {}: {:?}", self.service_name(), reason);
+                    error!("reconnecting to {} in {} ms", self.service_name(), self.timeout_ms);
                     let mut tm = Timeout::new(Duration::from_millis(self.timeout_ms), &self.hdl)?;
                     tm.poll()?;
                     self.timeout = Some(tm);
@@ -253,12 +317,20 @@ fn main() {
         .connection_customizer(Box::new(AppNameSetter))
         .build(manager)
         .unwrap();
-    info!("Initialising session...");
+    info!("Initialising NTROD session...");
     let mut core = Core::new().unwrap();
     let hdl = core.handle();
     let nrod_url = conf.nrod_url.as_ref().map(|x| x as &str).unwrap_or("datafeeds.networkrail.co.uk");
-    let sess = SessionBuilder::new(nrod_url, conf.nrod_port.unwrap_or(61618))
-        .with(Credentials(&conf.username, &conf.password))
+    let nrod_sess = SessionBuilder::new(nrod_url, conf.nrod_port.unwrap_or(61618))
+        .with(Credentials(&conf.nrod_username, &conf.nrod_password))
+        .with(Header::new("client-id", "eta@theta.eu.org"))
+        .with(HeartBeat(5_000, 2_000))
+        .start(hdl.clone())
+        .unwrap();
+    info!("Initialising Darwin session...");
+    let darwin_url = conf.darwin_url.as_ref().map(|x| x as &str).unwrap_or("datafeeds.nationalrail.co.uk");
+    let darwin_sess = SessionBuilder::new(darwin_url, conf.darwin_port.unwrap_or(61613))
+        .with(Credentials(&conf.darwin_username, &conf.darwin_password))
         .with(Header::new("client-id", "eta@theta.eu.org"))
         .with(HeartBeat(5_000, 2_000))
         .start(hdl.clone())
@@ -276,7 +348,8 @@ fn main() {
             worker.run();
         });
     }
-    info!("Running client...");
-    let p = NtrodProcessor { tx, sess, hdl, timeout: None, timeout_ms: 1000 };
-    core.run(p).unwrap();
+    info!("Running clients...");
+    let nrod = NtrodProcessor { tx: tx.clone(), sess: nrod_sess, hdl: hdl.clone(), timeout: None, timeout_ms: 1000, darwin_qn: None };
+    let darwin = NtrodProcessor { tx, sess: darwin_sess, hdl, timeout: None, timeout_ms: 1000, darwin_qn: Some(conf.darwin_queue_name) };
+    core.run(nrod.join(darwin)).unwrap();
 }
