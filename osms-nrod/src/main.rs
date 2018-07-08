@@ -348,6 +348,9 @@ fn main() {
         .connection_customizer(Box::new(AppNameSetter))
         .build(manager)
         .unwrap();
+    info!("Initialising database...");
+    osms_db::db::initialize_database(&*pool.get().unwrap())
+        .unwrap();
     info!("Initialising NTROD session...");
     let mut core = Core::new().unwrap();
     let hdl = core.handle();
