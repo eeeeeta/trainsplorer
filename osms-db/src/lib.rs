@@ -13,7 +13,6 @@ extern crate fallible_iterator;
 extern crate ordered_float;
 extern crate crossbeam;
 #[macro_use] extern crate serde_derive;
-extern crate titlecase;
 
 #[macro_use] pub mod util;
 pub mod migration;

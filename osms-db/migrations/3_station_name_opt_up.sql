@@ -1,1 +1,0 @@
-ALTER TABLE stations ADD COLUMN name VARCHAR;

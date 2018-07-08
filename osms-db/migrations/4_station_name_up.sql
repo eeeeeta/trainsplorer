@@ -1,1 +1,0 @@
-ALTER TABLE stations ALTER COLUMN name SET NOT NULL;
