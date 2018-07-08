@@ -200,6 +200,7 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
         return Err(NrodError::NoMovementsFound(train.parent_sched, acceptable_actions, tiplocs, m.planned_timestamp.map(|x| x.time())));
     }
     let mvt = mvts.into_iter().nth(0).unwrap();
+    let delta = m.actual_timestamp.time().signed_duration_since(mvt.time);
     let tmvt = TrainMvt {
         id: -1,
         parent_train: train.id,
@@ -210,5 +211,22 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
     };
     let id = tmvt.insert_self(conn)?;
     debug!("Registered train movement #{}.", id);
+    debug!("Deleting any estimations...");
+    conn.execute("DELETE FROM train_movements WHERE parent_mvt = $1 AND source = 2 AND estimated = true", &[&mvt.id])?;
+    debug!("Creating/updating naïve estimation movements with delta {}", delta);
+    let remaining_sched_mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND time > $2 ORDER BY time ASC", &[&train.parent_sched, &mvt.time])?;
+    for mvt in remaining_sched_mvts {
+        conn.execute("DELETE FROM train_movements WHERE parent_mvt = $1 AND source = 2 AND estimated = true", &[&mvt.id])?;
+        let tmvt = TrainMvt {
+            id: -1,
+            parent_train: train.id,
+            parent_mvt: mvt.id,
+            time: mvt.time + delta,
+            source: 2,
+            estimated: true
+        };
+        let id = tmvt.insert_self(conn)?;
+        debug!("Registered estimation train movement #{}.", id);
+    }
     Ok(())
 }
