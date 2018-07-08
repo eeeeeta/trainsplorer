@@ -9,6 +9,24 @@ use ntrod;
 use geo::*;
 use std::collections::HashSet;
 use postgis::ewkb::Polygon as PgPolygon;
+use errors::OsmsError;
+
+pub fn tiploc_to_readable<T: GenericConnection>(conn: &T, tl: &str) -> Result<String, OsmsError> {
+    let msn = MsnEntry::from_select(conn, "WHERE tiploc = $1", &[&tl])?;
+    let desc = match msn.into_iter().nth(0) {
+        Some(e) => Some(e.name),
+        None => {
+            let ce = CorpusEntry::from_select(conn, "WHERE nlcdesc IS NOT NULL AND tiploc = $1", &[&tl])?;
+            ce.into_iter().nth(0).map(|x| x.nlcdesc.unwrap())
+        }
+    };
+    Ok(if let Some(d) = desc {
+        ::titlecase::titlecase(&d)
+    }
+    else {
+        format!("[TIPLOC {}]", tl)
+    })
+}
 
 pub enum ProcessStationError {
     AlreadyProcessed,
@@ -78,11 +96,13 @@ pub fn process_station<T: GenericConnection>(conn: &T, nr_ref: &str, poly: Polyg
             distance: s_lp2_dist as f32
         }.insert(conn)?;
     }
+    let name = tiploc_to_readable(conn, nr_ref)?;
     let ret = Station {
         id: -1,
         nr_ref: nr_ref.into(),
         point: nd,
-        area: pgpoly
+        area: pgpoly,
+        name
     }.insert_self(conn)?;
     Ok(ret)
 }

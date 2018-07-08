@@ -1,6 +1,9 @@
 use db::*;
 use chrono::{NaiveDateTime, Utc};
 use errors::*;
+use postgres::transaction::Transaction;
+
+mod station_name;
 
 pub struct MigrationEntry {
     pub id: i32,
@@ -30,7 +33,8 @@ pub struct Migration {
     pub id: i32,
     pub name: &'static str,
     pub up: &'static str,
-    pub down: &'static str
+    pub down: &'static str,
+    pub func: Option<fn(&Transaction) -> Result<()>>
 }
 impl Migration {
     pub fn up<T: GenericConnection>(&self, conn: &T) -> Result<()> {
@@ -41,6 +45,10 @@ impl Migration {
             return Err(OsmsError::MigrationOutOfOrder(self.id));
         }
         trans.batch_execute(self.up)?;
+        if let Some(ref func) = self.func {
+            debug!("executing function for migration {}: {}", self.id, self.name);
+            func(&trans)?;
+        }
         let ent = MigrationEntry {
             id: self.id,
             timestamp: Utc::now().naive_utc()
@@ -67,19 +75,25 @@ impl Migration {
     }
 }
 macro_rules! migration {
-    ($id:expr, $name:expr) => {
+    ($id:expr, $name:expr, $func:expr) => {
         Migration {
             id: $id,
             name: $name,
             up: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/", $id, "_", $name, "_up.sql")),
             down: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/", $id, "_", $name, "_down.sql")),
+            func: $func
         }
-    }
+    };
+    ($id:expr, $name:expr) => {
+        migration!($id, $name, None)
+    };
 }
-pub static MIGRATIONS: [Migration; 3] = [
+pub static MIGRATIONS: [Migration; 5] = [
     migration!(0, "initial"),
     migration!(1, "darwin"),
     migration!(2, "tne"),
+    migration!(3, "station_name_opt", Some(station_name::station_name_func)),
+    migration!(4, "station_name")
 ];
 pub fn get_last_migration<T: GenericConnection>(conn: &T) -> Result<Option<i32>> {
     Ok(MigrationEntry::from_select(conn, "ORDER BY id DESC LIMIT 1", &[])?

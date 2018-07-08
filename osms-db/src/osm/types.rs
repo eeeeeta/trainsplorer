@@ -60,7 +60,8 @@ pub struct Station {
     pub id: i32,
     pub nr_ref: String,
     pub point: i64,
-    pub area: Polygon
+    pub area: Polygon,
+    pub name: String
 }
 impl DbType for Station {
     fn table_name() -> &'static str {
@@ -72,6 +73,7 @@ impl DbType for Station {
             nr_ref: row.get(1),
             point: row.get(2),
             area: row.get(3),
+            name: row.get(4)
         }
     }
 }
@@ -79,10 +81,10 @@ impl InsertableDbType for Station {
     type Id = i32;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
         let qry = conn.query("INSERT INTO stations
-                              (nr_ref, point, area)
-                              VALUES ($1, $2, $3)
+                              (nr_ref, point, area, name)
+                              VALUES ($1, $2, $3, $4)
                               RETURNING id",
-                             &[&self.nr_ref, &self.point, &self.area])?;
+                             &[&self.nr_ref, &self.point, &self.area, &self.name])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))
