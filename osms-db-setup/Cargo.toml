@@ -7,7 +7,7 @@ version = "0.1.0"
 [dependencies]
 chan = "0.1.21"
 chrono = "0.4"
-clap = "~2.29.0"
+clap = "~2.32.0"
 crossbeam = "0.3"
 csv = "1.0.0-beta.5"
 envy = "0.3.2"

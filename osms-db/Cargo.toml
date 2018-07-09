@@ -35,5 +35,5 @@ features = ["with-chrono", "with-serde_json"]
 version = "0.15"
 
 [dev-dependencies]
-clap = "2.26"
+clap = "2.32"
 env_logger = "0.5"
