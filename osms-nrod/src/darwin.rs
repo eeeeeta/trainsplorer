@@ -10,14 +10,13 @@ type Result<T> = ::std::result::Result<T, NrodError>;
 
 pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
     let conn = worker.pool.get().unwrap();
-    let trans = conn.transaction()?;
     debug!("Processing Darwin push port element, version {}, timestamp {}", pp.version, pp.ts);
     match pp.inner {
         PportElement::DataResponse(dr) => {
             debug!("Processing Darwin data response message, origin {:?}, source {:?}, rid {:?}", dr.update_origin, dr.request_source, dr.request_id);
             for ts in dr.train_status {
                 worker.incr("darwin.ts_recv");
-                match process_ts(&trans, ts) {
+                match process_ts(&*conn, ts) {
                     Ok(_) => worker.incr("darwin.ts_processed"),
                     Err(e) => {
                         worker.incr("darwin.ts_fail");
@@ -31,7 +30,6 @@ pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
             return Err(NrodError::UnimplementedMessageType("darwin_unknown".into()));
         }
     }
-    trans.commit()?;
     Ok(())
 }
 pub fn activate_train_from_darwin<T: GenericConnection>(conn: &T, rid: String, uid: String, start_date: NaiveDate) -> Result<Train> {
@@ -79,20 +77,24 @@ pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, rid: String, ui
         debug!("Found pre-linked train {} (TRUST id {:?}) for Darwin RID {}", t.id, t.trust_id, rid);
         return Ok(t);
     }
+    let trans = conn.transaction()?;
     debug!("Trying to link RID {} (uid {}, start_date {}) to a train...", rid, uid, start_date);
-    let trains = Train::from_select(conn, "WHERE EXISTS(SELECT * FROM schedules WHERE uid = $1 AND id = trains.parent_sched) AND date = $2", &[&uid, &start_date])?;
+    let trains = Train::from_select(&trans, "WHERE EXISTS(SELECT * FROM schedules WHERE uid = $1 AND id = trains.parent_sched) AND date = $2", &[&uid, &start_date])?;
     if trains.len() > 1 {
         return Err(NrodError::AmbiguousTrains { rid, uid, start_date });
     }
     match trains.into_iter().nth(0) {
         Some(t) => {
-            conn.execute("UPDATE trains SET nre_id = $1 WHERE id = $2", &[&rid, &t.id])?;
+            trans.execute("UPDATE trains SET nre_id = $1 WHERE id = $2", &[&rid, &t.id])?;
             debug!("Linked RID {} to train {} (TRUST ID {:?})", rid, t.id, t.trust_id);
+            trans.commit()?;
             Ok(t)
         },
         None => {
             debug!("Link failed; activating Darwin train...");
-            Ok(activate_train_from_darwin(conn, rid, uid, start_date)?)
+            let ret = activate_train_from_darwin(&trans, rid, uid, start_date)?;
+            trans.commit()?;
+            Ok(ret)
         }
     }
 }
