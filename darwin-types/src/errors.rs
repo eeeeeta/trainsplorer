@@ -4,6 +4,7 @@ use std::str::ParseBoolError;
 use xml::reader::Error as Xml;
 use xml::name::OwnedName;
 use xml::reader::XmlEvent;
+use std::string::ParseError as StringParse;
 use std::num::ParseIntError as Int;
 use chrono::format::ParseError as Chrono;
 
@@ -25,10 +26,17 @@ pub enum DarwinError {
     Expected(&'static str, String),
     #[fail(display = "missing {}", _0)]
     Missing(&'static str),
+    #[fail(display = "couldn't build: {}", _0)]
+    BuildFail(String),
     #[fail(display = "XML parse error: {}", _0)]
     XmlError(#[cause] Xml),
     #[fail(display = "Unexpected end of input")]
     UnexpectedEnd
+}
+impl From<StringParse> for DarwinError {
+    fn from(_: StringParse) -> DarwinError {
+        unreachable!()
+    }
 }
 impl_from_for_error! {
     DarwinError,
