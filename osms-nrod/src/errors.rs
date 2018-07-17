@@ -24,6 +24,14 @@ pub enum NrodError {
     UnimplementedMessageType(String),
     #[fail(display = "Darwin provided a forecast, but no location timings")]
     DarwinTimingsMissing,
+    #[fail(display = "Train #{} already activated with TRUST id {} (parent sched #{} and date {}), but {} also matches", id, orig_trust_id, parent_sched, date, new_trust_id)]
+    DoubleActivation {
+        id: i32,
+        orig_trust_id: String,
+        parent_sched: i32,
+        date: NaiveDate,
+        new_trust_id: String
+    },
     #[fail(display = "Couldn't find any trains for RID {} (UID {}, start_date {})", rid, uid, start_date)]
     RidLinkFailed {
         rid: String,
@@ -47,8 +55,16 @@ pub enum NrodError {
     },
     #[fail(display = "Schedules #{} and #{} are both authoritative!", _0, _1)]
     TwoAuthoritativeSchedules(i32, i32),
+    #[fail(display = "Schedules #{} and #{} are both authoritative for Darwin activation", _0, _1)]
+    TwoAuthoritativeSchedulesDarwin(i32, i32),
     #[fail(display = "No schedules are authoritative (UID {}, start {}, stp_indicator {:?}, src {})", _0, _1, _2, _3)]
     NoAuthoritativeSchedules(String, NaiveDate, StpIndicator, i32),
+    #[fail(display = "No schedules are authoritative for Darwin RID {} (uid {}, on date {})", rid, uid, start_date)]
+    NoAuthoritativeSchedulesDarwin {
+        rid: String,
+        uid: String,
+        start_date: NaiveDate
+    },
     #[fail(display = "No train found for ID {} on date {}", _0, _1)]
     NoTrainFound(String, NaiveDate),
     #[fail(display = "Failed to find any schedule movements (sched #{}, actions {:?}, tiplocs {:?}, time {:?})", _0, _1, _2, _3)]
