@@ -142,13 +142,9 @@ pub fn process_ts<T: GenericConnection>(conn: &T, ts: Ts) -> Result<()> {
                 continue;
             }
         };
-        // TODO: make this source check less brittle
-        let tmvts = TrainMvt::from_select(conn, "WHERE parent_mvt = $1 AND source = 1", &[&mvt.id])?;
-        for tmvt in tmvts {
-            if tmvt.estimated || tstd.at_removed {
-                debug!("Deleting old train movement {}", tmvt.id);
-                conn.execute("DELETE FROM train_movements WHERE id = $1", &[&tmvt.id])?;
-            }
+        if tstd.at_removed {
+            // TODO: make this source check less brittle
+            conn.execute("DELETE FROM train_movements WHERE parent_mvt = $1 AND source = 1", &[&mvt.id])?;
         }
         let tmvt = TrainMvt {
             id: -1,
