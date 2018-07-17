@@ -100,7 +100,7 @@ fn main() {
     println!("osms-darwin starting");
     println!("Loading config...");
     let conf = DarwinConfig::make().unwrap();
-    let log_level_g: log::LogLevelFilter = conf.log_level_general
+    let log_level_g: log::LevelFilter = conf.log_level_general
         .as_ref()
         .map(|x| x as &str)
         .unwrap_or("INFO")

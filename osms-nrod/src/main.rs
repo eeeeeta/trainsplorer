@@ -259,18 +259,18 @@ impl Future for NtrodProcessor {
                         debug!("Got a NTROD message addressed to {}", destination);
                         if destination == "/topic/TRAIN_MVT_ALL_TOC" {
                             let st = String::from_utf8_lossy(&frame.body);
-                            self.tx.send(WorkerMessage::Movement(st.into())).unwrap();
+                            self.tx.send(WorkerMessage::Movement(st.into()));
                         }
                         if destination == "/topic/VSTP_ALL" {
                             let st = String::from_utf8_lossy(&frame.body);
-                            self.tx.send(WorkerMessage::Vstp(st.into())).unwrap();
+                            self.tx.send(WorkerMessage::Vstp(st.into()));
                         }
                         self.sess.acknowledge_frame(&frame, AckOrNack::Ack);
                     }
                     else {
                         self.sess.acknowledge_frame(&frame, AckOrNack::Ack);
                         debug!("Got a Darwin message");
-                        self.tx.send(WorkerMessage::Darwin(frame.body)).unwrap();
+                        self.tx.send(WorkerMessage::Darwin(frame.body));
                     }
                 },
                 Disconnected(reason) => {
@@ -308,7 +308,7 @@ fn main() {
     file.read_to_string(&mut contents).unwrap();
     println!("Parsing config...");
     let conf: Config = toml::de::from_str(&contents).unwrap();
-    let log_level_g: log::LogLevelFilter = conf.log_level_general
+    let log_level_g: log::LevelFilter = conf.log_level_general
         .as_ref()
         .map(|x| x as &str)
         .unwrap_or("INFO")

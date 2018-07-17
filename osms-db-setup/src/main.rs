@@ -174,9 +174,9 @@ fn run() -> Result<(), Error> {
                                     record.level(),
                                     msg))
         })
-        .level(log::LogLevelFilter::Info)
-        .level_for("osms_db_setup", log::LogLevelFilter::Debug)
-        .level_for("osms_db", log::LogLevelFilter::Debug)
+        .level(log::LevelFilter::Info)
+        .level_for("osms_db_setup", log::LevelFilter::Debug)
+        .level_for("osms_db", log::LevelFilter::Debug)
         .chain(std::io::stdout());
     if let Some(f) = matches.value_of("logfile") {
         disp = disp.chain(fern::log_file(f)
@@ -190,7 +190,6 @@ fn run() -> Result<(), Error> {
     info!("Loading config...");
     let conf: Config = envy::from_env()?;
     info!("Connecting to Postgres...");
-    let r2c = r2d2::Config::default();
     let tls = if conf.require_tls {
         let tls = NativeTls::new()
             .context(err_msg("couldn't initialize tls"))?;
@@ -201,7 +200,9 @@ fn run() -> Result<(), Error> {
     };
     let manager = PostgresConnectionManager::new(conf.database_url, tls)
         .context(err_msg("couldn't connect to postgres"))?;
-    let pool = r2d2::Pool::new(r2c, manager).context(err_msg("couldn't make db pool"))?;
+    let pool = r2d2::Pool::builder()
+        .build(manager)
+        .context(err_msg("couldn't make db pool"))?;
 
     match matches.subcommand() {
         ("setup", Some(opts)) => {

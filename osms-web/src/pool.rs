@@ -24,15 +24,15 @@ impl<E> r2d2::CustomizeConnection<Conn, E> for AppNameSetter {
     }
 }
 pub fn attach_db(rocket: Rocket) -> Rocket {
-    let config = r2d2::config::Builder::new()
-        .connection_customizer(Box::new(AppNameSetter))
-        .build();
     let manager = {
         let url = rocket.config().get_str("database_url")
             .expect("'database_url' in config");
         PostgresConnectionManager::new(url, TlsMode::None).unwrap()
     };
-    let pool = r2d2::Pool::new(config, manager).expect("db pool");
+    let pool = r2d2::Builder::new()
+        .connection_customizer(Box::new(AppNameSetter))
+        .build(manager)
+        .expect("db pool");
     {
         let conn = pool.get().unwrap();
         ::osms_db::db::initialize_database(&*conn).unwrap();
