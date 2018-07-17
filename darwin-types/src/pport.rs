@@ -1,5 +1,6 @@
 //! Push Port data - http://www.thalesgroup.com/rtti/PushPort/v12
 use forecasts::Ts;
+use schedule::{Schedule, DeactivatedSchedule};
 use chrono::{DateTime, FixedOffset};
 use std::io::Read;
 use errors::*;
@@ -11,6 +12,10 @@ use xml::reader::{XmlEvent, EventReader};
 pub struct DataResponse {
     /// Train Status messages in this update.
     pub train_status: Vec<Ts>,
+    /// Train Schedule messages in this update.
+    pub schedule: Vec<Schedule>,
+    /// Deactivated schedule notifications in this update.
+    pub deactivated: Vec<DeactivatedSchedule>,
     /// A string describing the type of system that originated this update, e.g. "CIS" or "Darwin".
     pub update_origin: Option<String>,
     /// The source instance that generated this update, usually a CIS instance.
@@ -36,6 +41,12 @@ impl XmlDeserialize for DataResponse {
             pragma lenient,
             parse "TS", Ts as ts {
                 ret.train_status.push(ts);
+            },
+            parse "schedule", Schedule as sched {
+                ret.schedule.push(sched);
+            },
+            parse "deactivated", DeactivatedSchedule as sched {
+                ret.deactivated.push(sched);
             },
         }
         Ok(ret)

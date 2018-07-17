@@ -1,6 +1,6 @@
 //! Forecast data - http://www.thalesgroup.com/rtti/PushPort/Forecasts/v2
 use chrono::{NaiveTime, NaiveDate};
-use common::{CircularTimes, DisruptionReason};
+use common::{CircularTimes, CircularTimesBuilder, DisruptionReason};
 use std::default::Default;
 use std::str::FromStr;
 use errors::*;
@@ -15,6 +15,11 @@ pub enum PlatformSource {
     Automatic,
     Manual
 }
+impl Default for PlatformSource {
+    fn default() -> Self {
+        PlatformSource::Planned
+    }
+}
 impl FromStr for PlatformSource {
     type Err = DarwinError;
 
@@ -27,46 +32,42 @@ impl FromStr for PlatformSource {
         }
     }
 }
-#[derive(Default, Debug, Clone)]
+#[derive(Builder, Default, Debug, Clone)]
+#[builder(private)]
 /// Platform number with associated flags. 
 pub struct PlatformData {
     pub platform: String,
     /// Platform number is suppressed and should not be displayed.
+    #[builder(default)]
     pub platsup: bool,
     /// Whether a CIS, or Darwin Workstation, has set platform suppression
     /// at this location.
+    #[builder(default)]
     pub cis_platsup: bool,
     /// The source of the platform number.
-    pub platsrc: Option<PlatformSource>,
+    #[builder(default)]
+    pub platsrc: PlatformSource,
     /// Whether the platform number is confirmed.
+    #[builder(default)]
     pub conf: bool
 }
 impl XmlDeserialize for PlatformData {
     fn from_xml_iter<R: Read>(se: XmlStartElement, reader: &mut EventReader<R>) -> Result<Self> {
-        let mut ret: Self = Default::default();
+        let mut ret = PlatformDataBuilder::default();
         xml_attrs! { se, value,
-            parse platsup, conf on ret,
-            with platsrc on ret {
-                Some(value.parse()?)
-            },
-            pat "cisPlatsup" => {
-                ret.cis_platsup = value.parse()?;
-            }
+            parse platsup, platsrc, conf, cis_platsup from cisPlatsup on ret,
         }
-        let mut plat = false;
         xml_iter! { se, reader,
             pat XmlEvent::Characters(data) => {
-                ret.platform = data;
-                plat = true;
+                ret.platform(data);
             }
         }
-        if !plat {
-            Err(DarwinError::Missing("platform data"))?;
-        }
+        xml_build!(ret);
         Ok(ret)
     }
 }
-#[derive(Default, Debug, Clone)]
+#[derive(Builder, Default, Debug, Clone)]
+#[builder(private, default)]
 /// Type describing time-based forecast attributes for a TS arrival/departure/pass.
 pub struct TsTimeData {
     /// Estimated Time. For locations with a public activity, this will be based on the "public schedule". For all other activities, it will be based on the "working schedule".
@@ -90,32 +91,23 @@ pub struct TsTimeData {
 }
 impl XmlDeserialize for TsTimeData {
     fn from_xml_iter<R: Read>(se: XmlStartElement, reader: &mut EventReader<R>) -> Result<Self> {
-        let mut ret: Self = Default::default();
+        let mut ret = TsTimeDataBuilder::default();
         xml_attrs! { se, value,
+            parse at_removed from atRemoved, et_unknown from etUnknown, delayed on ret,
             with et, wet, at, etmin on ret {
                 Some(util::parse_time(&value)?)
             },
-            with delayed on ret {
-                value.parse()?
-            },
-            with src on ret {
+            with src, src_inst from srcInst on ret {
                 Some(value)
             },
-            pat "srcInst" => {
-                ret.src_inst = Some(value);
-            },
-            pat "atRemoved" => {
-                ret.at_removed = value.parse()?;
-            },
-            pat "etUnknown" => {
-                ret.et_unknown = value.parse()?;
-            }
         }
+        xml_build!(ret);
         xml_iter! { se, reader, }
         Ok(ret)
     }
 }
-#[derive(Default, Debug, Clone)]
+#[derive(Builder, Default, Debug, Clone)]
+#[builder(private)]
 /// Forecast data for an individual location in the service's schedule.
 pub struct TsLocation {
     /// TIPLOC
@@ -123,71 +115,76 @@ pub struct TsLocation {
     /// Scheduled timing data for this location.
     pub timings: CircularTimes,
     /// Forecast data for the arrival at this location.
+    #[builder(default)]
     pub arr: Option<TsTimeData>,
     /// Forecast data for the departure at this location.
+    #[builder(default)]
     pub dep: Option<TsTimeData>,
     /// Forecast data for the pass of this location.
+    #[builder(default)]
     pub pass: Option<TsTimeData>,
     /// Current platform number.
+    #[builder(default)]
     pub plat: Option<PlatformData>,
     /// Whether the service is suppressed at this location or not.
+    #[builder(default)]
     pub suppr: bool,
     /// The length of the service at this location on departure (or arrival at destination). The default value of zero indicates that the length is unknown.
+    #[builder(default)]
     pub length: u32,
     /// Indicates from which end of the train stock will be detached. The value is set to “true” if stock will be detached from the front of the train at this location. It will be set at each location where stock will be detached from the front. Darwin will not validate that a stock detachment activity code applies at this location.
+    #[builder(default)]
     pub detach_front: bool
 }
 impl XmlDeserialize for TsLocation {
     fn from_xml_iter<R: Read>(se: XmlStartElement, reader: &mut EventReader<R>) -> Result<Self> {
-        let mut ret: Self = Default::default();
-        let mut tpl = false;
+        let mut ret = TsLocationBuilder::default();
+        let mut timings = CircularTimesBuilder::default();
         {
-            let timings = &mut ret.timings;
             xml_attrs! { se, value,
+                parse tiploc from tpl on ret,
                 with wta, wtd, wtp, pta, ptd on timings {
                     Some(util::parse_time(&value)?)
                 },
-                pat "tpl" => {
-                    tpl = true;
-                    ret.tiploc = value;
-                }
             }
         }
-        if !tpl {
-            Err(DarwinError::Missing("TIPLOC"))?;
-        }
+        xml_build!(timings);
+        ret.timings(timings);
         type BoolElement = util::ValueElement<bool>;
         type U32Element = util::ValueElement<u32>;
         xml_iter! { se, reader, 
             parse "arr", TsTimeData as arr {
-                ret.arr = Some(arr);
+                ret.arr(Some(arr));
             },
             parse "dep", TsTimeData as dep {
-                ret.dep = Some(dep);
+                ret.dep(Some(dep));
             },
             parse "pass", TsTimeData as pass {
-                ret.pass = Some(pass);
+                ret.pass(Some(pass));
             },
             parse "suppr", BoolElement as suppr {
-                ret.suppr = suppr.0;
+                ret.suppr(suppr.0);
             },
             parse "detachFront", BoolElement as detach_front {
-                ret.detach_front = detach_front.0
+                ret.detach_front(detach_front.0);
             },
             parse "length", U32Element as len {
-                ret.length = len.0;
+                ret.length(len.0);
             },
             parse "plat", PlatformData as plat {
-                ret.plat = Some(plat);
+                ret.plat(Some(plat));
             },
         }
+        xml_build!(ret);
         Ok(ret)
     }
 }
 /// Train Status. Update to the "real time" forecast data for a service.
-#[derive(Debug, Clone)]
+#[derive(Builder, Debug, Clone)]
+#[builder(private)]
 pub struct Ts {
     /// Late running reason for this service. The reason applies to all locations of this service.
+    #[builder(default)]
     pub late_reason: Option<DisruptionReason>,
     /// Update of forecast data for individual locations in the service's schedule.
     pub locations: Vec<TsLocation>,
@@ -199,26 +196,16 @@ pub struct Ts {
     /// ITPS schedule's start date.]*
     pub start_date: NaiveDate,
     /// Indicates whether a train that divides is working with portions in reverse to their normal formation. The value applies to the whole train. Darwin will not validate that a divide association actually exists for this service.
+    #[builder(default)]
     pub is_reverse_formation: bool
 }
 impl XmlDeserialize for Ts {
     fn from_xml_iter<R: Read>(se: XmlStartElement, reader: &mut EventReader<R>) -> Result<Self> {
-        let mut rid = None;
-        let mut uid = None;
-        let mut ssd = None;
-        let mut is_reverse_formation = false;
+        let mut ret = TsBuilder::default();
         xml_attrs! { se, value,
-            pat "isReverseFormation" => {
-                is_reverse_formation = value.parse()?;
-            },
+            parse rid, uid, is_reverse_formation from isReverseFormation on ret,
             pat "ssd" => {
-                ssd = Some(NaiveDate::parse_from_str(&value, "%Y-%m-%d")?);
-            },
-            pat "rid" => {
-                rid = Some(value);
-            },
-            pat "uid" => {
-                uid = Some(value);
+                ret.start_date(NaiveDate::parse_from_str(&value, "%Y-%m-%d")?);
             }
         }
         let mut locs = vec![];
@@ -231,13 +218,9 @@ impl XmlDeserialize for Ts {
                 lr = Some(l);
             },
         }
-        Ok(Ts {
-            rid: rid.ok_or(DarwinError::Missing("rid"))?,
-            uid: uid.ok_or(DarwinError::Missing("uid"))?,
-            start_date: ssd.ok_or(DarwinError::Missing("ssd"))?,
-            is_reverse_formation,
-            locations: locs,
-            late_reason: lr
-        })
+        ret.late_reason(lr);
+        ret.locations(locs);
+        xml_build!(ret);
+        Ok(ret)
     }
 }
