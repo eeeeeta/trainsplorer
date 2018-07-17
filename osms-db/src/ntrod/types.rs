@@ -181,11 +181,11 @@ pub struct Train {
     /// Schedule this train is running from.
     pub parent_sched: i32,
     /// TRUST ID from NROD.
-    pub trust_id: String,
+    pub trust_id: Option<String>,
     /// Date this train was running on.
     pub date: NaiveDate,
     /// Signalling headcode from TRUST.
-    pub signalling_id: String,
+    pub signalling_id: Option<String>,
     /// Whether this train was cancelled or not.
     pub cancelled: bool,
     /// Whether this train has terminated or not.

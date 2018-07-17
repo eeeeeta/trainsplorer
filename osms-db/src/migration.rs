@@ -76,10 +76,11 @@ macro_rules! migration {
         }
     }
 }
-pub static MIGRATIONS: [Migration; 3] = [
+pub static MIGRATIONS: [Migration; 4] = [
     migration!(0, "initial"),
     migration!(1, "darwin"),
     migration!(2, "tne"),
+    migration!(3, "neutral_train_activations")
 ];
 pub fn get_last_migration<T: GenericConnection>(conn: &T) -> Result<Option<i32>> {
     Ok(MigrationEntry::from_select(conn, "ORDER BY id DESC LIMIT 1", &[])?
