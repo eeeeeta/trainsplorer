@@ -236,7 +236,6 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
     debug!("Creating/updating naïve estimation movements with delta {}", delta);
     let remaining_sched_mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND time > $2 ORDER BY time ASC", &[&train.parent_sched, &mvt.time])?;
     for mvt in remaining_sched_mvts {
-        conn.execute("DELETE FROM train_movements WHERE parent_mvt = $1 AND source = 2 AND estimated = true", &[&mvt.id])?;
         let tmvt = TrainMvt {
             id: -1,
             parent_train: train.id,
