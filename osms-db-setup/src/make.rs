@@ -161,7 +161,7 @@ pub fn msn_entries<R: BufRead, T: GenericConnection>(conn: &T, file: R) -> Resul
     let mut done = 0;
     for line in file.lines() {
         let line = line?;
-        if let IResult::Done(_, data) = msn_record(&line) {
+        if let Ok((_, data)) = msn_record(&line) {
             match data {
                 MsnRecord::Header(h) => {
                     debug!("msn_entries: file creation timestamp {}", h.timestamp); 

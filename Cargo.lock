@@ -1306,7 +1306,6 @@ dependencies = [
  "flate2 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "nom 4.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ntrod-types 0.1.0",
  "osms-db 0.1.0",
  "postgres 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",

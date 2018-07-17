@@ -51,11 +51,11 @@ pub struct IndexView {
     mvt_search: MovementSearchView
 }
 
-#[error(500)]
+#[catch(500)]
 fn ise() -> Template {
     Template::render("ise", TemplateContext::title("500"))
 }
-#[error(404)]
+#[catch(404)]
 fn not_found(req: &Request) -> Template {
     Template::render("not_found", TemplateContext {
         title: "404".into(),
@@ -98,7 +98,7 @@ fn main() {
             Ok(pool::attach_db(rocket))
         }))
         .attach(Template::fairing())
-        .catch(errors![not_found, ise])
+        .catch(catchers![not_found, ise])
         .mount("/", routes![
                index, 
                map,
