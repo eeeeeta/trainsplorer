@@ -94,10 +94,11 @@ pub fn process_ntrod_event<T: GenericConnection>(conn: &T, r: Record) -> Result<
     let Record { header, body } = r;
     debug!("Processing message type {} from system {} (source {})",
            header.msg_type, header.source_system_id, header.original_data_source);
+    let trans = conn.transaction()?;
     match body {
-        MvtBody::Activation(a) => process_activation(conn, a)?,
-        MvtBody::Cancellation(a) => process_cancellation(conn, a)?,
-        MvtBody::Movement(a) => process_movement(conn, a)?,
+        MvtBody::Activation(a) => process_activation(&trans, a)?,
+        MvtBody::Cancellation(a) => process_cancellation(&trans, a)?,
+        MvtBody::Movement(a) => process_movement(&trans, a)?,
         MvtBody::Unknown(v) => {
             return Err(NrodError::UnknownMvtBody(v));
         },
@@ -105,16 +106,16 @@ pub fn process_ntrod_event<T: GenericConnection>(conn: &T, r: Record) -> Result<
             return Err(NrodError::UnimplementedMessageType(header.msg_type));
         }
     }
+    trans.commit()?;
     Ok(())
 }
 pub fn process_activation<T: GenericConnection>(conn: &T, a: Activation) -> Result<()> {
-    let trans = conn.transaction()?;
     debug!("Processing activation of train {}...", a.train_id);
     let src = match a.schedule_source {
         ScheduleSource::CifItps => 0,
         ScheduleSource::VstpTops => 1,
     };
-    let scheds = Schedule::from_select(&trans,
+    let scheds = Schedule::from_select(conn,
         "WHERE uid = $1 AND stp_indicator = $2 AND start_date = $3 AND source = $4",
         &[&a.train_uid, &a.schedule_type, &a.schedule_start_date, &src])?;
     if scheds.len() == 0 {
@@ -130,7 +131,7 @@ pub fn process_activation<T: GenericConnection>(conn: &T, a: Activation) -> Resu
     }
     let mut auth_schedule: Option<Schedule> = None;
     for sched in scheds {
-        if !sched.is_authoritative(&trans, a.origin_dep_timestamp.date())? {
+        if !sched.is_authoritative(conn, a.origin_dep_timestamp.date())? {
             debug!("Schedule #{} is superseded.", sched.id);
         }
         else {
@@ -146,7 +147,7 @@ pub fn process_activation<T: GenericConnection>(conn: &T, a: Activation) -> Resu
     else {
         return Err(NrodError::NoAuthoritativeSchedules(a.train_uid, a.schedule_start_date, a.schedule_type, src));
     };
-    let nre_trains = Train::from_select(&trans, "WHERE parent_sched = $1 AND date = $2", &[&auth_schedule.id, &a.origin_dep_timestamp.date()])?;
+    let nre_trains = Train::from_select(conn, "WHERE parent_sched = $1 AND date = $2", &[&auth_schedule.id, &a.origin_dep_timestamp.date()])?;
     if let Some(nt) = nre_trains.into_iter().nth(0) {
         debug!("Found pre-existing train #{} with NRE id {:?}; linking...", nt.id, nt.nre_id);
         if let Some(tid) = nt.trust_id {
@@ -158,8 +159,7 @@ pub fn process_activation<T: GenericConnection>(conn: &T, a: Activation) -> Resu
                 new_trust_id: a.train_id
             });
         }
-        trans.execute("UPDATE trains SET trust_id = $1, signalling_id = $2 WHERE id = $3", &[&a.train_id, &a.schedule_wtt_id, &nt.id])?;
-        trans.commit()?;
+        conn.execute("UPDATE trains SET trust_id = $1, signalling_id = $2 WHERE id = $3", &[&a.train_id, &a.schedule_wtt_id, &nt.id])?;
         debug!("Linked train.");
         Ok(())
     }
@@ -174,8 +174,7 @@ pub fn process_activation<T: GenericConnection>(conn: &T, a: Activation) -> Resu
             terminated: false,
             nre_id: None,
         };
-        let id = train.insert_self(&trans)?;
-        trans.commit()?;
+        let id = train.insert_self(conn)?;
         debug!("Inserted train as #{}", id);
         Ok(())
     }
