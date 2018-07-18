@@ -287,7 +287,7 @@ fn run() -> Result<(), Error> {
                         let sf = ::osms_db::ntrod::types::ScheduleFile::from_select(&*conn, "ORDER BY metaseq DESC LIMIT 1", &[])?;
                         if let Some(sf) = sf.into_iter().nth(0) {
                             info!("Last metaseq was {}. Deleting stale schedules...", sf.metaseq);
-                            conn.execute("DELETE FROM schedules WHERE metaseq != $1", &[&sf.metaseq])?;
+                            conn.execute("DELETE FROM schedules WHERE file_metaseq != $1", &[&sf.metaseq])?;
                         }
                         else {
                             warn!("No schedules inserted yet!");
