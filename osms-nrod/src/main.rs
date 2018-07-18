@@ -243,8 +243,6 @@ impl Future for NtrodProcessor {
             let ev = ev.unwrap();
             match ev {
                 Connected => {
-                    self.timeout = None;
-                    self.timeout_ms = 1000;
                     if let Some(ref qn) = self.darwin_qn {
                         info!("Connected to Darwin; subscribing...");
                         self.sess.subscription(&format!("/queue/{}", qn))
@@ -266,6 +264,8 @@ impl Future for NtrodProcessor {
                 },
                 Message { destination, frame, .. } => {
                     if self.darwin_qn.is_none() {
+                        self.timeout = None;
+                        self.timeout_ms = 1000;
                         debug!("Got a NTROD message addressed to {}", destination);
                         if destination == "/topic/TRAIN_MVT_ALL_TOC" {
                             let st = String::from_utf8_lossy(&frame.body);
@@ -278,6 +278,8 @@ impl Future for NtrodProcessor {
                         self.sess.acknowledge_frame(&frame, AckOrNack::Ack);
                     }
                     else {
+                        self.timeout = None;
+                        self.timeout_ms = 1000;
                         self.sess.acknowledge_frame(&frame, AckOrNack::Ack);
                         debug!("Got a Darwin message");
                         self.tx.send(WorkerMessage::Darwin(frame.body));
