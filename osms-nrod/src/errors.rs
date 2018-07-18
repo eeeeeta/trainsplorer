@@ -5,6 +5,7 @@ use osms_db::errors::OsmsError;
 use serde_json::Value;
 use ntrod_types::cif::StpIndicator;
 use chrono::{NaiveDate, NaiveTime};
+use super::NtrodWorker;
 
 #[derive(Debug, Fail)]
 pub enum NrodError {
@@ -59,6 +60,44 @@ pub enum NrodError {
     NoMovementsFound(i32, Vec<i32>, Vec<String>, Option<NaiveTime>),
     #[fail(display = "Multiple errors: {:?}", _0)]
     MultipleFailures(Vec<NrodError>)
+}
+
+impl NrodError {
+    pub fn send_to_stats(&self, prefix: &'static str, worker: &mut NtrodWorker) {
+        match *self {
+            NrodError::MultipleFailures(ref fails) => {
+                for fail in fails {
+                    fail.send_to_stats(prefix, worker);
+                }
+            },
+            ref x => {
+                worker.incr(&format!("{}.{}", prefix, x.stats_name()));
+            }
+        }
+    }
+    pub fn stats_name(&self) -> &'static str {
+        use self::NrodError::*;
+
+        match *self {
+            Io(..) => "io",
+            Pg(..) => "pg",
+            Serde(..) => "serde",
+            Db(..) => "db",
+            NoScheduleSegment => "no_schedule_segment",
+            UnknownMvtBody(..) => "unknown_mvt_body",
+            UnimplementedMessageType(..) => "unimplemented_message_type",
+            DarwinTimingsMissing => "darwin_timings_missing",
+            DoubleActivation { .. } => "double_activation",
+            NoSchedules { .. } => "no_schedules",
+            TwoAuthoritativeSchedules(..) => "two_authoritative_schedules",
+            TwoAuthoritativeSchedulesDarwin(..) => "two_authoritative_schedules_darwin",
+            NoAuthoritativeSchedules(..) => "no_authoritative_schedules",
+            NoAuthoritativeSchedulesDarwin { .. } => "no_authoritative_schedules_darwin",
+            NoTrainFound { .. } => "no_train_found",
+            NoMovementsFound { .. } => "no_movements_found",
+            MultipleFailures { .. } => "multiple_failures"
+        }
+    }
 }
 
 impl_from_for_error! {

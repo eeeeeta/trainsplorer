@@ -126,6 +126,7 @@ impl NtrodWorker {
                         match darwin::process_darwin_pport(self, doc) {
                             Ok(_) => self.incr("darwin.processed"),
                             Err(e) => {
+                                e.send_to_stats("darwin.fails", self);
                                 error!("Failed to process pport: {}", e);
                                 self.incr("darwin.fail");
                             }
@@ -153,6 +154,7 @@ impl NtrodWorker {
                 match live::process_vstp(&*conn, record) {
                     Err(e) => {
                         self.incr("vstp.fail");
+                        e.send_to_stats("vstp.fails", self);
                         error!("Error processing: {}", e);
                     },
                     _ => {
@@ -192,6 +194,7 @@ impl NtrodWorker {
                         Err(e) => {
                             self.incr("messages.fail");
                             self.incr(&format!("{}.fail", dest));
+                            e.send_to_stats("nrod.fails", self);
                             error!("Error processing: {}", e);
                         },
                         _ => {
