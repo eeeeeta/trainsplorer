@@ -25,6 +25,7 @@ pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
                 match process_ts(&trans, worker, ts) {
                     Ok(_) => worker.incr("darwin.ts_processed"),
                     Err(e) => {
+                        e.send_to_stats("darwin.ts_fails", worker);
                         worker.incr("darwin.ts_fail");
                         error!("Failed to process TS: {}", e);
                     }
