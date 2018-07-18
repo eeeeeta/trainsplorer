@@ -1,4 +1,5 @@
 use errors::NrodError;
+use osms_db::errors::OsmsError;
 use osms_db::ntrod::types::*;
 use osms_db::db::{DbType, InsertableDbType, GenericConnection};
 use darwin_types::pport::{Pport, PportElement};
@@ -84,7 +85,19 @@ pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, worker: &mut Nt
         terminated: false,
         nre_id: Some(rid.clone())
     };
-    let (train, was_update) = train.insert_self(conn)?;
+    let (train, was_update) = match train.insert_self(conn) {
+        Ok(t) => t,
+        Err(e) => {
+            match e {
+                OsmsError::DoubleTrainActivation(ps, date) => {
+                    worker.incr("darwin.link.double_activation");
+                    warn!("Train activated twice for ({}, {}), retrying...", ps, date);
+                    return get_train_for_rid_uid_ssd(conn, worker, rid, uid, start_date);
+                },
+                e => Err(e)?
+            }
+        }
+    };
     if was_update {
         worker.incr("darwin.link.linked_existing");
         debug!("Linked RID {} to train {} (TRUST id {:?})", rid, train.id, train.trust_id);
