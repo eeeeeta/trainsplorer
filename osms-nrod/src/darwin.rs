@@ -17,7 +17,7 @@ pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
             debug!("Processing Darwin data response message, origin {:?}, source {:?}, rid {:?}", dr.update_origin, dr.request_source, dr.request_id);
             for ts in dr.train_status {
                 worker.incr("darwin.ts_recv");
-                match process_ts(&trans, ts) {
+                match process_ts(&trans, worker, ts) {
                     Ok(_) => worker.incr("darwin.ts_processed"),
                     Err(e) => {
                         worker.incr("darwin.ts_fail");
@@ -34,9 +34,10 @@ pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
     trans.commit()?;
     Ok(())
 }
-pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, rid: String, uid: String, start_date: NaiveDate) -> Result<Train> {
+pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, rid: String, uid: String, start_date: NaiveDate) -> Result<Train> {
     let rid_trains = Train::from_select(conn, "WHERE nre_id = $1", &[&rid])?;
     if let Some(t) = rid_trains.into_iter().nth(0) {
+        worker.incr("darwin.link.train_prelinked");
         debug!("Found pre-linked train {} (TRUST id {:?}) for Darwin RID {}", t.id, t.trust_id, rid);
         return Ok(t);
     }
@@ -66,11 +67,13 @@ pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, rid: String, ui
     let trains = Train::from_select(conn, "WHERE parent_sched = $1 AND date = $2", &[&auth_schedule.id, &start_date])?;
     match trains.into_iter().nth(0) {
         Some(t) => {
+            worker.incr("darwin.link.linked_existing");
             conn.execute("UPDATE trains SET nre_id = $1 WHERE id = $2", &[&rid, &t.id])?;
             debug!("Linked RID {} to train {} (TRUST ID {:?})", rid, t.id, t.trust_id);
             Ok(t)
         },
         None => {
+            worker.incr("darwin.link.darwin_activation");
             debug!("Link failed; activating Darwin train...");
             let mut train = Train {
                 id: -1,
@@ -89,9 +92,9 @@ pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, rid: String, ui
         }
     }
 }
-pub fn process_ts<T: GenericConnection>(conn: &T, ts: Ts) -> Result<()> {
+pub fn process_ts<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, ts: Ts) -> Result<()> {
     debug!("Processing update to rid {} (uid {}, start_date {})...", ts.rid, ts.uid, ts.start_date);
-    let train = get_train_for_rid_uid_ssd(conn, ts.rid, ts.uid, ts.start_date)?;
+    let train = get_train_for_rid_uid_ssd(conn, worker, ts.rid, ts.uid, ts.start_date)?;
     // vec of (tiploc, action, time, tstimedata)
     let mut updates = vec![];
     for loc in ts.locations {
@@ -131,13 +134,21 @@ pub fn process_ts<T: GenericConnection>(conn: &T, ts: Ts) -> Result<()> {
         let time = match time {
             Some(t) => t,
             None => {
+                worker.incr("darwin.ts.no_useful_time");
                 debug!("No useful time");
                 continue;
             }
         };
         if tstd.at_removed {
+            worker.incr("darwin.ts.at_removed");
             // TODO: make this source check less brittle
             conn.execute("DELETE FROM train_movements WHERE parent_mvt = $1 AND source = 1", &[&mvt.id])?;
+        }
+        if actual {
+            worker.incr("darwin.ts.actual");
+        }
+        else {
+            worker.incr("darwin.ts.estimated");
         }
         let tmvt = TrainMvt {
             id: -1,

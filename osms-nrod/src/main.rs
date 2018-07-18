@@ -181,7 +181,7 @@ impl NtrodWorker {
                         Unknown(_) => "messages_unknown"
                     };
                     self.incr(&format!("{}.recv", dest));
-                    match live::process_ntrod_event(&*conn, record) {
+                    match live::process_ntrod_event(&*conn, self, record) {
                         Err(e) => {
                             self.incr("messages.fail");
                             self.incr(&format!("{}.fail", dest));

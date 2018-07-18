@@ -4,6 +4,7 @@ use ntrod_types::vstp::Record as VstpRecord;
 use osms_db::ntrod::types::*;
 use osms_db::db::{DbType, InsertableDbType, GenericConnection};
 use errors::NrodError;
+use super::NtrodWorker;
 
 type Result<T> = ::std::result::Result<T, NrodError>;
 
@@ -90,15 +91,15 @@ pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()>
     trans.commit()?;
     Ok(())
 }
-pub fn process_ntrod_event<T: GenericConnection>(conn: &T, r: Record) -> Result<()> {
+pub fn process_ntrod_event<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, r: Record) -> Result<()> {
     let Record { header, body } = r;
     debug!("Processing message type {} from system {} (source {})",
            header.msg_type, header.source_system_id, header.original_data_source);
     let trans = conn.transaction()?;
     match body {
-        MvtBody::Activation(a) => process_activation(&trans, a)?,
+        MvtBody::Activation(a) => process_activation(&trans, worker, a)?,
         MvtBody::Cancellation(a) => process_cancellation(&trans, a)?,
-        MvtBody::Movement(a) => process_movement(&trans, a)?,
+        MvtBody::Movement(a) => process_movement(&trans, worker, a)?,
         MvtBody::Unknown(v) => {
             return Err(NrodError::UnknownMvtBody(v));
         },
@@ -109,7 +110,7 @@ pub fn process_ntrod_event<T: GenericConnection>(conn: &T, r: Record) -> Result<
     trans.commit()?;
     Ok(())
 }
-pub fn process_activation<T: GenericConnection>(conn: &T, a: Activation) -> Result<()> {
+pub fn process_activation<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, a: Activation) -> Result<()> {
     debug!("Processing activation of train {}...", a.train_id);
     let src = match a.schedule_source {
         ScheduleSource::CifItps => 0,
@@ -149,6 +150,7 @@ pub fn process_activation<T: GenericConnection>(conn: &T, a: Activation) -> Resu
     };
     let nre_trains = Train::from_select(conn, "WHERE parent_sched = $1 AND date = $2", &[&auth_schedule.id, &a.origin_dep_timestamp.date()])?;
     if let Some(nt) = nre_trains.into_iter().nth(0) {
+        worker.incr("nrod.activation.link_with_darwin");
         debug!("Found pre-existing train #{} with NRE id {:?}; linking...", nt.id, nt.nre_id);
         if let Some(tid) = nt.trust_id {
             return Err(NrodError::DoubleActivation {
@@ -164,6 +166,7 @@ pub fn process_activation<T: GenericConnection>(conn: &T, a: Activation) -> Resu
         Ok(())
     }
     else {
+        worker.incr("nrod.activation.trust_only");
         let train = Train {
             id: -1,
             parent_sched: auth_schedule.id,
@@ -185,13 +188,15 @@ pub fn process_cancellation<T: GenericConnection>(conn: &T, c: Cancellation) -> 
     debug!("Train cancelled.");
     Ok(())
 }
-pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<()> {
+pub fn process_movement<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, m: Movement) -> Result<()> {
     debug!("Processing movement of train {} at STANOX {}...", m.train_id, m.loc_stanox);
     if m.train_terminated {
+        worker.incr("ntrod.mvt.terminated");
         debug!("Train has terminated.");
         conn.execute("UPDATE trains SET terminated = true WHERE trust_id = $1 AND (date = $2 OR date = ($2 - interval '1 day'))", &[&m.train_id, &m.actual_timestamp.date()])?;
     }
     if m.offroute_ind {
+        worker.incr("ntrod.mvt.offroute");
         debug!("Train #{} off route.", m.train_id);
         return Ok(());
     }
@@ -204,6 +209,7 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
                                            &[&m.loc_stanox])?;
     let tiplocs = entries.into_iter().map(|x| x.tiploc.unwrap()).collect::<Vec<_>>();
     if tiplocs.len() == 0 {
+        worker.incr("nrod.mvt.unmatched_stanox");
         debug!("No TIPLOC found for STANOX {}", m.loc_stanox);
         return Ok(());
     }
@@ -231,6 +237,7 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
     };
     let id = tmvt.insert_self(conn)?;
     debug!("Registered train movement #{}.", id);
+    worker.incr("nrod.mvt.actual");
     debug!("Deleting any estimations...");
     conn.execute("DELETE FROM train_movements WHERE parent_mvt = $1 AND source = 2 AND estimated = true", &[&mvt.id])?;
     debug!("Creating/updating naïve estimation movements with delta {}", delta);
@@ -245,6 +252,7 @@ pub fn process_movement<T: GenericConnection>(conn: &T, m: Movement) -> Result<(
             estimated: true
         };
         let id = tmvt.insert_self(conn)?;
+        worker.incr("nrod.mvt.estimated");
         debug!("Registered estimation train movement #{}.", id);
     }
     Ok(())
