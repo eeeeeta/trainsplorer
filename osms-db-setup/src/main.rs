@@ -341,6 +341,7 @@ fn run() -> Result<(), Error> {
                                 }
                                 warn!("Retrying in {} ms...", timeout_ms);
                                 ::std::thread::sleep(::std::time::Duration::from_millis(timeout_ms));
+                                timeout_ms *= 2;
                             }
                         }
                     }

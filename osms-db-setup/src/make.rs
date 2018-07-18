@@ -261,13 +261,14 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
             if updated {
                 warn!("apply_schedule_record: duplicate record (UID {}, start {}, stp_indicator {:?})",
                 train_uid, schedule_start_date, stp_indicator);
-                let orig_mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1", &[&sid])?;
+                let orig_mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 ORDER BY time ASC", &[&sid])?;
                 let mut valid = true;
                 if orig_mvts.len() != mvts.len() {
                     warn!("apply_schedule_record: invalidating prior schedule movements due to length difference");
                     valid = false;
                 }
                 else {
+                    mvts.sort_by_key(|&(_, time, _, _)| time);
                     for (mvt, &(ref tiploc, time, action, origterm)) in orig_mvts.iter().zip(mvts.iter()) {
                         if mvt.tiploc == tiploc as &str && mvt.time == time && mvt.action == action && mvt.origterm == origterm {
                             debug!("apply_schedule_record: mvt #{} matches", mvt.id);
