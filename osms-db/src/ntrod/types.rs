@@ -227,9 +227,9 @@ impl InsertableDbType for Train {
                               SELECT $1, $2, $3, $4, $5, $6, $7
                               WHERE 'inserted' = set_config('upsert.action', 'inserted', true)
                               ON CONFLICT (parent_sched, date) DO UPDATE
-                              SET trust_id = COALESCE(trust_id, EXCLUDED.trust_id),
-                                  signalling_id = COALESCE(signalling_id, EXCLUDED.signalling_id),
-                                  nre_id = COALESCE(nre_id, EXCLUDED.nre_id)
+                              SET trust_id = COALESCE(trains.trust_id, EXCLUDED.trust_id),
+                                  signalling_id = COALESCE(trains.signalling_id, EXCLUDED.signalling_id),
+                                  nre_id = COALESCE(trains.nre_id, EXCLUDED.nre_id)
                               WHERE 'updated' = set_config('upsert.action', 'updated', true)
                               AND (
                                   (trains.trust_id IS NULL AND EXCLUDED.trust_id IS NOT NULL)
