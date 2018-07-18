@@ -1,6 +1,7 @@
 use std::io::Error as IoError;
 use postgres::error::Error as PgError;
 use serde_json::Error as SerdeError;
+use chrono::NaiveDate;
 #[derive(Debug, Fail)]
 pub enum OsmsError {
     #[fail(display = "I/O error: {}", _0)]
@@ -11,6 +12,8 @@ pub enum OsmsError {
     Serde(#[cause] SerdeError),
     #[fail(display = "Database inconsistency: {}", _0)]
     DatabaseInconsistency(&'static str),
+    #[fail(display = "Double train activation for ({}, {})", _0, _1)]
+    DoubleTrainActivation(i32, NaiveDate),
     #[fail(display = "Station #{} couldn't be found", _0)]
     StationNotFound(i32),
     #[fail(display = "Crossing {} couldn't be found", _0)]

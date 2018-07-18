@@ -242,7 +242,8 @@ impl InsertableDbType for Train {
         for row in &qry {
             ret = Some(Self::from_row(&row))
         }
-        Ok((ret.expect("No id in Train::insert?!"), Self::upsert_was_update(conn)?))
+        let ret = ret.ok_or(OsmsError::DoubleTrainActivation(self.parent_sched, self.date))?;
+        Ok((ret, Self::upsert_was_update(conn)?))
     }
 }
 #[derive(Debug, Clone)]
