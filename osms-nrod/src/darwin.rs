@@ -21,12 +21,17 @@ pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
             debug!("Processing Darwin data response message, origin {:?}, source {:?}, rid {:?}", dr.update_origin, dr.request_source, dr.request_id);
             for ts in dr.train_status {
                 worker.incr("darwin.ts_recv");
+                let now = Local::now();
                 match process_ts(&trans, worker, ts) {
                     Ok(_) => worker.incr("darwin.ts_processed"),
                     Err(e) => {
                         worker.incr("darwin.ts_fail");
                         error!("Failed to process TS: {}", e);
                     }
+                }
+                let after = Local::now();
+                if let Ok(dur) = after.signed_duration_since(now).to_std() {
+                    worker.latency("darwin.ts_process_time", dur);
                 }
             }
         },
