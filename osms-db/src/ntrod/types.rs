@@ -210,20 +210,36 @@ impl DbType for Train {
         }
     }
 }
+impl Train {
+    fn upsert_was_update<T: GenericConnection>(conn: &T) -> Result<bool> {
+        let mut ret = None;
+        for row in &conn.query("SELECT ('updated' = current_setting('upsert.action'))", &[])? {
+            ret = Some(row.get(0));
+        }
+        Ok(ret.expect("No upsert result"))
+    }
+}
 impl InsertableDbType for Train {
-    type Id = i32;
-    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
+    type Id = (Self, bool);
+    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<(Self, bool)> {
         let qry = conn.query("INSERT INTO trains
                               (parent_sched, trust_id, date, signalling_id, cancelled, terminated, nre_id)
-                              VALUES ($1, $2, $3, $4, $5, $6, $7)
-                              RETURNING id",
+                              SELECT $1, $2, $3, $4, $5, $6, $7
+                              WHERE 'inserted' = set_config('upsert.action', 'inserted', true)
+                              ON CONFLICT (parent_sched, date) DO UPDATE
+                              SET trust_id = COALESCE(trust_id, EXCLUDED.trust_id),
+                                  signalling_id = COALESCE(signalling_id, EXCLUDED.signalling_id),
+                                  nre_id = COALESCE(nre_id, EXCLUDED.nre_id)
+                              WHERE 'updated' = set_config('upsert.action', 'updated', true)
+                              AND (trust_id IS NULL OR nre_id IS NULL)
+                              RETURNING *",
                              &[&self.parent_sched, &self.trust_id, &self.date,
                                &self.signalling_id, &self.cancelled, &self.terminated, &self.nre_id])?;
         let mut ret = None;
         for row in &qry {
-            ret = Some(row.get(0))
+            ret = Some(Self::from_row(&row))
         }
-        Ok(ret.expect("No id in Train::insert?!"))
+        Ok((ret.expect("No id in Train::insert?!"), Self::upsert_was_update(conn)?))
     }
 }
 #[derive(Debug, Clone)]

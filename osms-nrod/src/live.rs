@@ -153,39 +153,26 @@ pub fn process_activation<T: GenericConnection>(conn: &T, worker: &mut NtrodWork
     else {
         return Err(NrodError::NoAuthoritativeSchedules(a.train_uid, a.schedule_start_date, a.schedule_type, src));
     };
-    let nre_trains = Train::from_select(conn, "WHERE parent_sched = $1 AND date = $2", &[&auth_schedule.id, &a.origin_dep_timestamp.date()])?;
-    if let Some(nt) = nre_trains.into_iter().nth(0) {
+    let train = Train {
+        id: -1,
+        parent_sched: auth_schedule.id,
+        trust_id: Some(a.train_id),
+        date: a.origin_dep_timestamp.date(),
+        signalling_id: Some(a.schedule_wtt_id),
+        cancelled: false,
+        terminated: false,
+        nre_id: None,
+    };
+    let (train, was_update) = train.insert_self(conn)?;
+    if was_update {
         worker.incr("nrod.activation.link_with_darwin");
-        debug!("Found pre-existing train #{} with NRE id {:?}; linking...", nt.id, nt.nre_id);
-        if let Some(tid) = nt.trust_id {
-            return Err(NrodError::DoubleActivation {
-                id: nt.id,
-                orig_trust_id: tid,
-                parent_sched: auth_schedule.id,
-                date: a.origin_dep_timestamp.date(),
-                new_trust_id: a.train_id
-            });
-        }
-        conn.execute("UPDATE trains SET trust_id = $1, signalling_id = $2 WHERE id = $3", &[&a.train_id, &a.schedule_wtt_id, &nt.id])?;
-        debug!("Linked train.");
-        Ok(())
+        debug!("Linked pre-existing train #{} with NRE id {:?} to TRUST id {:?}", train.id, train.nre_id, train.trust_id);
     }
     else {
         worker.incr("nrod.activation.trust_only");
-        let train = Train {
-            id: -1,
-            parent_sched: auth_schedule.id,
-            trust_id: Some(a.train_id),
-            date: a.origin_dep_timestamp.date(),
-            signalling_id: Some(a.schedule_wtt_id),
-            cancelled: false,
-            terminated: false,
-            nre_id: None,
-        };
-        let id = train.insert_self(conn)?;
-        debug!("Inserted train as #{}", id);
-        Ok(())
+        debug!("Inserted train as #{}", train.id);
     }
+    Ok(())
 }
 pub fn process_cancellation<T: GenericConnection>(conn: &T, c: Cancellation) -> Result<()> {
     debug!("Processing cancellation of train {}...", c.train_id);

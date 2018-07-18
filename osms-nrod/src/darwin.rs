@@ -74,33 +74,26 @@ pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, worker: &mut Nt
             rid, uid, start_date
         });
     };
-    let trains = Train::from_select(conn, "WHERE parent_sched = $1 AND date = $2", &[&auth_schedule.id, &start_date])?;
-    match trains.into_iter().nth(0) {
-        Some(t) => {
-            worker.incr("darwin.link.linked_existing");
-            conn.execute("UPDATE trains SET nre_id = $1 WHERE id = $2", &[&rid, &t.id])?;
-            debug!("Linked RID {} to train {} (TRUST ID {:?})", rid, t.id, t.trust_id);
-            Ok(t)
-        },
-        None => {
-            worker.incr("darwin.link.darwin_activation");
-            debug!("Link failed; activating Darwin train...");
-            let mut train = Train {
-                id: -1,
-                parent_sched: auth_schedule.id,
-                trust_id: None,
-                date: start_date,
-                signalling_id: None,
-                cancelled: false,
-                terminated: false,
-                nre_id: Some(rid)
-            };
-            let id = train.insert_self(conn)?;
-            debug!("Inserted train as #{}", id);
-            train.id = id;
-            Ok(train)
-        }
+    let train = Train {
+        id: -1,
+        parent_sched: auth_schedule.id,
+        trust_id: None,
+        date: start_date,
+        signalling_id: None,
+        cancelled: false,
+        terminated: false,
+        nre_id: Some(rid.clone())
+    };
+    let (train, was_update) = train.insert_self(conn)?;
+    if was_update {
+        worker.incr("darwin.link.linked_existing");
+        debug!("Linked RID {} to train {} (TRUST id {:?})", rid, train.id, train.trust_id);
     }
+    else {
+        worker.incr("darwin.link.darwin_activation");
+        debug!("Inserted train as #{}", train.id);
+    }
+    Ok(train)
 }
 pub fn process_ts<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, ts: Ts) -> Result<()> {
     debug!("Processing update to rid {} (uid {}, start_date {})...", ts.rid, ts.uid, ts.start_date);
