@@ -45,7 +45,7 @@ pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()>
                 ..
             } = schedule_segment;
             let sched = Schedule {
-                uid: train_uid,
+                uid: train_uid.clone(),
                 start_date: schedule_start_date,
                 end_date: schedule_end_date,
                 days: schedule_days_runs,
@@ -56,7 +56,15 @@ pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()>
                 geo_generation: 0,
                 id: -1
             };
-            let sid = sched.insert_self(&trans)?;
+            let (sid, update) = sched.insert_self(&trans)?;
+            if update {
+                return Err(NrodError::DuplicateVstpSchedule {
+                    train_uid,
+                    start_date: schedule_start_date,
+                    stp_indicator,
+                    source: 1
+                });
+            }
             let mut mvts = vec![];
             for loc in schedule_location {
                 match loc {
