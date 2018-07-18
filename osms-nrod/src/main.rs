@@ -262,7 +262,7 @@ impl Future for NtrodProcessor {
                 },
                 ErrorFrame(fr) => {
                     error!("Error frame from {}, reconnecting: {:?}", self.service_name(), fr);
-                    self.sess.reconnect().unwrap();
+                    self.sess.disconnect();
                 },
                 Message { destination, frame, .. } => {
                     if self.darwin_qn.is_none() {
