@@ -116,7 +116,7 @@ schedule_loc_deserialize! { LocIp, LocIpBuilder, ret, value,
     sla sla,
     cpa cpa,
     time wtd, wta on ret,
-    parse rdelay_mins on ret,
+    parse rdelay_mins from rdelay on ret,
     with fd on ret {
         Some(value)
     },
@@ -142,7 +142,7 @@ pub struct LocOpIp {
 schedule_loc_deserialize! { LocOpIp, LocOpIpBuilder, ret, value,
     sla sla,
     time wtd, wta on ret,
-    parse rdelay_mins on ret,
+    parse rdelay_mins from rdelay on ret,
 }
 /// Intermediate passing point ('PP') element.
 #[derive(Builder, Debug, Clone)]
@@ -163,7 +163,7 @@ pub struct LocPp {
 schedule_loc_deserialize! { LocPp, LocPpBuilder, ret, value,
     sla sla,
     time wtp on ret,
-    parse rdelay_mins on ret,
+    parse rdelay_mins from rdelay on ret,
 }
 /// Passenger destination calling point ('DT') element.
 #[derive(Builder, Debug, Clone)]
@@ -191,7 +191,7 @@ schedule_loc_deserialize! { LocDt, LocDtBuilder, ret, value,
     cpa cpa,
     time wta on ret,
     time_opt wtd on ret,
-    parse rdelay_mins on ret,
+    parse rdelay_mins from rdelay on ret,
 }
 /// Operational destination ('OPDT') element.
 #[derive(Builder, Debug, Clone)]
@@ -216,7 +216,7 @@ schedule_loc_deserialize! { LocOpDt, LocOpDtBuilder, ret, value,
     sla sla,
     time wta on ret,
     time_opt wtd on ret,
-    parse rdelay_mins on ret,
+    parse rdelay_mins from rdelay on ret,
 }
 /// A Darwin train schedule.
 #[derive(Builder, Debug, Clone)]

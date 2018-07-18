@@ -9,6 +9,3 @@ failure = "0.1"
 failure_derive = "0.1"
 derive_builder = "0.5"
 xml-rs = "0.8"
-
-[dependencies.ntrod-types]
-path = "../ntrod-types"
