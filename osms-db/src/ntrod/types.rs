@@ -231,7 +231,10 @@ impl InsertableDbType for Train {
                                   signalling_id = COALESCE(signalling_id, EXCLUDED.signalling_id),
                                   nre_id = COALESCE(nre_id, EXCLUDED.nre_id)
                               WHERE 'updated' = set_config('upsert.action', 'updated', true)
-                              AND (trust_id IS NULL OR nre_id IS NULL)
+                              AND (
+                                  (trains.trust_id IS NULL AND EXCLUDED.trust_id IS NOT NULL)
+                               OR (trains.nre_id IS NULL AND EXCLUDED.nre_id IS NOT NULL)
+                              )
                               RETURNING *",
                              &[&self.parent_sched, &self.trust_id, &self.date,
                                &self.signalling_id, &self.cancelled, &self.terminated, &self.nre_id])?;
