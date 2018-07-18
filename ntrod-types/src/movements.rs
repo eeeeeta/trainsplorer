@@ -8,7 +8,9 @@ pub struct MvtHeader {
     pub msg_type: String,
     pub source_dev_id: String,
     pub source_system_id: String,
-    pub original_data_source: String
+    pub original_data_source: String,
+    #[serde(deserialize_with = "parse_ts")]
+    pub msg_queue_timestamp: NaiveDateTime,
 }
 
 pub type Records = Vec<Record>;

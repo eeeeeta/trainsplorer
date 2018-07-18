@@ -32,18 +32,6 @@ pub enum NrodError {
         date: NaiveDate,
         new_trust_id: String
     },
-    #[fail(display = "Couldn't find any trains for RID {} (UID {}, start_date {})", rid, uid, start_date)]
-    RidLinkFailed {
-        rid: String,
-        uid: String,
-        start_date: NaiveDate
-    },
-    #[fail(display = "More than one train for RID {} (UID {}, start_date {})", rid, uid, start_date)]
-    AmbiguousTrains {
-        rid: String,
-        uid: String,
-        start_date: NaiveDate
-    },
     #[fail(display = "Failed to find a schedule (UID {}, start {}, stp_indicator {:?}, src {}) when processing activation for {} on {}", train_uid, start_date, stp_indicator, source, train_id, date)]
     NoSchedules {
         train_uid: String,

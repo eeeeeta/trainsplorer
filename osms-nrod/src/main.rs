@@ -94,6 +94,13 @@ impl NtrodWorker {
             }
         }
     }
+    pub fn latency(&mut self, dest: &str, dur: Duration) {
+        if let Some(ref mut m) = self.metrics {
+            if let Err(e) = m.time_duration(dest, dur) {
+                error!("failed to update latency metrics: {:?}", e);
+            }
+        }
+    }
     fn run(&mut self) {
         loop {
             let data = self.rx.recv().unwrap();

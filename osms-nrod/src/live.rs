@@ -2,6 +2,7 @@ use ntrod_types::movements::{Activation, Cancellation, Movement, Record, MvtBody
 use ntrod_types::reference::CorpusEntry;
 use ntrod_types::vstp::Record as VstpRecord;
 use osms_db::ntrod::types::*;
+use chrono::Local;
 use osms_db::db::{DbType, InsertableDbType, GenericConnection};
 use errors::NrodError;
 use super::NtrodWorker;
@@ -94,7 +95,11 @@ pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()>
 pub fn process_ntrod_event<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, r: Record) -> Result<()> {
     let Record { header, body } = r;
     debug!("Processing message type {} from system {} (source {})",
-           header.msg_type, header.source_system_id, header.original_data_source);
+    header.msg_type, header.source_system_id, header.original_data_source);
+    let now = Local::now().naive_local();
+    if let Ok(dur) = now.signed_duration_since(header.msg_queue_timestamp).to_std() {
+        worker.latency("nrod.latency", dur);
+    }
     let trans = conn.transaction()?;
     match body {
         MvtBody::Activation(a) => process_activation(&trans, worker, a)?,
@@ -191,12 +196,12 @@ pub fn process_cancellation<T: GenericConnection>(conn: &T, c: Cancellation) -> 
 pub fn process_movement<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, m: Movement) -> Result<()> {
     debug!("Processing movement of train {} at STANOX {}...", m.train_id, m.loc_stanox);
     if m.train_terminated {
-        worker.incr("ntrod.mvt.terminated");
+        worker.incr("nrod.mvt.terminated");
         debug!("Train has terminated.");
         conn.execute("UPDATE trains SET terminated = true WHERE trust_id = $1 AND (date = $2 OR date = ($2 - interval '1 day'))", &[&m.train_id, &m.actual_timestamp.date()])?;
     }
     if m.offroute_ind {
-        worker.incr("ntrod.mvt.offroute");
+        worker.incr("nrod.mvt.offroute");
         debug!("Train #{} off route.", m.train_id);
         return Ok(());
     }
