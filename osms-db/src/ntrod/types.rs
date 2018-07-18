@@ -7,6 +7,14 @@ use errors::*;
 
 pub use ntrod_types::reference::CorpusEntry;
 
+fn upsert_was_update<T: GenericConnection>(conn: &T) -> Result<bool> {
+    let mut ret = None;
+    for row in &conn.query("SELECT ('updated' = current_setting('upsert.action'))", &[])? {
+        ret = Some(row.get(0));
+    }
+    Ok(ret.expect("No upsert result"))
+}
+
 /// A schedule from NROD, describing how trains should theoretically run.
 #[derive(Debug, Serialize, Clone)]
 pub struct Schedule {
@@ -54,12 +62,20 @@ impl DbType for Schedule {
     }
 }
 impl InsertableDbType for Schedule {
-    type Id = i32;
-    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
+    type Id = (i32, bool);
+    fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<(i32, bool)> {
         let qry = conn.query(
             "INSERT INTO schedules
              (uid, start_date, end_date, days, stp_indicator, signalling_id, geo_generation, source, file_metaseq)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9
+             WHERE 'inserted' = set_config('upsert.action', 'inserted', true)
+             ON CONFLICT (uid, start_date, stp_indicator, source) DO UPDATE
+             SET end_date = EXCLUDED.end_date,
+                 days = EXCLUDED.days,
+                 signalling_id = EXCLUDED.signalling_id,
+                 source = EXCLUDED.source,
+                 file_metaseq = EXCLUDED.file_metaseq
+             WHERE 'updated' = set_config('upsert.action', 'updated', true)
              RETURNING id",
             &[&self.uid, &self.start_date, &self.end_date, &self.days, &self.stp_indicator,
               &self.signalling_id, &self.geo_generation, &self.source, &self.file_metaseq])?;
@@ -67,7 +83,7 @@ impl InsertableDbType for Schedule {
         for row in &qry {
             ret = Some(row.get(0))
         }
-        Ok(ret.expect("No id in Schedule::insert?!"))
+        Ok((ret.expect("No id in Schedule::insert?!"), upsert_was_update(conn)?))
     }
 }
 
@@ -210,15 +226,6 @@ impl DbType for Train {
         }
     }
 }
-impl Train {
-    fn upsert_was_update<T: GenericConnection>(conn: &T) -> Result<bool> {
-        let mut ret = None;
-        for row in &conn.query("SELECT ('updated' = current_setting('upsert.action'))", &[])? {
-            ret = Some(row.get(0));
-        }
-        Ok(ret.expect("No upsert result"))
-    }
-}
 impl InsertableDbType for Train {
     type Id = (Self, bool);
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<(Self, bool)> {
@@ -243,7 +250,7 @@ impl InsertableDbType for Train {
             ret = Some(Self::from_row(&row))
         }
         let ret = ret.ok_or(OsmsError::DoubleTrainActivation(self.parent_sched, self.date))?;
-        Ok((ret, Self::upsert_was_update(conn)?))
+        Ok((ret, upsert_was_update(conn)?))
     }
 }
 #[derive(Debug, Clone)]

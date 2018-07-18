@@ -115,7 +115,15 @@ fn run() -> Result<(), Error> {
                     .subcommand(SubCommand::with_name("init")
                                 .about("Downloads and imports the set of ALL Network Rail schedules. Run to initialise the database."))
                     .subcommand(SubCommand::with_name("update")
-                                .about("Downloads and imports today's schedule update file."))
+                                .about("Downloads and imports today's schedule update file.")
+                                .arg(Arg::with_name("retries")
+                                     .short("r")
+                                     .long("retries")
+                                     .value_name("NUMBER")
+                                     .help("Number of times to retry getting the schedule update file; defaults to 9.")
+                                     .takes_value(true)))
+                    .subcommand(SubCommand::with_name("recover")
+                                .about("Recovers after a schedule update file is missed."))
                     .subcommand(SubCommand::with_name("listener")
                                 .about("Starts a long-running listener that makes new schedule ways every time schedules are changed."))
                     .subcommand(SubCommand::with_name("ways")
@@ -261,7 +269,7 @@ fn run() -> Result<(), Error> {
         },
         ("schedule", Some(opts)) => {
             match opts.subcommand() {
-                ("init", _) => {
+                (x @ "init", _) | (x @ "recover", _) => {
                     let conn = pool.get().unwrap();
                     info!("Initialising database types & relations...");
                     db::initialize_database(&*pool.get().unwrap())?;
@@ -272,6 +280,19 @@ fn run() -> Result<(), Error> {
                     let data = GzDecoder::new(data)
                         .context(err_msg("couldn't start gunzipping schedule data file"))?;
                     make::apply_schedule_records(&*conn, data)?;
+                    if x == "recover" {
+                        use db::DbType;
+
+                        info!("Beginning recovery...");
+                        let sf = ::osms_db::ntrod::types::ScheduleFile::from_select(&*conn, "ORDER BY metaseq DESC LIMIT 1", &[])?;
+                        if let Some(sf) = sf.into_iter().nth(0) {
+                            info!("Last metaseq was {}. Deleting stale schedules...", sf.metaseq);
+                            conn.execute("DELETE FROM schedules WHERE metaseq != $1", &[&sf.metaseq])?;
+                        }
+                        else {
+                            warn!("No schedules inserted yet!");
+                        }
+                    }
                 },
                 ("update", _) => {
                     use chrono::*;
@@ -289,13 +310,40 @@ fn run() -> Result<(), Error> {
                         Weekday::Sat => "toc-update-sat",
                         Weekday::Sun => "toc-update-sun",
                     };
-                    info!("Downloading and importing CIF_ALL_UPDATE_DAILY {}...", file);
-                    let data = download(&format!("https://datafeeds.networkrail.co.uk/ntrod/CifFileAuthenticate?type=CIF_ALL_UPDATE_DAILY&day={}", file),
-                                        &mut cli, &conf.username, &conf.password)?;
-                    let data = BufReader::new(data);
-                    let data = GzDecoder::new(data)
-                        .context(err_msg("couldn't start gunzipping schedule data file"))?;
-                    make::apply_schedule_records(&*conn, data)?;
+                    let retries = opts.value_of("retries").unwrap_or("9");
+                    let retries = retries.parse::<usize>()?;
+                    info!("Attempting to fetch CIF_ALL_FULL_DAILY, with {} retries.", retries);
+                    let mut cur = 0;
+                    let mut timeout_ms = 16000;
+                    let username = &conf.username;
+                    let password = &conf.password;
+                    let mut do_fetch = || -> Result<(), ::failure::Error> {
+                        let data = download(&format!("https://datafeeds.networkrail.co.uk/ntrod/CifFileAuthenticate?type=CIF_ALL_UPDATE_DAILY&day={}", file),
+                        &mut cli, username, password)?;
+                        let data = BufReader::new(data);
+                        let data = GzDecoder::new(data)
+                            .context(err_msg("couldn't start gunzipping schedule data file"))?;
+                        make::apply_schedule_records(&*conn, data)
+                    };
+                    loop {
+                        info!("Attempting to fetch {} (try {})...", file, cur+1);
+                        match do_fetch() {
+                            Ok(()) => {
+                                info!("Successful!");
+                                break;
+                            },
+                            Err(e) => {
+                                warn!("Failed to fetch: {}", e);
+                                cur += 1;
+                                if cur > retries {
+                                    error!("Attempt to fetch timed out!");
+                                    Err(format_err!("fetch attempts timed out"))?
+                                }
+                                warn!("Retrying in {} ms...", timeout_ms);
+                                ::std::thread::sleep(::std::time::Duration::from_millis(timeout_ms));
+                            }
+                        }
+                    }
                 },
                 ("ways", _) => {
                     let conn = pool.get().unwrap();

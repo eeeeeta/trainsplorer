@@ -220,15 +220,6 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
             schedule_segment,
             ..
         } => {
-            let prev = Schedule::from_select(conn, "WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3",
-                                             &[&train_uid, &schedule_start_date.naive_utc(), &stp_indicator])?;
-            if prev.len() > 0 {
-                debug!("apply_schedule_record: duplicate record, not inserting (UID {}, start {}, stp_indicator {:?})",
-                train_uid, schedule_start_date, stp_indicator);
-                conn.execute("UPDATE schedules SET file_metaseq = $4 WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3 AND source = 0",
-                             &[&train_uid, &schedule_start_date.naive_utc(), &stp_indicator, &Some(metaseq)])?;
-                return Ok(());
-            }
             debug!("apply_schedule_record: inserting record (UID {}, start {}, stp_indicator {:?})",
             train_uid, schedule_start_date, stp_indicator);
             let ScheduleSegment {
@@ -237,7 +228,7 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
                 ..
             } = schedule_segment;
             let sched = Schedule {
-                uid: train_uid,
+                uid: train_uid.clone(),
                 start_date: schedule_start_date.naive_utc(),
                 end_date: schedule_end_date.naive_utc(),
                 days: schedule_days_runs,
@@ -248,7 +239,7 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
                 geo_generation: 0,
                 id: -1
             };
-            let sid = sched.insert_self(conn)?;
+            let (sid, updated) = sched.insert_self(conn)?;
             let mut mvts = vec![];
             for loc in schedule_location {
                 match loc {
@@ -265,6 +256,35 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
                     Terminating { tiploc_code, arrival, .. } => {
                         mvts.push((tiploc_code, arrival, 0, true));
                     }
+                }
+            }
+            if updated {
+                warn!("apply_schedule_record: duplicate record (UID {}, start {}, stp_indicator {:?})",
+                train_uid, schedule_start_date, stp_indicator);
+                let orig_mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1", &[&sid])?;
+                let mut valid = true;
+                if orig_mvts.len() != mvts.len() {
+                    warn!("apply_schedule_record: invalidating prior schedule movements due to length difference");
+                    valid = false;
+                }
+                else {
+                    for (mvt, &(ref tiploc, time, action, origterm)) in orig_mvts.iter().zip(mvts.iter()) {
+                        if mvt.tiploc == tiploc as &str && mvt.time == time && mvt.action == action && mvt.origterm == origterm {
+                            debug!("apply_schedule_record: mvt #{} matches", mvt.id);
+                        }
+                        else {
+                            warn!("apply_schedule_record: invalidating prior schedule movements due to mvt #{} mismatch", mvt.id);
+                            valid = false;
+                            break;
+                        }
+                    }
+                }
+                if valid {
+                    debug!("apply_schedule_record: left movements untouched");
+                    return Ok(());
+                }
+                else {
+                    conn.execute("DELETE FROM schedule_movements WHERE parent_sched = $1", &[&sid])?;
                 }
             }
             for (tiploc, time, action, origterm) in mvts {
