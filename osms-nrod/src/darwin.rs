@@ -34,8 +34,13 @@ pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
     trans.commit()?;
     Ok(())
 }
-pub fn activate_train_from_darwin<T: GenericConnection>(conn: &T, rid: String, uid: String, start_date: NaiveDate) -> Result<Train> {
-    debug!("Activating Darwin train with RID {}, UID {}, start_date {}", rid, uid, start_date);
+pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, rid: String, uid: String, start_date: NaiveDate) -> Result<Train> {
+    let rid_trains = Train::from_select(conn, "WHERE nre_id = $1", &[&rid])?;
+    if let Some(t) = rid_trains.into_iter().nth(0) {
+        debug!("Found pre-linked train {} (TRUST id {:?}) for Darwin RID {}", t.id, t.trust_id, rid);
+        return Ok(t);
+    }
+    debug!("Trying to link RID {} (uid {}, start_date {}) to a train...", rid, uid, start_date);
     let scheds = Schedule::from_select(conn, "WHERE uid = $1 AND start_date <= $2 AND end_date >= $2", &[&uid, &start_date])?;
     debug!("{} potential schedules", scheds.len());
     let mut auth_schedule: Option<Schedule> = None;
@@ -58,32 +63,7 @@ pub fn activate_train_from_darwin<T: GenericConnection>(conn: &T, rid: String, u
             rid, uid, start_date
         });
     };
-    let mut train = Train {
-        id: -1,
-        parent_sched: auth_schedule.id,
-        trust_id: None,
-        date: start_date,
-        signalling_id: None,
-        cancelled: false,
-        terminated: false,
-        nre_id: Some(rid)
-    };
-    let id = train.insert_self(conn)?;
-    debug!("Inserted train as #{}", id);
-    train.id = id;
-    Ok(train)
-}
-pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, rid: String, uid: String, start_date: NaiveDate) -> Result<Train> {
-    let rid_trains = Train::from_select(conn, "WHERE nre_id = $1", &[&rid])?;
-    if let Some(t) = rid_trains.into_iter().nth(0) {
-        debug!("Found pre-linked train {} (TRUST id {:?}) for Darwin RID {}", t.id, t.trust_id, rid);
-        return Ok(t);
-    }
-    debug!("Trying to link RID {} (uid {}, start_date {}) to a train...", rid, uid, start_date);
-    let trains = Train::from_select(conn, "WHERE EXISTS(SELECT * FROM schedules WHERE uid = $1 AND id = trains.parent_sched) AND date = $2", &[&uid, &start_date])?;
-    if trains.len() > 1 {
-        return Err(NrodError::AmbiguousTrains { rid, uid, start_date });
-    }
+    let trains = Train::from_select(conn, "WHERE parent_sched = $1 AND date = $2", &[&auth_schedule.id, &start_date])?;
     match trains.into_iter().nth(0) {
         Some(t) => {
             conn.execute("UPDATE trains SET nre_id = $1 WHERE id = $2", &[&rid, &t.id])?;
@@ -92,7 +72,20 @@ pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, rid: String, ui
         },
         None => {
             debug!("Link failed; activating Darwin train...");
-            Ok(activate_train_from_darwin(conn, rid, uid, start_date)?)
+            let mut train = Train {
+                id: -1,
+                parent_sched: auth_schedule.id,
+                trust_id: None,
+                date: start_date,
+                signalling_id: None,
+                cancelled: false,
+                terminated: false,
+                nre_id: Some(rid)
+            };
+            let id = train.insert_self(conn)?;
+            debug!("Inserted train as #{}", id);
+            train.id = id;
+            Ok(train)
         }
     }
 }
