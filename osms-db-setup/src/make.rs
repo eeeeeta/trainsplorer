@@ -271,7 +271,7 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
                     mvts.sort_by_key(|&(_, time, _, _)| time);
                     for (mvt, &(ref tiploc, time, action, origterm)) in orig_mvts.iter().zip(mvts.iter()) {
                         if mvt.tiploc == tiploc as &str && mvt.time == time && mvt.action == action && mvt.origterm == origterm {
-                            debug!("apply_schedule_record: mvt #{} matches", mvt.id);
+                            trace!("apply_schedule_record: mvt #{} matches", mvt.id);
                         }
                         else {
                             warn!("apply_schedule_record: invalidating prior schedule movements due to mvt #{} mismatch", mvt.id);
