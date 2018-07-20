@@ -167,7 +167,7 @@ dependencies = [
 
 [[package]]
 name = "cadence"
-version = "0.15.0"
+version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "crossbeam 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1310,7 +1310,7 @@ dependencies = [
 name = "osms-nrod"
 version = "0.1.0"
 dependencies = [
- "cadence 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cadence 0.15.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "crossbeam-channel 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2615,7 +2615,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum byteorder 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)" = "0fc10e8cc6b2580fda3f36eb6dc5316657f812a3df879a44a66fc9f0fdbc4855"
 "checksum byteorder 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "74c0b906e9446b0a2e4f760cdb3fa4b2c48cdc6db8766a845c54b6ff063fd2e9"
 "checksum bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)" = "7dd32989a66957d3f0cba6588f15d4281a733f4e9ffc43fcd2385f57d3bf99ff"
-"checksum cadence 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6b3dd57ee27d5f94f113682d8a0ab3e232de3b89cfb9047514cdbbe61e30ab84"
+"checksum cadence 0.15.1 (registry+https://github.com/rust-lang/crates.io-index)" = "532a688a320f1a7e3838b8175d26d009672ddedc7a043e5097ec422a153b87c2"
 "checksum cc 1.0.18 (registry+https://github.com/rust-lang/crates.io-index)" = "2119ea4867bd2b8ed3aecab467709720b2d55b1bcfe09f772fd68066eaf15275"
 "checksum cfg-if 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "efe5c877e17a9c717a0bf3613b2709f723202c4e4675cc8f12926ded29bcb17e"
 "checksum cgmath 0.16.1 (registry+https://github.com/rust-lang/crates.io-index)" = "64a4b57c8f4e3a2e9ac07e0f6abc9c24b6fc9e1b54c3478cfb598f3d0023e51c"
