@@ -64,7 +64,7 @@ dependencies = [
 name = "atoc-msn"
 version = "0.1.0"
 dependencies = [
- "chrono 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "nom 4.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -203,7 +203,7 @@ dependencies = [
 
 [[package]]
 name = "chrono"
-version = "0.4.4"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "num-integer 0.1.39 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -217,7 +217,7 @@ name = "chrono-tz"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "chrono 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "parse-zoneinfo 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -442,7 +442,7 @@ dependencies = [
 name = "darwin-types"
 version = "0.1.0"
 dependencies = [
- "chrono 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "derive_builder 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure_derive 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1073,7 +1073,7 @@ dependencies = [
 name = "ntrod-types"
 version = "0.1.0"
 dependencies = [
- "chrono 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono-tz 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "derive_is_enum_variant 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "postgres 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1252,7 +1252,7 @@ dependencies = [
 name = "osms-db"
 version = "0.1.0"
 dependencies = [
- "chrono 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "crossbeam 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.5.11 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1279,7 +1279,7 @@ version = "0.1.0"
 dependencies = [
  "atoc-msn 0.1.0",
  "chan 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "crossbeam 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "csv 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1311,7 +1311,7 @@ name = "osms-nrod"
 version = "0.1.0"
 dependencies = [
  "cadence 0.15.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "crossbeam-channel 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "darwin-types 0.1.0",
@@ -1338,7 +1338,7 @@ dependencies = [
 name = "osms-web"
 version = "0.1.0"
 dependencies = [
- "chrono 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "geo 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "geojson 0.11.0 (git+https://github.com/eeeeeta/rust-geojson)",
@@ -1537,7 +1537,7 @@ name = "postgres-shared"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "chrono 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "fallible-iterator 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "phf 0.7.21 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2623,7 +2623,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum cfg-if 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "efe5c877e17a9c717a0bf3613b2709f723202c4e4675cc8f12926ded29bcb17e"
 "checksum cgmath 0.16.1 (registry+https://github.com/rust-lang/crates.io-index)" = "64a4b57c8f4e3a2e9ac07e0f6abc9c24b6fc9e1b54c3478cfb598f3d0023e51c"
 "checksum chan 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)" = "9af7c487bb99c929ba2715b1a3a7bf45f5062bf5b6eae5d32b292a96c5865172"
-"checksum chrono 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)" = "6962c635d530328acc53ac6a955e83093fedc91c5809dfac1fa60fa470830a37"
+"checksum chrono 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)" = "e48d85528df61dc964aa43c5f6ca681a19cfa74939b2348d204bd08a981f2fb0"
 "checksum chrono-tz 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "44420a821d3075c6b4dcdba557104274a240b5b6e323dc17136507e96ca2db59"
 "checksum clamp 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b0113a8ae379a061c89a71d57a809439f5ce550b6a76063ab5ba2b1cb180971f"
 "checksum clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b957d88f4b6a63b9d70d5f454ac8011819c6efa7727858f458ab71c756ce2d3e"
