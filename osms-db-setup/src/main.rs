@@ -248,8 +248,7 @@ fn run() -> Result<(), Error> {
                         let data = File::open(opts.value_of("corpus").unwrap())
                             .context(err_msg("couldn't open corpus data file"))?;
                         let data = BufReader::new(data);
-                        let data = GzDecoder::new(data)
-                            .context(err_msg("couldn't start gunzipping corpus data file"))?;
+                        let data = GzDecoder::new(data);
                         make::corpus_entries(&*conn, data)?;
                     }
                     if util::count(&*conn, "FROM naptan_entries", &[])? == 0 {
@@ -277,8 +276,7 @@ fn run() -> Result<(), Error> {
                     let data = download("https://datafeeds.networkrail.co.uk/ntrod/CifFileAuthenticate?type=CIF_ALL_FULL_DAILY&day=toc-full",
                                         &mut cli, &conf.username, &conf.password)?;
                     let data = BufReader::new(data);
-                    let data = GzDecoder::new(data)
-                        .context(err_msg("couldn't start gunzipping schedule data file"))?;
+                    let data = GzDecoder::new(data);
                     make::apply_schedule_records(&*conn, data)?;
                     if x == "recover" {
                         use db::DbType;
@@ -321,8 +319,7 @@ fn run() -> Result<(), Error> {
                         let data = download(&format!("https://datafeeds.networkrail.co.uk/ntrod/CifFileAuthenticate?type=CIF_ALL_UPDATE_DAILY&day={}", file),
                         &mut cli, username, password)?;
                         let data = BufReader::new(data);
-                        let data = GzDecoder::new(data)
-                            .context(err_msg("couldn't start gunzipping schedule data file"))?;
+                        let data = GzDecoder::new(data);
                         make::apply_schedule_records(&*conn, data)
                     };
                     loop {
@@ -437,7 +434,7 @@ fn run() -> Result<(), Error> {
 fn main() {
     if let Err(e) = run() {
         error!("ERROR: {}", e);
-        for c in e.causes().skip(1) {
+        for c in e.iter_causes() {
             error!("Cause: {}", c);
         }
         if e.backtrace().to_string() == "" {

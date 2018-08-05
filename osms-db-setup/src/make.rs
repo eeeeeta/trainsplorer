@@ -14,7 +14,6 @@ use osms_db::errors::OsmsError;
 use osms_db::ntrod::types::*;
 use ntrod_types::reference::{CorpusEntry, CorpusData};
 use ntrod_types::schedule::{self, ScheduleRecord};
-use crossbeam::sync::chase_lev;
 use failure::Error;
 use std::collections::HashMap;
 
@@ -461,14 +460,14 @@ pub fn links<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     use geo::algorithm::haversine_length::HaversineLength;
     use geo::algorithm::from_postgis::FromPostgis;
     use geo::algorithm::to_postgis::ToPostgis;
-    use self::chase_lev::Steal;
+    use crossbeam::deque;
 
     if ctx.count("FROM links")? != 0 { return Ok(()) };
     info!("Phase 1.2: making links");
 
     let bar = ctx.make_bar();
     bar.set_message("Beginning link import");
-    let (worker, stealer) = chase_lev::deque();
+    let (worker, stealer) = deque::fifo();
 
     let mut objs = 0;
     let mut ways = 0;
@@ -492,56 +491,53 @@ pub fn links<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
         for n in 0..ctx.n_threads() {
             debug!("links: spawning thread {}", n);
             scope.spawn(|| {
+                let db = pool.get().unwrap();
                 'outer: loop {
-                    let db = pool.get().unwrap();
-                    match stealer.steal() {
-                        Steal::Empty => {
-                            debug!("links: thread done");
-                            bar.finish();
-                            break;
-                        },
-                        Steal::Data(way) => {
-                            let trans = db.transaction().unwrap();
-                            for slice in way.nodes.windows(2) {
-                                let p1 = Node::from_select(&trans, "WHERE orig_osm_id = $1", &[&slice[0].0])
-                                    .unwrap().into_iter()
-                                    .nth(0);
-                                let p1 = match p1 {
-                                    Some(n) => n,
-                                    None => {
-                                        debug!("links: way #{} contained invalid point #{}",
-                                               way.id.0, slice[0].0);
-                                        continue 'outer;
-                                    }
-                                };
-                                let p2 = Node::from_select(&trans, "WHERE orig_osm_id = $1", &[&slice[1].0])
-                                    .unwrap().into_iter()
-                                    .nth(0);
-                                let p2 = match p2 {
-                                    Some(n) => n,
-                                    None => {
-                                        debug!("links: way #{} contained invalid point #{}",
-                                               way.id.0, slice[1].0);
-                                        continue 'outer;
-                                    }
-                                };
-                                let geo_p1 = Point::from_postgis(&p1.location);
-                                let geo_p2 = Point::from_postgis(&p2.location);
-                                let ls = LineString(vec![geo_p1, geo_p2]);
-                                let dist = ls.haversine_length();
+                    while let Some(way) = stealer.steal() {
+                        let trans = db.transaction().unwrap();
+                        for slice in way.nodes.windows(2) {
+                            let p1 = Node::from_select(&trans, "WHERE orig_osm_id = $1", &[&slice[0].0])
+                                .unwrap().into_iter()
+                                .nth(0);
+                            let p1 = match p1 {
+                                Some(n) => n,
+                                None => {
+                                    debug!("links: way #{} contained invalid point #{}",
+                                           way.id.0, slice[0].0);
+                                    continue 'outer;
+                                }
+                            };
+                            let p2 = Node::from_select(&trans, "WHERE orig_osm_id = $1", &[&slice[1].0])
+                                .unwrap().into_iter()
+                                .nth(0);
+                            let p2 = match p2 {
+                                Some(n) => n,
+                                None => {
+                                    debug!("links: way #{} contained invalid point #{}",
+                                           way.id.0, slice[1].0);
+                                    continue 'outer;
+                                }
+                            };
+                            let geo_p1 = Point::from_postgis(&p1.location);
+                            let geo_p2 = Point::from_postgis(&p2.location);
+                            let ls = LineString(vec![geo_p1, geo_p2]);
+                            let dist = ls.haversine_length();
 
-                                let link = Link {
-                                    p1: p1.id,
-                                    p2: p2.id,
-                                    way: ls.to_postgis_wgs84(),
-                                    distance: dist as _
-                                };
-                                link.insert(&trans).unwrap();
-                            }
-                            trans.commit().unwrap();
-                            bar.inc(1);
-                        },
-                        _ => {}
+                            let link = Link {
+                                p1: p1.id,
+                                p2: p2.id,
+                                way: ls.to_postgis_wgs84(),
+                                distance: dist as _
+                            };
+                            link.insert(&trans).unwrap();
+                        }
+                        trans.commit().unwrap();
+                        bar.inc(1);
+                    }
+                    if stealer.is_empty() {
+                        debug!("links: thread done");
+                        bar.finish();
+                        break;
                     }
                 }
             });
