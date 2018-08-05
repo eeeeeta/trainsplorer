@@ -5,7 +5,7 @@ version = "0.1.0"
 license = "AGPL-3.0"
 
 [dependencies]
-chrono = "0.4.0"
+chrono = "0.4.5"
 failure = "0.1"
 postgis = "0.6"
 postgres = "0.15"
