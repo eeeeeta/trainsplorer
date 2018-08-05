@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 chrono = "0.4"
-crossbeam = "0.3"
+crossbeam = "0.4"
 failure = "0.1"
 failure_derive = "0.1"
 fallible-iterator = "0.1"
