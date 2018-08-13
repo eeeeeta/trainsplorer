@@ -109,8 +109,9 @@ impl Schedule {
         }
         debug!("Checking authoritativeness of schedule #{} on {}", self.id, on_date);
         let scheds = Schedule::from_select(conn, "WHERE uid = $1
-                                                  AND start_date <= $2 AND end_date >= $2",
-                                           &[&self.uid, &on_date])?;
+                                                  AND start_date <= $2 AND end_date >= $2
+                                                  AND source = $3",
+                                           &[&self.uid, &on_date, &self.source])?;
         let mut highest = (0, StpIndicator::None, 0);
         for sched in scheds.into_iter() {
             if !sched.days.value_for_iso_weekday(on_date.weekday().number_from_monday()).unwrap() {
@@ -122,16 +123,9 @@ impl Schedule {
                 highest = (sched.id, sched.stp_indicator, sched.source);
             }
             else if sched.stp_indicator == highest.1 && !sched.stp_indicator.is_cancellation() {
-                if sched.source > highest.2 {
-                    warn!("Schedule #{} ({:?}) supersedes schedule #{} ({:?}), but only because of source ({} vs {})!",
-                    sched.id, sched.stp_indicator, highest.0, highest.1, sched.source, highest.2);
-                    highest = (sched.id, sched.stp_indicator, sched.source);
-                }
-                else {
-                    error!("Inconsistency: schedule #{} has a STP indicator equal to #{}",
-                           sched.id, highest.0);
-                    return Err(OsmsError::DatabaseInconsistency("STP indicators equal"));
-                }
+                error!("Inconsistency: schedule #{} has a STP indicator equal to #{}",
+                       sched.id, highest.0);
+                return Err(OsmsError::DatabaseInconsistency("STP indicators equal"));
             }
         }
         Ok(highest.0 == self.id)
