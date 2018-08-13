@@ -137,7 +137,7 @@ impl Schedule {
         Ok(highest.0 == self.id)
     }
 }
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, Hash)]
 /// Describes a movement a train makes within a schedule.
 pub struct ScheduleMvt {
     /// Internal primary key.

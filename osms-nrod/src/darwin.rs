@@ -9,6 +9,7 @@ use darwin_types::schedule::{LocOr, LocOpOr, LocIp, LocOpIp, LocPp, LocDt, LocOp
 use darwin_types::forecasts::Ts;
 use ntrod_types::schedule::Days;
 use ntrod_types::cif::StpIndicator;
+use std::collections::HashSet;
 use super::NtrodWorker;
 use chrono::{Local, NaiveDate, Duration};
 
@@ -216,19 +217,36 @@ pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
     };
     let (sid, update) = s.insert_self(&trans)?;
     if update {
-        return Err(NrodError::DuplicateDarwinSchedule {
-            train_uid: sched.uid,
-            start_date: sched.ssd,
-            stp_indicator: StpIndicator::NewSchedule,
-            source: 2
-        });
+        // set of movements in old schedule = A (orig_mvts)
+        // set of movements in new schedule = B (mvts)
+        //
+        // we want to delete A ∩ B' (in A but not in B)
+        // ...do nothing to A ∩ B (in both)
+        // ...and insert A' ∩ B (in B but not in A)
+        let orig_mvts: HashSet<ScheduleMvt> = ScheduleMvt::from_select(&trans, "WHERE parent_sched = $1 ORDER BY time ASC", &[&sid])?
+            .into_iter().collect();
+        let mvts: HashSet<ScheduleMvt> = mvts.into_iter().collect();
+        let mut to_delete = vec![];
+        for mvt in orig_mvts.difference(&mvts) {
+            to_delete.push(mvt.id);
+        }
+        trans.execute("DELETE FROM schedule_movements WHERE id = ANY($1)", &[&to_delete])?;
+        for mvt in mvts.difference(&orig_mvts) {
+            let mut mvt = mvt.clone();
+            mvt.parent_sched = sid;
+            mvt.insert_self(&trans)?;
+        }
+        debug!("Updated schedule #{}.", sid);
+        worker.incr("darwin.sched.updated");
     }
-    worker.incr("darwin.sched.inserted");
-    for mut mvt in mvts {
-        mvt.parent_sched = sid;
-        mvt.insert_self(&trans)?;
+    else {
+        for mut mvt in mvts {
+            mvt.parent_sched = sid;
+            mvt.insert_self(&trans)?;
+        }
+        debug!("Schedule inserted as #{}.", sid);
+        worker.incr("darwin.sched.inserted");
     }
-    debug!("Schedule inserted as #{}.", sid);
     trans.execute("UPDATE trains SET parent_nre_sched = $1 WHERE id = $2", &[&sid, &train.id])?;
     trans.commit()?;
     Ok(())
