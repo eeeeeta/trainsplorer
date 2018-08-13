@@ -26,10 +26,9 @@ pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
         PportElement::DataResponse(dr) => {
             debug!("Processing Darwin data response message, origin {:?}, source {:?}, rid {:?}", dr.update_origin, dr.request_source, dr.request_id);
             for ts in dr.train_status {
-                let trans = conn.transaction()?;
                 worker.incr("darwin.ts_recv");
                 let now = Local::now();
-                match process_ts(&trans, worker, ts) {
+                match process_ts(&*conn, worker, ts) {
                     Ok(_) => worker.incr("darwin.ts_processed"),
                     Err(e) => {
                         e.send_to_stats("darwin.ts_fails", worker);
@@ -41,13 +40,11 @@ pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
                 if let Ok(dur) = after.signed_duration_since(now).to_std() {
                     worker.latency("darwin.ts_process_time", dur);
                 }
-                trans.commit()?;
             }
             for sched in dr.schedule {
-                let trans = conn.transaction()?;
                 worker.incr("darwin.sched.recv");
                 let now = Local::now();
-                match process_schedule(&trans, worker, sched) {
+                match process_schedule(&*conn, worker, sched) {
                     Ok(_) => worker.incr("darwin.sched.processed"),
                     Err(e) => {
                         e.send_to_stats("darwin.sched.fails", worker);
@@ -59,7 +56,6 @@ pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
                 if let Ok(dur) = after.signed_duration_since(now).to_std() {
                     worker.latency("darwin.sched.process_time", dur);
                 }
-                trans.commit()?;
             }
         },
         _ => {
@@ -70,29 +66,31 @@ pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
     Ok(())
 }
 pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, rid: String, uid: String, start_date: NaiveDate) -> Result<Train> {
-    let rid_trains = Train::from_select(conn, "WHERE nre_id = $1", &[&rid])?;
+    let trans = conn.transaction()?;
+    let rid_trains = Train::from_select(&trans, "WHERE nre_id = $1", &[&rid])?;
     if let Some(t) = rid_trains.into_iter().nth(0) {
         worker.incr("darwin.link.train_prelinked");
         debug!("Found pre-linked train {} (TRUST id {:?}) for Darwin RID {}", t.id, t.trust_id, rid);
         return Ok(t);
     }
     debug!("Trying to link RID {} (uid {}, start_date {}) to a train...", rid, uid, start_date);
-    let trains = Train::from_select(conn, "WHERE EXISTS(SELECT * FROM schedules WHERE uid = $1 AND start_date <= $2 AND end_date >= $2 AND id = trains.parent_sched) AND date = $2 AND nre_id IS NULL", &[&uid, &start_date])?;
+    let trains = Train::from_select(&trans, "WHERE EXISTS(SELECT * FROM schedules WHERE uid = $1 AND start_date <= $2 AND end_date >= $2 AND id = trains.parent_sched) AND date = $2 AND nre_id IS NULL", &[&uid, &start_date])?;
     if trains.len() == 1 {
         let train = trains.into_iter().nth(0).unwrap();
         debug!("Found matching train #{}", train.id);
         worker.incr("darwin.link.train_matched");
-        conn.execute("UPDATE trains SET nre_id = $1 WHERE id = $2", &[&rid, &train.id])?;
+        trans.execute("UPDATE trains SET nre_id = $1 WHERE id = $2", &[&rid, &train.id])?;
+        trans.commit()?;
         return Ok(train);
     }
     else if trains.len() > 1 {
         warn!("More than one possible train for RID {} (uid {}, start_date {})", rid, uid, start_date);
     }
-    let scheds = Schedule::from_select(conn, "WHERE uid = $1 AND start_date <= $2 AND end_date >= $2 AND source = 0", &[&uid, &start_date])?;
+    let scheds = Schedule::from_select(&trans, "WHERE uid = $1 AND start_date <= $2 AND end_date >= $2 AND source = 0", &[&uid, &start_date])?;
     debug!("{} potential schedules", scheds.len());
     let mut auth_schedule: Option<Schedule> = None;
     for sched in scheds {
-        if !sched.is_authoritative(conn, start_date)? {
+        if !sched.is_authoritative(&trans, start_date)? {
             debug!("Schedule #{} is superseded.", sched.id);
         }
         else {
@@ -121,13 +119,14 @@ pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, worker: &mut Nt
         nre_id: Some(rid.clone()),
         parent_nre_sched: None
     };
-    let (train, was_update) = match train.insert_self(conn) {
+    let (train, was_update) = match train.insert_self(&trans) {
         Ok(t) => t,
         Err(e) => {
             match e {
                 OsmsError::DoubleTrainActivation(ps, date) => {
                     worker.incr("darwin.link.double_activation");
                     warn!("Train activated twice for ({}, {}), retrying...", ps, date);
+                    trans.commit()?;
                     return get_train_for_rid_uid_ssd(conn, worker, rid, uid, start_date);
                 },
                 e => Err(e)?
@@ -142,12 +141,14 @@ pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, worker: &mut Nt
         worker.incr("darwin.link.darwin_activation");
         debug!("Inserted train as #{}", train.id);
     }
+    trans.commit()?;
     Ok(train)
 }
 pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, sched: DarwinSchedule) -> Result<()> {
     use self::DarwinScheduleLocation::*;
     debug!("Processing Darwin schedule with rid {} (uid {}, start_date {})", sched.rid, sched.uid, sched.ssd);
     let train = get_train_for_rid_uid_ssd(conn, worker, sched.rid.clone(), sched.uid.clone(), sched.ssd.clone())?;
+    let trans = conn.transaction()?;
     let mut mvts: Vec<ScheduleMvt> = vec![];
     for loc in sched.locations {
         let tiploc;
@@ -207,7 +208,7 @@ pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
         }
     }
     mvts.sort_by_key(|mvt| mvt.time);
-    let orig_mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 ORDER BY time ASC", &[&train.parent_sched])?;
+    let orig_mvts = ScheduleMvt::from_select(&trans, "WHERE parent_sched = $1 ORDER BY time ASC", &[&train.parent_sched])?;
     if mvts == orig_mvts {
         worker.incr("darwin.sched.identical");
         debug!("Schedules are identical; doing nothing.");
@@ -226,7 +227,7 @@ pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
         signalling_id: Some(sched.train_id),
         id: -1
     };
-    let (sid, update) = s.insert_self(conn)?;
+    let (sid, update) = s.insert_self(&trans)?;
     if update {
         // set of movements in old schedule = A (orig_mvts)
         // set of movements in new schedule = B (mvts)
@@ -234,18 +235,18 @@ pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
         // we want to delete A ∩ B' (in A but not in B)
         // ...do nothing to A ∩ B (in both)
         // ...and insert A' ∩ B (in B but not in A)
-        let orig_mvts: HashSet<ScheduleMvt> = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 ORDER BY time ASC", &[&sid])?
+        let orig_mvts: HashSet<ScheduleMvt> = ScheduleMvt::from_select(&trans, "WHERE parent_sched = $1 ORDER BY time ASC", &[&sid])?
             .into_iter().collect();
         let mvts: HashSet<ScheduleMvt> = mvts.into_iter().collect();
         let mut to_delete = vec![];
         for mvt in orig_mvts.difference(&mvts) {
             to_delete.push(mvt.id);
         }
-        conn.execute("DELETE FROM schedule_movements WHERE id = ANY($1)", &[&to_delete])?;
+        trans.execute("DELETE FROM schedule_movements WHERE id = ANY($1)", &[&to_delete])?;
         for mvt in mvts.difference(&orig_mvts) {
             let mut mvt = mvt.clone();
             mvt.parent_sched = sid;
-            mvt.insert_self(conn)?;
+            mvt.insert_self(&trans)?;
         }
         debug!("Updated schedule #{}.", sid);
         worker.incr("darwin.sched.updated");
@@ -253,17 +254,19 @@ pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
     else {
         for mut mvt in mvts {
             mvt.parent_sched = sid;
-            mvt.insert_self(conn)?;
+            mvt.insert_self(&trans)?;
         }
         debug!("Schedule inserted as #{}.", sid);
         worker.incr("darwin.sched.inserted");
     }
-    conn.execute("UPDATE trains SET parent_nre_sched = $1 WHERE id = $2", &[&sid, &train.id])?;
+    trans.execute("UPDATE trains SET parent_nre_sched = $1 WHERE id = $2", &[&sid, &train.id])?;
+    trans.commit()?;
     Ok(())
 }
 pub fn process_ts<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, ts: Ts) -> Result<()> {
     debug!("Processing update to rid {} (uid {}, start_date {})...", ts.rid, ts.uid, ts.start_date);
     let train = get_train_for_rid_uid_ssd(conn, worker, ts.rid, ts.uid, ts.start_date)?;
+    let trans = conn.transaction()?;
     // vec of (tiploc, action, time, tstimedata)
     let mut updates = vec![];
     for loc in ts.locations {
@@ -288,13 +291,13 @@ pub fn process_ts<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, ts: 
     let mut errs = vec![];
     for (tiploc, action, time, tstd) in updates {
         debug!("Querying for movements - parent_sched = {}, tiploc = {}, action = {}, time = {}", train.parent_sched, tiploc, action, time);
-        let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = $2 AND action = $3 AND time = $4", &[&train.parent_sched, &tiploc, &action, &time])?;
+        let mvts = ScheduleMvt::from_select(&trans, "WHERE parent_sched = $1 AND tiploc = $2 AND action = $3 AND time = $4", &[&train.parent_sched, &tiploc, &action, &time])?;
         let mvt = match mvts.into_iter().nth(0) {
             Some(m) => m,
             None => {
                 if let Some(darwin_sched) = train.parent_nre_sched {
                     debug!("Movement query failed - querying with Darwin parent_sched = {}", darwin_sched);
-                    let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = $2 AND action = $3 AND time = $4 FOR KEY SHARE", &[&darwin_sched, &tiploc, &action, &time])?;
+                    let mvts = ScheduleMvt::from_select(&trans, "WHERE parent_sched = $1 AND tiploc = $2 AND action = $3 AND time = $4 FOR KEY SHARE", &[&darwin_sched, &tiploc, &action, &time])?;
                     match mvts.into_iter().nth(0) {
                         Some(m) => {
                             debug!("Found Darwin schedule movement #{}", m.id);
@@ -329,7 +332,7 @@ pub fn process_ts<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, ts: 
         if tstd.at_removed {
             worker.incr("darwin.ts.at_removed");
             // TODO: make this source check less brittle
-            conn.execute("DELETE FROM train_movements WHERE parent_mvt = $1 AND source = 1", &[&mvt.id])?;
+            trans.execute("DELETE FROM train_movements WHERE parent_mvt = $1 AND source = 1", &[&mvt.id])?;
         }
         if actual {
             worker.incr("darwin.ts.actual");
@@ -345,9 +348,10 @@ pub fn process_ts<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, ts: 
             source: 1,
             estimated: !actual
         };
-        let id = tmvt.insert_self(conn)?;
+        let id = tmvt.insert_self(&trans)?;
         debug!("Registered train movement #{}.", id);
     }
+    trans.commit()?;
     if errs.len() > 0 {
         Err(NrodError::MultipleFailures(errs))
     }
