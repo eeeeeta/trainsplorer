@@ -247,7 +247,7 @@ impl InsertableDbType for Train {
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<(Self, bool)> {
         let qry = conn.query("INSERT INTO trains
                               (parent_sched, trust_id, date, signalling_id, cancelled, terminated, nre_id, parent_nre_sched)
-                              SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9
+                              SELECT $1, $2, $3, $4, $5, $6, $7, $8
                               WHERE 'inserted' = set_config('upsert.action', 'inserted', true)
                               ON CONFLICT (parent_sched, date) DO UPDATE
                               SET trust_id = COALESCE(trains.trust_id, EXCLUDED.trust_id),
