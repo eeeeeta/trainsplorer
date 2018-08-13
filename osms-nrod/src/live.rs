@@ -54,6 +54,7 @@ pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()>
                 source: 1,
                 file_metaseq: None,
                 geo_generation: 0,
+                darwin_id: None,
                 id: -1
             };
             let (sid, update) = sched.insert_self(&trans)?;
@@ -92,8 +93,8 @@ pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()>
                     tiploc, time, action, origterm
                 };
                 mvt.insert_self(&trans)?;
-                debug!("Schedule inserted as #{}.", sid);
             }
+            debug!("Schedule inserted as #{}.", sid);
         }
     }
     trans.execute("NOTIFY osms_schedule_updates;", &[])?;
@@ -170,6 +171,7 @@ pub fn process_activation<T: GenericConnection>(conn: &T, worker: &mut NtrodWork
         cancelled: false,
         terminated: false,
         nre_id: None,
+        parent_nre_sched: None
     };
     let (train, was_update) = train.insert_self(conn)?;
     if was_update {

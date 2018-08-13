@@ -236,7 +236,8 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
                 source: 0,
                 file_metaseq: Some(metaseq),
                 geo_generation: 0,
-                id: -1
+                id: -1,
+                darwin_id: None
             };
             let (sid, updated) = sched.insert_self(conn)?;
             let mut mvts = vec![];

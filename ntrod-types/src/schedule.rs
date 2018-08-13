@@ -47,6 +47,17 @@ impl fmt::Display for Days {
     }
 }
 impl Days {
+    pub fn all() -> Self {
+        Days {
+            mon: true,
+            tue: true,
+            wed: true,
+            thu: true,
+            fri: true,
+            sat: true,
+            sun: true
+        }
+    }
     pub fn value_for_iso_weekday(&self, wd: u32) -> Option<bool> {
         match wd {
             1 => Some(self.mon),

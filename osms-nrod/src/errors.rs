@@ -25,16 +25,15 @@ pub enum NrodError {
     UnimplementedMessageType(String),
     #[fail(display = "Darwin provided a forecast, but no location timings")]
     DarwinTimingsMissing,
-    #[fail(display = "Train #{} already activated with TRUST id {} (parent sched #{} and date {}), but {} also matches", id, orig_trust_id, parent_sched, date, new_trust_id)]
-    DoubleActivation {
-        id: i32,
-        orig_trust_id: String,
-        parent_sched: i32,
-        date: NaiveDate,
-        new_trust_id: String
-    },
     #[fail(display = "Duplicate VSTP schedule (UID {}, start {}, stp_indicator {:?}, src {})", train_uid, start_date, stp_indicator, source)]
     DuplicateVstpSchedule {
+        train_uid: String,
+        start_date: NaiveDate, 
+        stp_indicator: StpIndicator,
+        source: i32,
+    },
+    #[fail(display = "Duplicate Darwin schedule (UID {}, start {}, stp_indicator {:?}, src {})", train_uid, start_date, stp_indicator, source)]
+    DuplicateDarwinSchedule {
         train_uid: String,
         start_date: NaiveDate, 
         stp_indicator: StpIndicator,
@@ -65,6 +64,8 @@ pub enum NrodError {
     NoTrainFound(String, NaiveDate),
     #[fail(display = "Failed to find any schedule movements (sched #{}, actions {:?}, tiplocs {:?}, time {:?})", _0, _1, _2, _3)]
     NoMovementsFound(i32, Vec<i32>, Vec<String>, Option<NaiveTime>),
+    #[fail(display = "Failed to find any schedule movements with Darwin schedule (sched #{}, actions {:?}, tiplocs {:?}, time {:?})", _0, _1, _2, _3)]
+    NoMovementsFoundDarwin(i32, Vec<i32>, Vec<String>, Option<NaiveTime>),
     #[fail(display = "Multiple errors: {:?}", _0)]
     MultipleFailures(Vec<NrodError>)
 }
@@ -95,7 +96,6 @@ impl NrodError {
             UnknownMvtBody(..) => "unknown_mvt_body",
             UnimplementedMessageType(..) => "unimplemented_message_type",
             DarwinTimingsMissing => "darwin_timings_missing",
-            DoubleActivation { .. } => "double_activation",
             NoSchedules { .. } => "no_schedules",
             TwoAuthoritativeSchedules(..) => "two_authoritative_schedules",
             TwoAuthoritativeSchedulesDarwin(..) => "two_authoritative_schedules_darwin",
@@ -103,6 +103,7 @@ impl NrodError {
             NoAuthoritativeSchedulesDarwin { .. } => "no_authoritative_schedules_darwin",
             NoTrainFound { .. } => "no_train_found",
             NoMovementsFound { .. } => "no_movements_found",
+            NoMovementsFoundDarwin { .. } => "no_movements_found_darwin",
             MultipleFailures { .. } => "multiple_failures"
         }
     }

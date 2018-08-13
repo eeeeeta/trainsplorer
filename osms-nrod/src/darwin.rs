@@ -3,9 +3,14 @@ use osms_db::errors::OsmsError;
 use osms_db::ntrod::types::*;
 use osms_db::db::{DbType, InsertableDbType, GenericConnection};
 use darwin_types::pport::{Pport, PportElement};
+use darwin_types::schedule::Schedule as DarwinSchedule;
+use darwin_types::schedule::ScheduleLocation as DarwinScheduleLocation;
+use darwin_types::schedule::{LocOr, LocOpOr, LocIp, LocOpIp, LocPp, LocDt, LocOpDt};
 use darwin_types::forecasts::Ts;
+use ntrod_types::schedule::Days;
+use ntrod_types::cif::StpIndicator;
 use super::NtrodWorker;
-use chrono::{Local, NaiveDate};
+use chrono::{Local, NaiveDate, Duration};
 
 type Result<T> = ::std::result::Result<T, NrodError>;
 
@@ -75,6 +80,14 @@ pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, worker: &mut Nt
             rid, uid, start_date
         });
     };
+    let nre_sched = Schedule::from_select(conn, "WHERE darwin_id = $1", &[&rid])?
+        .into_iter()
+        .nth(0)
+        .map(|x| x.id);
+    if let Some(sid) = nre_sched {
+        worker.incr("darwin.link.added_nre_sched");
+        debug!("Linking to NRE schedule #{}", sid);
+    }
     let train = Train {
         id: -1,
         parent_sched: auth_schedule.id,
@@ -83,7 +96,8 @@ pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, worker: &mut Nt
         signalling_id: None,
         cancelled: false,
         terminated: false,
-        nre_id: Some(rid.clone())
+        nre_id: Some(rid.clone()),
+        parent_nre_sched: nre_sched
     };
     let (train, was_update) = match train.insert_self(conn) {
         Ok(t) => t,
@@ -107,6 +121,109 @@ pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, worker: &mut Nt
         debug!("Inserted train as #{}", train.id);
     }
     Ok(train)
+}
+pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, sched: DarwinSchedule) -> Result<()> {
+    use self::DarwinScheduleLocation::*;
+    debug!("Processing Darwin schedule with rid {} (uid {}, start_date {})", sched.rid, sched.uid, sched.ssd);
+    let trans = conn.transaction()?;
+    let train = get_train_for_rid_uid_ssd(&trans, worker, sched.rid, sched.uid, sched.ssd)?;
+    let mut mvts: Vec<ScheduleMvt> = vec![];
+    for loc in sched.locations {
+        let tiploc;
+        let primary_time;
+        let mut primary_action = 1;
+        let mut secondary_time = None;
+        let mut secondary_action = 0;
+        let mut rdelay_mins_ = 0;
+        match loc {
+            Or(LocOr { sla, wta, wtd, .. }) | OpOr(LocOpOr { sla, wta, wtd, .. }) => {
+                tiploc = sla.tpl;
+                primary_time = wtd;
+                secondary_time = wta;
+            },
+            Ip(LocIp { sla, wta, wtd, rdelay_mins, .. }) | OpIp(LocOpIp { sla, wta, wtd, rdelay_mins }) => {
+                tiploc = sla.tpl;
+                primary_time = wtd;
+                secondary_time = Some(wta);
+                rdelay_mins_ = rdelay_mins;
+            },
+            Pp(LocPp { sla, wtp, rdelay_mins }) => {
+                tiploc = sla.tpl;
+                primary_time = wtp;
+                primary_action = 2;
+                rdelay_mins_ = rdelay_mins;
+            },
+            Dt(LocDt { sla, wta, wtd, rdelay_mins, .. }) | OpDt(LocOpDt { sla, wta, wtd, rdelay_mins }) => {
+                tiploc = sla.tpl;
+                primary_time = wta;
+                primary_action = 0;
+                secondary_time = wtd;
+                secondary_action = 1;
+                rdelay_mins_ = rdelay_mins;
+            },
+        }
+        mvts.push(ScheduleMvt {
+            id: -1,
+            parent_sched: -1,
+            tiploc: tiploc.clone(),
+            action: primary_action,
+            origterm: false,
+            time: primary_time + Duration::minutes(rdelay_mins_ as _),
+            starts_path: None,
+            ends_path: None
+        });
+        if let Some(time) = secondary_time {
+            mvts.push(ScheduleMvt {
+                id: -1,
+                parent_sched: -1,
+                tiploc: tiploc,
+                action: secondary_action,
+                origterm: false,
+                time: time + Duration::minutes(rdelay_mins_ as _),
+                starts_path: None,
+                ends_path: None
+            });
+        }
+    }
+    mvts.sort_by_key(|mvt| mvt.time);
+    let orig_mvts = ScheduleMvt::from_select(&trans, "WHERE parent_sched = $1 ORDER BY time ASC", &[&train.parent_sched])?;
+    if mvts == orig_mvts {
+        worker.incr("darwin.sched.identical");
+        debug!("Schedules are identical; doing nothing.");
+        trans.commit()?;
+        return Ok(());
+    }
+    let s = Schedule {
+        uid: sched.uid.clone(),
+        start_date: sched.ssd.clone(),
+        end_date: sched.ssd.clone(),
+        days: Days::all(),
+        stp_indicator: StpIndicator::NewSchedule,
+        source: 2,
+        file_metaseq: None,
+        geo_generation: 0,
+        darwin_id: Some(sched.rid.clone()),
+        signalling_id: Some(sched.train_id),
+        id: -1
+    };
+    let (sid, update) = s.insert_self(&trans)?;
+    if update {
+        return Err(NrodError::DuplicateDarwinSchedule {
+            train_uid: sched.uid,
+            start_date: sched.ssd,
+            stp_indicator: StpIndicator::NewSchedule,
+            source: 2
+        });
+    }
+    worker.incr("darwin.sched.inserted");
+    for mut mvt in mvts {
+        mvt.parent_sched = sid;
+        mvt.insert_self(&trans)?;
+    }
+    debug!("Schedule inserted as #{}.", sid);
+    trans.execute("UPDATE trains SET parent_nre_sched = $1 WHERE id = $2", &[&sid, &train.id])?;
+    trans.commit()?;
+    Ok(())
 }
 pub fn process_ts<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, ts: Ts) -> Result<()> {
     debug!("Processing update to rid {} (uid {}, start_date {})...", ts.rid, ts.uid, ts.start_date);
@@ -139,8 +256,26 @@ pub fn process_ts<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, ts: 
         let mvt = match mvts.into_iter().nth(0) {
             Some(m) => m,
             None => {
-                errs.push(NrodError::NoMovementsFound(train.parent_sched, vec![action], vec![tiploc], Some(time)));
-                continue;
+                if let Some(darwin_sched) = train.parent_nre_sched {
+                    debug!("Movement query failed - querying with Darwin parent_sched = {}", darwin_sched);
+                    let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = $2 AND action = $3 AND time = $4", &[&darwin_sched, &tiploc, &action, &time])?;
+                    match mvts.into_iter().nth(0) {
+                        Some(m) => {
+                            debug!("Found Darwin schedule movement #{}", m.id);
+                            worker.incr("darwin.ts.darwin_sched_mvt");
+                            m
+                        },
+                        None => {
+                            debug!("Failed to find movements even with Darwin schedule (!)");
+                            errs.push(NrodError::NoMovementsFoundDarwin(train.parent_sched, vec![action], vec![tiploc], Some(time)));
+                            continue;
+                        }
+                    }
+                }
+                else {
+                    errs.push(NrodError::NoMovementsFound(train.parent_sched, vec![action], vec![tiploc], Some(time)));
+                    continue;
+                }
             }
         };
         let actual = tstd.at.is_some();

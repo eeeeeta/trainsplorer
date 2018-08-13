@@ -37,10 +37,13 @@ pub struct Schedule {
     ///
     /// - 0 for schedules from CIF/ITPS
     /// - 1 for schedules from VSTP/TOPS
+    /// - 2 for schedules from Darwin
     pub source: i32,
     /// The sequence number of the file this was imported from,
     /// if imported from CIF/ITPS
-    pub file_metaseq: Option<i32>
+    pub file_metaseq: Option<i32>,
+    /// The Darwin RID for this schedule, if obtained from Darwin
+    pub darwin_id: Option<String>
 }
 impl DbType for Schedule {
     fn table_name() -> &'static str {
@@ -58,6 +61,7 @@ impl DbType for Schedule {
             geo_generation: row.get(7),
             source: row.get(8),
             file_metaseq: row.get(9),
+            darwin_id: row.get(10),
         }
     }
 }
@@ -66,19 +70,20 @@ impl InsertableDbType for Schedule {
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<(i32, bool)> {
         let qry = conn.query(
             "INSERT INTO schedules
-             (uid, start_date, end_date, days, stp_indicator, signalling_id, geo_generation, source, file_metaseq)
-             SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9
+             (uid, start_date, end_date, days, stp_indicator, signalling_id, geo_generation, source, file_metaseq, darwin_id)
+             SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
              WHERE 'inserted' = set_config('upsert.action', 'inserted', true)
              ON CONFLICT (uid, start_date, stp_indicator, source) DO UPDATE
              SET end_date = EXCLUDED.end_date,
                  days = EXCLUDED.days,
                  signalling_id = EXCLUDED.signalling_id,
                  source = EXCLUDED.source,
-                 file_metaseq = EXCLUDED.file_metaseq
+                 file_metaseq = EXCLUDED.file_metaseq,
+                 darwin_id = EXCLUDED.darwin_id
              WHERE 'updated' = set_config('upsert.action', 'updated', true)
              RETURNING id",
             &[&self.uid, &self.start_date, &self.end_date, &self.days, &self.stp_indicator,
-              &self.signalling_id, &self.geo_generation, &self.source, &self.file_metaseq])?;
+              &self.signalling_id, &self.geo_generation, &self.source, &self.file_metaseq, &self.darwin_id])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))
@@ -156,6 +161,14 @@ pub struct ScheduleMvt {
     pub starts_path: Option<i32>,
     pub ends_path: Option<i32>
 }
+impl PartialEq for ScheduleMvt {
+    fn eq(&self, other: &ScheduleMvt) -> bool {
+        self.tiploc == other.tiploc
+            && self.action == other.action
+            && self.time == other.time
+    }
+}
+impl Eq for ScheduleMvt {}
 impl DbType for ScheduleMvt {
     fn table_name() -> &'static str {
         "schedule_movements"
@@ -207,7 +220,9 @@ pub struct Train {
     /// Whether this train has terminated or not.
     pub terminated: bool,
     /// A National Rail Enquiries RTTI ID for this train.
-    pub nre_id: Option<String>
+    pub nre_id: Option<String>,
+    /// Live Darwin schedule this train is running from, if any.
+    pub parent_nre_sched: Option<i32>
 }
 impl DbType for Train {
     fn table_name() -> &'static str {
@@ -222,7 +237,8 @@ impl DbType for Train {
             signalling_id: row.get(4),
             cancelled: row.get(5),
             terminated: row.get(6),
-            nre_id: row.get(7)
+            nre_id: row.get(7),
+            parent_nre_sched: row.get(8)
         }
     }
 }
@@ -230,13 +246,14 @@ impl InsertableDbType for Train {
     type Id = (Self, bool);
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<(Self, bool)> {
         let qry = conn.query("INSERT INTO trains
-                              (parent_sched, trust_id, date, signalling_id, cancelled, terminated, nre_id)
-                              SELECT $1, $2, $3, $4, $5, $6, $7
+                              (parent_sched, trust_id, date, signalling_id, cancelled, terminated, nre_id, parent_nre_sched)
+                              SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9
                               WHERE 'inserted' = set_config('upsert.action', 'inserted', true)
                               ON CONFLICT (parent_sched, date) DO UPDATE
                               SET trust_id = COALESCE(trains.trust_id, EXCLUDED.trust_id),
                                   signalling_id = COALESCE(trains.signalling_id, EXCLUDED.signalling_id),
-                                  nre_id = COALESCE(trains.nre_id, EXCLUDED.nre_id)
+                                  nre_id = COALESCE(trains.nre_id, EXCLUDED.nre_id),
+                                  parent_nre_sched = COALESCE(trains.parent_nre_sched, EXCLUDED.parent_nre_sched)
                               WHERE 'updated' = set_config('upsert.action', 'updated', true)
                               AND (
                                   (trains.trust_id IS NULL AND EXCLUDED.trust_id IS NOT NULL)
@@ -244,7 +261,7 @@ impl InsertableDbType for Train {
                               )
                               RETURNING *",
                              &[&self.parent_sched, &self.trust_id, &self.date,
-                               &self.signalling_id, &self.cancelled, &self.terminated, &self.nre_id])?;
+                               &self.signalling_id, &self.cancelled, &self.terminated, &self.nre_id, &self.parent_nre_sched])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(Self::from_row(&row))
