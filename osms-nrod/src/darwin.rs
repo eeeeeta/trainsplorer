@@ -240,7 +240,6 @@ pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
         for mvt in orig_mvts.difference(&mvts) {
             to_delete.push(mvt.id);
         }
-        conn.execute("SELECT * FROM schedule_movements WHERE id = ANY($1) ORDER BY id ASC FOR UPDATE;", &[&to_delete])?;
         conn.execute("DELETE FROM schedule_movements WHERE id = ANY($1)", &[&to_delete])?;
         for mvt in mvts.difference(&orig_mvts) {
             let mut mvt = mvt.clone();
@@ -288,13 +287,13 @@ pub fn process_ts<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, ts: 
     let mut errs = vec![];
     for (tiploc, action, time, tstd) in updates {
         debug!("Querying for movements - parent_sched = {}, tiploc = {}, action = {}, time = {}", train.parent_sched, tiploc, action, time);
-        let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = $2 AND action = $3 AND time = $4 ORDER BY id ASC", &[&train.parent_sched, &tiploc, &action, &time])?;
+        let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = $2 AND action = $3 AND time = $4", &[&train.parent_sched, &tiploc, &action, &time])?;
         let mvt = match mvts.into_iter().nth(0) {
             Some(m) => m,
             None => {
                 if let Some(darwin_sched) = train.parent_nre_sched {
                     debug!("Movement query failed - querying with Darwin parent_sched = {}", darwin_sched);
-                    let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = $2 AND action = $3 AND time = $4 ORDER BY id ASC FOR KEY SHARE", &[&darwin_sched, &tiploc, &action, &time])?;
+                    let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = $2 AND action = $3 AND time = $4 FOR KEY SHARE", &[&darwin_sched, &tiploc, &action, &time])?;
                     match mvts.into_iter().nth(0) {
                         Some(m) => {
                             debug!("Found Darwin schedule movement #{}", m.id);
