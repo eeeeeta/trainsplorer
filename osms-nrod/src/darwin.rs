@@ -236,7 +236,7 @@ pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
         // we want to delete A ∩ B' (in A but not in B)
         // ...do nothing to A ∩ B (in both)
         // ...and insert A' ∩ B (in B but not in A)
-        let orig_mvts: HashSet<ScheduleMvt> = ScheduleMvt::from_select(&trans, "WHERE parent_sched = $1 ORDER BY time ASC", &[&sid])?
+        let orig_mvts: HashSet<ScheduleMvt> = ScheduleMvt::from_select(&trans, "WHERE parent_sched = $1 ORDER BY id ASC FOR UPDATE", &[&sid])?
             .into_iter().collect();
         let mvts: HashSet<ScheduleMvt> = mvts.into_iter().collect();
         let mut to_delete = vec![];
