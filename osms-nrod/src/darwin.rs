@@ -235,7 +235,6 @@ pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
         let orig_mvts: HashSet<ScheduleMvt> = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 ORDER BY time ASC", &[&sid])?
             .into_iter().collect();
         let mvts: HashSet<ScheduleMvt> = mvts.into_iter().collect();
-        let mut to_delete = vec![];
         for mvt in orig_mvts.difference(&mvts) {
             conn.execute("DELETE FROM schedule_movements WHERE id = $1", &[&mvt.id])?;
         }
