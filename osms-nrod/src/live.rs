@@ -223,7 +223,7 @@ pub fn process_movement<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
     let acceptable_actions = vec![2, action];
     debug!("Mapped STANOX {} to TIPLOCs {:?}", m.loc_stanox, tiplocs);
     debug!("Querying for movements - parent_sched = {}, tiplocs = {:?}, actions = {:?}", train.parent_sched, tiplocs, acceptable_actions);
-    let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = ANY($2) AND action = ANY($3) AND COALESCE(time = $4, TRUE) ORDER BY time ASC FOR KEY SHARE", &[&train.parent_sched, &tiplocs, &acceptable_actions, &m.planned_timestamp.map(|x| x.time())])?;
+    let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = ANY($2) AND action = ANY($3) AND COALESCE(time = $4, TRUE) ORDER BY time ASC", &[&train.parent_sched, &tiplocs, &acceptable_actions, &m.planned_timestamp.map(|x| x.time())])?;
     if mvts.len() == 0 {
         return Err(NrodError::NoMovementsFound(train.parent_sched, acceptable_actions, tiplocs, m.planned_timestamp.map(|x| x.time())));
     }
