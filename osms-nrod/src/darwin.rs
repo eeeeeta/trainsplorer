@@ -75,7 +75,7 @@ pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, worker: &mut Nt
         return Ok(t);
     }
     debug!("Trying to link RID {} (uid {}, start_date {}) to a train...", rid, uid, start_date);
-    let trains = Train::from_select("WHERE EXISTS(SELECT * FROM schedules WHERE uid = $1 AND start_date <= $2 AND end_date >= $2 AND id = trains.parent_sched) AND nre_id IS NULL")?;
+    let trains = Train::from_select(conn, "WHERE EXISTS(SELECT * FROM schedules WHERE uid = $1 AND start_date <= $2 AND end_date >= $2 AND id = trains.parent_sched) AND nre_id IS NULL", &[&uid, &start_date])?;
     if trains.len() == 1 {
         let train = trains.into_iter().nth(0).unwrap();
         debug!("Found matching train #{}", train.id);
@@ -239,7 +239,7 @@ pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
         for mvt in orig_mvts.difference(&mvts) {
             to_delete.push(mvt.id);
         }
-        conn.execute("LOCK TABLE train_movements IN ROW EXCLUSIVE MODE")?;
+        conn.execute("LOCK TABLE train_movements IN ROW EXCLUSIVE MODE", &[])?;
         conn.execute("DELETE FROM schedule_movements WHERE id = ANY($1)", &[&to_delete])?;
         for mvt in mvts.difference(&orig_mvts) {
             let mut mvt = mvt.clone();
