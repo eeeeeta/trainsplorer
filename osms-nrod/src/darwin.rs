@@ -66,7 +66,6 @@ pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
             return Err(NrodError::UnimplementedMessageType("darwin_unknown".into()));
         }
     }
-    trans.commit()?;
     Ok(())
 }
 pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, rid: String, uid: String, start_date: NaiveDate) -> Result<Train> {
