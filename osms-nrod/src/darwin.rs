@@ -41,6 +41,7 @@ pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
                 if let Ok(dur) = after.signed_duration_since(now).to_std() {
                     worker.latency("darwin.ts_process_time", dur);
                 }
+                trans.commit()?;
             }
             for sched in dr.schedule {
                 let trans = conn.transaction()?;
