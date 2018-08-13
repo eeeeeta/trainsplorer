@@ -41,6 +41,22 @@ pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
                     worker.latency("darwin.ts_process_time", dur);
                 }
             }
+            for sched in dr.schedule {
+                worker.incr("darwin.sched.recv");
+                let now = Local::now();
+                match process_schedule(&trans, worker, sched) {
+                    Ok(_) => worker.incr("darwin.sched.processed"),
+                    Err(e) => {
+                        e.send_to_stats("darwin.sched.fails", worker);
+                        worker.incr("darwin.sched.fail");
+                        error!("Failed to process TS: {}", e);
+                    }
+                }
+                let after = Local::now();
+                if let Ok(dur) = after.signed_duration_since(now).to_std() {
+                    worker.latency("darwin.sched.process_time", dur);
+                }
+            }
         },
         _ => {
             worker.incr("darwin.unknown_message");
@@ -80,14 +96,6 @@ pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, worker: &mut Nt
             rid, uid, start_date
         });
     };
-    let nre_sched = Schedule::from_select(conn, "WHERE darwin_id = $1", &[&rid])?
-        .into_iter()
-        .nth(0)
-        .map(|x| x.id);
-    if let Some(sid) = nre_sched {
-        worker.incr("darwin.link.added_nre_sched");
-        debug!("Linking to NRE schedule #{}", sid);
-    }
     let train = Train {
         id: -1,
         parent_sched: auth_schedule.id,
@@ -97,7 +105,7 @@ pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, worker: &mut Nt
         cancelled: false,
         terminated: false,
         nre_id: Some(rid.clone()),
-        parent_nre_sched: nre_sched
+        parent_nre_sched: None
     };
     let (train, was_update) = match train.insert_self(conn) {
         Ok(t) => t,
@@ -126,7 +134,7 @@ pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
     use self::DarwinScheduleLocation::*;
     debug!("Processing Darwin schedule with rid {} (uid {}, start_date {})", sched.rid, sched.uid, sched.ssd);
     let trans = conn.transaction()?;
-    let train = get_train_for_rid_uid_ssd(&trans, worker, sched.rid, sched.uid, sched.ssd)?;
+    let train = get_train_for_rid_uid_ssd(&trans, worker, sched.rid.clone(), sched.uid.clone(), sched.ssd.clone())?;
     let mut mvts: Vec<ScheduleMvt> = vec![];
     for loc in sched.locations {
         let tiploc;

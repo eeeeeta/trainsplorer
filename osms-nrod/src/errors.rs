@@ -93,6 +93,7 @@ impl NrodError {
             Db(..) => "db",
             NoScheduleSegment => "no_schedule_segment",
             DuplicateVstpSchedule { .. } => "duplicate_vstp_schedule",
+            DuplicateDarwinSchedule { .. } => "duplicate_darwin_schedule",
             UnknownMvtBody(..) => "unknown_mvt_body",
             UnimplementedMessageType(..) => "unimplemented_message_type",
             DarwinTimingsMissing => "darwin_timings_missing",
