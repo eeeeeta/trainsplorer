@@ -237,10 +237,8 @@ pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
         let mvts: HashSet<ScheduleMvt> = mvts.into_iter().collect();
         let mut to_delete = vec![];
         for mvt in orig_mvts.difference(&mvts) {
-            to_delete.push(mvt.id);
+            conn.execute("DELETE FROM schedule_movements WHERE id = $1", &[&mvt.id])?;
         }
-        conn.execute("LOCK TABLE train_movements IN ROW EXCLUSIVE MODE", &[])?;
-        conn.execute("DELETE FROM schedule_movements WHERE id = ANY($1)", &[&to_delete])?;
         for mvt in mvts.difference(&orig_mvts) {
             let mut mvt = mvt.clone();
             mvt.parent_sched = sid;
