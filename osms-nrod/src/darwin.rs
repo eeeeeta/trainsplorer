@@ -71,6 +71,7 @@ pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, worker: &mut Nt
     if let Some(t) = rid_trains.into_iter().nth(0) {
         worker.incr("darwin.link.train_prelinked");
         debug!("Found pre-linked train {} (TRUST id {:?}) for Darwin RID {}", t.id, t.trust_id, rid);
+        trans.commit()?;
         return Ok(t);
     }
     debug!("Trying to link RID {} (uid {}, start_date {}) to a train...", rid, uid, start_date);
