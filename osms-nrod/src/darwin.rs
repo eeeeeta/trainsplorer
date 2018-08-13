@@ -17,7 +17,6 @@ type Result<T> = ::std::result::Result<T, NrodError>;
 
 pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
     let conn = worker.pool.get().unwrap();
-    let trans = conn.transaction()?;
     debug!("Processing Darwin push port element, version {}, timestamp {}", pp.version, pp.ts);
     let now = Local::now();
     if let Ok(dur) = now.signed_duration_since(pp.ts).to_std() {
@@ -27,6 +26,7 @@ pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
         PportElement::DataResponse(dr) => {
             debug!("Processing Darwin data response message, origin {:?}, source {:?}, rid {:?}", dr.update_origin, dr.request_source, dr.request_id);
             for ts in dr.train_status {
+                let trans = conn.transaction()?;
                 worker.incr("darwin.ts_recv");
                 let now = Local::now();
                 match process_ts(&trans, worker, ts) {
@@ -43,6 +43,7 @@ pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
                 }
             }
             for sched in dr.schedule {
+                let trans = conn.transaction()?;
                 worker.incr("darwin.sched.recv");
                 let now = Local::now();
                 match process_schedule(&trans, worker, sched) {
@@ -57,6 +58,7 @@ pub fn process_darwin_pport(worker: &mut NtrodWorker, pp: Pport) -> Result<()> {
                 if let Ok(dur) = after.signed_duration_since(now).to_std() {
                     worker.latency("darwin.sched.process_time", dur);
                 }
+                trans.commit()?;
             }
         },
         _ => {
