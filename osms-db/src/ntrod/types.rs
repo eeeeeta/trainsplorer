@@ -306,7 +306,7 @@ impl InsertableDbType for TrainMvt {
         let qry = conn.query("INSERT INTO train_movements
                               (parent_train, parent_mvt, time, source, estimated)
                               VALUES ($1, $2, $3, $4, $5)
-                              ON CONFLICT ON CONSTRAINT train_movements_parent_mvt_source_unique DO UPDATE SET time = EXCLUDED.time, estimated = EXCLUDED.estimated
+                              ON CONFLICT ON CONSTRAINT train_movements_parent_train_parent_mvt_source_unique DO UPDATE SET time = EXCLUDED.time, estimated = EXCLUDED.estimated
                               RETURNING id",
                              &[&self.parent_train, &self.parent_mvt, &self.time, &self.source, &self.estimated])?;
         let mut ret = None;
