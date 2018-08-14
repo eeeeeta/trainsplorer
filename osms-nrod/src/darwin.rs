@@ -291,6 +291,7 @@ pub fn process_ts<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, ts: 
     }
     let mut errs = vec![];
     for (tiploc, action, time, tstd) in updates {
+        let trans = trans.transaction()?;
         debug!("Querying for movements - parent_sched = {}, tiploc = {}, action = {}, time = {}", train.parent_sched, tiploc, action, time);
         let mvts = ScheduleMvt::from_select(&trans, "WHERE parent_sched = $1 AND tiploc = $2 AND action = $3 AND time = $4", &[&train.parent_sched, &tiploc, &action, &time])?;
         let mvt = match mvts.into_iter().nth(0) {
@@ -358,6 +359,7 @@ pub fn process_ts<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, ts: 
                 continue;
             }
         }
+        trans.commit()?;
     }
     trans.commit()?;
     if errs.len() > 0 {
