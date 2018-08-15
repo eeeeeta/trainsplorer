@@ -8,7 +8,7 @@ license = "AGPL-3.0 OR MIT OR Apache-2.0"
 derive_is_enum_variant = "0.1.1"
 serde = "1.0.70"
 serde_json = "1.0"
-serde_derive = "1.0.70"
+serde_derive = "1.0.71"
 smart-default = "0.2.0"
 
 [dependencies.chrono]
