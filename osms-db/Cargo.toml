@@ -21,7 +21,7 @@ serde_json = "1.0"
 
 [dependencies.geo]
 features = ["postgis-integration", "use-serde"]
-version = "0.9"
+version = "0.10"
 
 [dependencies.ntrod-types]
 features = ["postgres-traits"]

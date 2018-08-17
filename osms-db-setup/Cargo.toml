@@ -33,7 +33,7 @@ path = "../atoc-msn"
 
 [dependencies.geo]
 features = ["postgis-integration", "use-serde"]
-version = "0.9"
+version = "0.10"
 
 [dependencies.ntrod-types]
 path = "../ntrod-types"
