@@ -6,6 +6,7 @@
   - Autofix schedule download fails, so we don't have to manually do recovery
   - Maybe make it splurge all the logs to IRC? That might be handy...
 - Fix osms-web to not suck:
+  - rewrite the whole thing to use rouille instead of rocket, so it compiles on rust stable
   - don't choke on multiple train mvts for one schedule mvt
   - handle errors *sanely*
   - support darwin schedules and display 'em nicely
