@@ -33,8 +33,8 @@ matrix:
         cargo: true
         timeout: 1000
       script:
-        - cargo build --verbose --all --exclude osms-web
-        - cargo test --verbose --all --exclude osms-web
+        - cargo build --verbose --all
+        - cargo test --verbose --all
         - source osms-db-setup/setup-travis.sh && cargo run -p osms-db-setup -- setup init
     - language: node_js
       node_js:
