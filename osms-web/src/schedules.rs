@@ -1,11 +1,11 @@
 use super::Result;
-use rocket_contrib::Template;
-use pool::DbConn;
 use qb::QueryBuilder;
 use tmpl::TemplateContext;
 use osms_db::db::*;
 use osms_db::util;
 use osms_db::ntrod::types::*;
+use sctx::Sctx;
+use rouille::{Response, Request};
 
 pub fn tiploc_to_readable<T: GenericConnection>(conn: &T, tl: &str) -> Result<String> {
     let msn = MsnEntry::from_select(conn, "WHERE tiploc = $1", &[&tl])?;
@@ -23,7 +23,7 @@ pub fn tiploc_to_readable<T: GenericConnection>(conn: &T, tl: &str) -> Result<St
         format!("[TIPLOC {}]", tl)
     })
 }
-#[derive(Serialize, FromForm, Default, Clone)]
+#[derive(Serialize, Default, Clone)]
 pub struct ScheduleOptions {
     pagination: Option<i32>,
     uid: Option<String>,
@@ -93,19 +93,25 @@ pub struct ScheduleView {
     more: Option<String>,
     date: Option<String>
 }
-#[get("/schedules?<opts>")]
-pub fn schedules_qs(db: DbConn, opts: ScheduleOptions) -> Result<Template> {
-    schedules(db, opts)
-}
-#[get("/schedules")]
-pub fn schedules_noqs(db: DbConn) -> Result<Template> {
-    schedules(db, Default::default())
-}
-fn schedules(db: DbConn, opts: ScheduleOptions) -> Result<Template> {
+pub fn schedules(sctx: Sctx, req: &Request) -> Response {
     use chrono::{Utc, NaiveDate};
+    let db = get_db!(sctx);
+    let pagination = if let Some(p) = req.get_param("pagination") {
+        let p = try_or_400!(p.parse());
+        Some(p)
+    }
+    else {
+        None
+    };
+    let opts = ScheduleOptions {
+        pagination,
+        uid: req.get_param("uid"),
+        date: req.get_param("date")
+    };
+
     let mut curdate = None;
     let date = if let Some(ref d) = opts.date {
-        Some(NaiveDate::parse_from_str(d, "%Y-%m-%d")?)
+        Some(try_or_400!(NaiveDate::parse_from_str(d, "%Y-%m-%d")))
     } else {
         curdate = Some(Utc::now().format("%Y-%m-%d").to_string());
         None 
@@ -123,7 +129,7 @@ fn schedules(db: DbConn, opts: ScheduleOptions) -> Result<Template> {
     }
     qb.add_other("ORDER BY id DESC", &[]);
     qb.add_other("LIMIT 25", &[]);
-    let schedules = qb.query_dbtype::<Schedule, _>(&*db)?;
+    let schedules = try_or_ise!(sctx, qb.query_dbtype::<Schedule, _>(&*db));
     let mut more = None;
     let mut pagination = None;
     if let Some(p) = schedules.last() {
@@ -136,8 +142,10 @@ fn schedules(db: DbConn, opts: ScheduleOptions) -> Result<Template> {
     }
     let mut rows = vec![];
     for sched in schedules {
-        let orig_dest = ScheduleOrigDest::get_for_schedule(&*db, sched.id)?;
-        let n_trains = util::count(&*db, "FROM trains WHERE parent_sched = $1", &[&sched.id])?;
+        let orig_dest = try_or_ise!(sctx, ScheduleOrigDest::get_for_schedule(&*db, sched.id));
+        let n_trains = util::count(&*db, "FROM trains WHERE parent_sched = $1", &[&sched.id]);
+        let n_trains = try_or_ise!(sctx, n_trains);
+
         rows.push(ScheduleRow {
             id: sched.id.to_string(),
             uid: sched.uid.clone(),
@@ -150,7 +158,8 @@ fn schedules(db: DbConn, opts: ScheduleOptions) -> Result<Template> {
             n_trains
         })
     }
-    Ok(Template::render("schedules", TemplateContext {
+    render!(sctx, TemplateContext {
+        template: "schedules",
         title: "Schedule search".into(),
         body: ScheduleView {
             schedules: rows,
@@ -158,5 +167,5 @@ fn schedules(db: DbConn, opts: ScheduleOptions) -> Result<Template> {
             pagination,
             date: curdate
         }
-    }))
+    })
 }

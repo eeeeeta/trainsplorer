@@ -1,15 +1,12 @@
 use super::Result;
-use rocket_contrib::Template;
-use pool::DbConn;
+use sctx::{Sctx, MovementSearchView};
 use tmpl::TemplateContext;
 use osms_db::db::*;
 use osms_db::ntrod::types::*;
 use chrono::*;
-use rocket::response::{Flash, Redirect};
-use rocket::request::Form;
-use rocket_contrib::Json;
+use pool::DbConn;
+use rouille::{Request, Response};
 use std::collections::{BTreeMap, HashMap};
-use super::MovementSearchView;
 use schedules;
 use schedule;
 
@@ -42,44 +39,36 @@ pub struct ConnectionDesc {
 pub struct ConnectionsView {
     conns: Vec<ConnectionDesc>
 }
-#[derive(FromForm)]
-pub struct MovementParams {
-    #[form(field = "ts-tiploc")]
-    tiploc: Option<String>,
-    #[form(field = "ts-date")]
-    date: Option<String>,
-    #[form(field = "ts-time")]
-    time: Option<String>
-}
-fn validate_movement_params(mvtp: MovementParams) -> Result<(String, String, String)> {
-    let tiploc = mvtp.tiploc.ok_or(format_err!("A location is required."))?;
-    if tiploc.trim().len() == 0 {
-        return Err(format_err!("Location cannot be blank."))?;
-    }
-    let date = mvtp.date.ok_or(format_err!("A date is required."))?;
-    if date.trim().len() == 0 {
-        return Err(format_err!("Date cannot be blank."))?;
-    }
-    let time = mvtp.time.ok_or(format_err!("A time is required."))?;
-    if time.trim().len() == 0 {
-        return Err(format_err!("Time cannot be blank."))?;
-    }
-    NaiveDate::parse_from_str(&date, "%Y-%m-%d")
-        .map_err(|e| format_err!("Error parsing date: {}", e))?;
-    NaiveTime::parse_from_str(&time, "%H:%M")
-        .map_err(|e| format_err!("Error parsing time: {}", e))?;
-    Ok((tiploc, date, time))
-}
-#[post("/movements", data = "<mvtp>")]
-fn post_index_movements(mvtp: Form<MovementParams>) -> ::std::result::Result<Redirect, Flash<Redirect>> {
-    match validate_movement_params(mvtp.into_inner()) {
-        Ok((tiploc, date, time)) => {
-            Ok(Redirect::to(&format!("/movements/{}/{}/{}", tiploc, date, time)))
-        },
-        Err(e) => {
-            Err(Flash::error(Redirect::to("/"), e.to_string()))
+pub fn post_index_movements(sctx: Sctx, req: &Request) -> Response {
+    let (mut tiploc, mut date, mut time) = (None, None, None);
+    let input = try_or_badreq!(sctx, ::rouille::input::post::raw_urlencoded_post_input(req));
+    for (k, v) in input {
+        match &k as &str {
+            "ts-tiploc" => {
+                if v.trim().len() == 0 {
+                    try_or_badreq!(sctx, Err(format_err!("Location cannot be blank.")));
+                }
+                else {
+                    tiploc = Some(v);
+                }
+            },
+            "ts-date" => {
+                let d = NaiveDate::parse_from_str(&v, "%Y-%m-%d")
+                    .map_err(|e| format_err!("Error parsing date: {}", e));
+                date = Some(try_or_badreq!(sctx, d));
+            },
+            "ts-time" => {
+                let t = NaiveTime::parse_from_str(&v, "%H:%M")
+                    .map_err(|e| format_err!("Error parsing time: {}", e));
+                time = Some(try_or_badreq!(sctx, t));
+            },
+            _ => {}
         }
     }
+    let tiploc = try_or_badreq!(sctx, tiploc.ok_or(format_err!("A location is required.")));
+    let date = try_or_badreq!(sctx, date.ok_or(format_err!("A date is required.")));
+    let time = try_or_badreq!(sctx, time.ok_or(format_err!("A time is required.")));
+    Response::redirect_303(format!("/movements/{}/{}/{}", tiploc, date, time))
 }
 #[derive(Serialize)]
 pub struct StationSuggestion {
@@ -91,17 +80,20 @@ pub struct StationSuggestion {
 pub struct StationSuggestions {
     suggestions: Vec<StationSuggestion>
 }
-#[derive(FromForm)]
-pub struct SuggestionOptions {
-    query: String
-}
-#[get("/station_suggestions?<opts>")]
-pub fn station_suggestions(db: DbConn, opts: SuggestionOptions) -> Result<Json<StationSuggestions>> {
+pub fn station_suggestions(sctx: Sctx, req: &Request) -> Response {
+    let db = get_db!(sctx);
+    let query = req.get_param("query")
+        .ok_or(format_err!("No suggestion query provided"));
+    let query = try_or_badreq!(sctx, query);
+
     let mut tiplocs = HashMap::new();
     let mut similarity_tiplocs = BTreeMap::new();
     let mut crses = HashMap::new();
     let mut similarity_crses = BTreeMap::new();
-    for row in &db.query("SELECT *, GREATEST(similarity(crs, $1), similarity(name, $1)), GREATEST(similarity(name, $1), similarity(tiploc, $1)) FROM msn_entries WHERE name % $1 OR crs % $1 OR tiploc % $1", &[&opts.query])? {
+
+    let msn_query = db.query("SELECT *, GREATEST(similarity(crs, $1), similarity(name, $1)), GREATEST(similarity(name, $1), similarity(tiploc, $1)) FROM msn_entries WHERE name % $1 OR crs % $1 OR tiploc % $1", &[&query]);
+
+    for row in &try_or_ise!(sctx, msn_query) {
         let ent = MsnEntry::from_row(&row);
         let similarity_crs: f32 = row.get(4);
         let similarity_crs: u32 = (similarity_crs * 1000.0) as u32;
@@ -114,7 +106,9 @@ pub fn station_suggestions(db: DbConn, opts: SuggestionOptions) -> Result<Json<S
             similarity_crses.insert(similarity_crs, ent.crs);
         }
     }
-    for row in &db.query("SELECT *, GREATEST(similarity(nlcdesc, $1), similarity(tiploc, $1)), GREATEST(similarity(nlcdesc, $1), similarity(crs, $1)) FROM corpus_entries WHERE nlcdesc IS NOT NULL AND (crs IS NOT NULL or tiploc IS NOT NULL) AND (nlcdesc % $1 OR crs % $1 OR tiploc % $1)", &[&opts.query])? {
+    let corpus_query = db.query("SELECT *, GREATEST(similarity(nlcdesc, $1), similarity(tiploc, $1)), GREATEST(similarity(nlcdesc, $1), similarity(crs, $1)) FROM corpus_entries WHERE nlcdesc IS NOT NULL AND (crs IS NOT NULL or tiploc IS NOT NULL) AND (nlcdesc % $1 OR crs % $1 OR tiploc % $1)", &[&query]);
+
+    for row in &try_or_ise!(sctx, corpus_query) {
         let ent = CorpusEntry::from_row(&row);
         let similarity_crs: f32 = row.get(7);
         let similarity_crs: u32 = (similarity_crs * 1000.0) as u32;
@@ -149,70 +143,9 @@ pub fn station_suggestions(db: DbConn, opts: SuggestionOptions) -> Result<Json<S
         });
     }
     let ret = ret.into_iter().rev().map(|(_, v)| v).collect();
-    Ok(Json(StationSuggestions {
+    Response::json(&StationSuggestions {
         suggestions: ret
-    }))
-}
-#[get("/connections/<origin>/<date>/<time>/<destination>")]
-fn connections(db: DbConn, origin: String, date: String, time: String, destination: String) -> Result<Template> {
-    // XXX: This is a ridiculously stupid implementation and you should
-    // be ashamed of yourself for writing it.
-    //
-    // The correct way to do this is to do TWO queries, and filter the second
-    // one by the first one's parent_sched list.
-    let mut tiplocs_origin = MsnEntry::from_select(&*db, "WHERE crs = $1", &[&origin])?
-        .into_iter()
-        .map(|x| x.tiploc)
-        .collect::<Vec<_>>();
-    tiplocs_origin.push(origin.clone());
-    let mut tiplocs_destination = MsnEntry::from_select(&*db, "WHERE crs = $1", &[&destination])?
-        .into_iter()
-        .map(|x| x.tiploc)
-        .collect::<Vec<_>>();
-    tiplocs_destination.push(destination.clone());
-    let date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")?;
-    let time = NaiveTime::parse_from_str(&time, "%H:%M")?;
-    let wd: i32 = date.weekday().number_from_monday() as _;
-    let mvts = ScheduleMvt::from_select(&*db, "WHERE (tiploc = ANY($1) OR tiploc = ANY($5)) AND (CAST($4 AS time) + interval '1 hour') >= time AND (CAST($4 AS time) - interval '1 hour') <= time AND EXISTS(SELECT * FROM schedules WHERE id = schedule_movements.parent_sched AND start_date <= $2 AND end_date >= $2 AND days_value_for_iso_weekday((days), $3) = true)", &[&tiplocs_origin, &date, &wd, &time, &tiplocs_destination])?;
-    let descs = handle_movement_list(db, mvts, date, false)?;
-    let mut parent_sched_mvts = HashMap::new();
-    for desc in descs {
-        parent_sched_mvts.entry(desc.parent_sched.clone()).or_insert(vec![]).push(desc);
-    }
-    let mut ret = vec![];
-    for (_, mvts) in parent_sched_mvts {
-        let mut orig = None;
-        let mut dest = None;
-        for mvt in mvts {
-            if tiplocs_origin.contains(&mvt.tiploc) {
-                if mvt._action == 1 || mvt._action == 2 {
-                    orig = Some(mvt);
-                }
-            }
-            else if tiplocs_destination.contains(&mvt.tiploc) {
-                if mvt._action == 0 || mvt._action == 2 {
-                    dest = Some(mvt);
-                }
-            }
-            else { 
-                return Err(format_err!("whoops!"));
-            }
-        }
-        if orig.is_none() || dest.is_none() {
-            continue;
-        }
-        ret.push(ConnectionDesc { 
-            origin: orig.unwrap(), 
-            destination: dest.unwrap()
-        });
-    }
-    ret.sort_unstable_by(|a, b| a.origin._time.cmp(&b.destination._time));
-    Ok(Template::render("connections", TemplateContext {
-        title: "Connection search".into(),
-        body: ConnectionsView {
-            conns: ret
-        }
-    }))
+    })
 }
 fn handle_movement_list(db: DbConn, mvts: Vec<ScheduleMvt>, date: NaiveDate, include_od: bool) -> Result<Vec<MovementDesc>> {
     let ids = mvts.iter().map(|x| x.id).collect::<Vec<_>>();
@@ -276,19 +209,21 @@ fn handle_movement_list(db: DbConn, mvts: Vec<ScheduleMvt>, date: NaiveDate, inc
     descs.sort_unstable_by(|a, b| a._time.cmp(&b._time));
     Ok(descs)
 }
-#[get("/movements/<station>/<date>/<time>")]
-fn movements(db: DbConn, station: String, date: String, time: String) -> Result<Template> {
-    let mut tiplocs = MsnEntry::from_select(&*db, "WHERE crs = $1", &[&station])?
+pub fn movements(sctx: Sctx, station: String, date: String, time: String) -> Response {
+    let db = get_db!(sctx);
+    let mut tiplocs = try_or_ise!(sctx, MsnEntry::from_select(&*db, "WHERE crs = $1", &[&station]))
         .into_iter()
         .map(|x| x.tiploc)
         .collect::<Vec<_>>();
     tiplocs.push(station.clone());
-    let date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")?;
-    let time = NaiveTime::parse_from_str(&time, "%H:%M")?;
+    let date = try_or_badreq!(sctx, NaiveDate::parse_from_str(&date, "%Y-%m-%d"));
+    let time = try_or_badreq!(sctx, NaiveTime::parse_from_str(&time, "%H:%M:%S"));
     let wd: i32 = date.weekday().number_from_monday() as _;
-    let mvts = ScheduleMvt::from_select(&*db, "WHERE tiploc = ANY($1) AND (CAST($4 AS time) + interval '1 hour') >= time AND (CAST($4 AS time) - interval '1 hour') <= time AND EXISTS(SELECT * FROM schedules WHERE id = schedule_movements.parent_sched AND start_date <= $2 AND end_date >= $2 AND days_value_for_iso_weekday((days), $3) = true)", &[&tiplocs, &date, &wd, &time])?;
-    let descs = handle_movement_list(db, mvts, date, true)?;
-    Ok(Template::render("movements", TemplateContext {
+    let mvts = ScheduleMvt::from_select(&*db, "WHERE tiploc = ANY($1) AND (CAST($4 AS time) + interval '1 hour') >= time AND (CAST($4 AS time) - interval '1 hour') <= time AND EXISTS(SELECT * FROM schedules WHERE id = schedule_movements.parent_sched AND start_date <= $2 AND end_date >= $2 AND days_value_for_iso_weekday((days), $3) = true)", &[&tiplocs, &date, &wd, &time]);
+    let mvts = try_or_ise!(sctx, mvts);
+    let descs = try_or_ise!(sctx, handle_movement_list(db, mvts, date, true));
+    render!(sctx, TemplateContext {
+        template: "movements",
         title: "Movement search".into(),
         body: MovementsView {
             mvts: descs,
@@ -299,5 +234,5 @@ fn movements(db: DbConn, station: String, date: String, time: String) -> Result<
                 time: time.format("%H:%M").to_string()
             }
         }
-    }))
+    })
 }

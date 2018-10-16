@@ -1,23 +1,29 @@
 [package]
 authors = ["eeeeeta <eeeeeta@users.noreply.github.com>"]
+license = "AGPL-3.0"
 name = "osms-web"
 version = "0.1.0"
-license = "AGPL-3.0"
 
 [dependencies]
-chrono = "0.4.5"
+chrono = "0.4"
 failure = "0.1"
+fern = "0.5.6"
+handlebars = "0.32"
+log = "0.4"
 postgis = "0.6"
 postgres = "0.15"
 r2d2 = "0.8"
 r2d2_postgres = "0.14"
-rocket = "0.3"
-rocket_codegen = "0.3"
+rouille = "2.2"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
-titlecase = "0.10.0"
-url = "1.6.0"
+titlecase = "0.10"
+url = "1.6"
+
+[dependencies.config]
+features = ["toml"]
+version = "0.9"
 
 [dependencies.geo]
 features = ["postgis-integration", "use-serde"]
@@ -28,7 +34,3 @@ git = "https://github.com/eeeeeta/rust-geojson"
 
 [dependencies.osms-db]
 path = "../osms-db"
-
-[dependencies.rocket_contrib]
-features = ["json", "handlebars_templates"]
-version = "0.3"

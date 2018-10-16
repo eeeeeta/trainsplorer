@@ -109,8 +109,7 @@ impl DbType for StationOverride {
 }
 impl StationOverride {
     pub fn insert<T: GenericConnection>(conn: &T, nr_ref: &str, area: Polygon) -> Result<()> {
-        conn.execute("INSERT INTO station_overrides (nr_ref, area) VALUES ($1, $2)
-                      ON CONFLICT DO UPDATE",
+        conn.execute("INSERT INTO station_overrides (nr_ref, area) VALUES ($1, $2)",
                      &[&nr_ref, &area])?;
         Ok(())
     }

@@ -1,17 +1,17 @@
 use geojson::{Feature, FeatureCollection};
 use geo::*;
+use sctx::Sctx;
 use postgis::ewkb::Polygon as PgPolygon;
 use osms_db::db::*;
 use osms_db::util;
 use osms_db::osm;
 use osms_db::osm::types::*;
-use pool::DbConn;
 use super::Result;
-use rocket_contrib::Json;
 use geojson::conversion;
 use geo::algorithm::from_postgis::FromPostgis;
+use rouille::{Request, Response};
+use tmpl::TemplateContext;
 
-#[derive(FromForm)]
 struct GeoParameters {
     xmin: f64,
     xmax: f64,
@@ -20,6 +20,25 @@ struct GeoParameters {
     limit: Option<u32>
 }
 impl GeoParameters {
+    fn get_from_req(req: &Request) -> Result<Self> {
+        let xmin = req.get_param("xmin")
+            .ok_or(format_err!("xmin not provided"))?.parse()?;
+        let xmax = req.get_param("xmax")
+            .ok_or(format_err!("xmax not provided"))?.parse()?;
+        let ymin = req.get_param("ymin")
+            .ok_or(format_err!("ymin not provided"))?.parse()?;
+        let ymax = req.get_param("ymax")
+            .ok_or(format_err!("ymax not provided"))?.parse()?;
+        let limit = if let Some(l) = req.get_param("limit") {
+            Some(l.parse()?)
+        }
+        else {
+            None
+        };
+        Ok(Self {
+            xmax, xmin, ymin, ymax, limit
+        })
+    }
     fn as_bbox(&self) -> Bbox<f64> {
         Bbox {
             xmin: self.xmin,
@@ -27,10 +46,6 @@ impl GeoParameters {
             ymin: self.ymin,
             ymax: self.ymax
         }
-    }
-    fn area(&self) -> f64 {
-        use geo::algorithm::area::Area;
-        Area::area(&self.as_bbox())
     }
     fn as_poly(&self) -> Polygon<f64> {
         util::geo_bbox_to_poly(self.as_bbox())
@@ -52,39 +67,44 @@ struct CorrectionDetails {
     name: String,
     poly: Feature
 }
-#[post("/geo/correct_station", data = "<details>")]
-fn geo_correct_station(db: DbConn, details: Json<CorrectionDetails>) -> Result<()> {
+pub fn map(sctx: Sctx) -> Response {
+    render!(sctx, TemplateContext::title("map", "Slippy map"))
+}
+pub fn geo_correct_station(sctx: Sctx, req: &Request) -> Response {
     use geojson::conversion::TryInto;
     use geo::algorithm::to_postgis::ToPostgis;
 
-    let poly = details.0.poly.geometry.ok_or(format_err!("no geometry provided"))?;
-    let mut poly: Polygon<f64> = poly.value.try_into()?;
-    println!("poly: {:?}", poly);
+    let db = get_db!(sctx);
+    let details: CorrectionDetails = try_or_badreq!(sctx, ::rouille::input::json::json_input(req));
+    let poly = try_or_badreq!(sctx, details.poly.geometry.ok_or(format_err!("no geometry provided")));
+    let mut poly: Polygon<f64> = try_or_badreq!(sctx, poly.value.try_into());
     // FIXME: postgis complains if you have an empty ring; this should
     // ideally be fixed in the geo library
     poly.interiors = vec![];
     let pgpoly = poly.to_postgis_wgs84();
-    StationOverride::insert(&*db, &details.0.name, pgpoly)?;
-    osm::remove_station(&*db, &details.0.name)?;
-    match osm::process_station(&*db, &details.0.name, poly) {
+    try_or_ise!(sctx, StationOverride::insert(&*db, &details.name, pgpoly));
+    try_or_ise!(sctx, osm::remove_station(&*db, &details.name));
+    match osm::process_station(&*db, &details.name, poly) {
         Ok(_) => {},
         Err(osm::ProcessStationError::AlreadyProcessed) => {
-            Err(format_err!("already processed, somehow"))?;
+            try_or_ise!(sctx, Err(format_err!("already processed, somehow")));
         },
         Err(osm::ProcessStationError::Problematic(_, id)) => {
-            eprintln!("FIXME: it was problematic: {}", id);
+            warn!("FIXME: it was problematic: {}", id);
         },
         Err(osm::ProcessStationError::Error(e)) => {
-            Err(e)?;
+            try_or_ise!(sctx, Err(e));
         }
     }
-    Ok(())
+    Response::empty_204()
 }
-#[get("/geo/stations?<geo>")]
-fn geo_stations(db: DbConn, geo: GeoParameters) -> Result<Json<FeatureCollection>> {
+pub fn geo_stations(sctx: Sctx, req: &Request) -> Response {
+    let db = get_db!(sctx);
+    let geo = try_or_badreq!(sctx, GeoParameters::get_from_req(req));
     let (limit, poly) = geo.get_limit_and_pg_poly();
     let mut features = vec![];
-    for stn in Station::from_select(&*db, "WHERE ST_Intersects(area, $1) LIMIT $2", &[&poly, &(limit as i64)])? {
+    let stn_query = Station::from_select(&*db, "WHERE ST_Intersects(area, $1) LIMIT $2", &[&poly, &(limit as i64)]);
+    for stn in try_or_ise!(sctx, stn_query) {
         let mut ls = vec![];
         for point in stn.area.rings[0].points.iter() {
             ls.push(vec![point.x, point.y]);
@@ -104,17 +124,19 @@ fn geo_stations(db: DbConn, geo: GeoParameters) -> Result<Json<FeatureCollection
             foreign_members: None
         });
     }
-    Ok(Json(FeatureCollection {
+    Response::json(&FeatureCollection {
         bbox: None,
         features,
         foreign_members: None
-    }))
+    })
 }
-#[get("/geo/ways?<geo>")]
-fn geo_ways(db: DbConn, geo: GeoParameters) -> Result<Json<FeatureCollection>> {
+pub fn geo_ways(sctx: Sctx, req: &Request) -> Response {
+    let db = get_db!(sctx);
+    let geo = try_or_badreq!(sctx, GeoParameters::get_from_req(req));
     let (limit, poly) = geo.get_limit_and_pg_poly();
     let mut features = vec![];
-    for link in Link::from_select(&*db, "WHERE ST_Intersects(way, $1) LIMIT $2", &[&poly, &(limit as i64)])? {
+    let link_query = Link::from_select(&*db, "WHERE ST_Intersects(way, $1) LIMIT $2", &[&poly, &(limit as i64)]);
+    for link in try_or_ise!(sctx, link_query) {
         let way = LineString::from_postgis(&link.way);
         let ls = conversion::create_line_string_type(&way);
         let geom = ::geojson::Geometry {
@@ -133,9 +155,9 @@ fn geo_ways(db: DbConn, geo: GeoParameters) -> Result<Json<FeatureCollection>> {
             foreign_members: None
         });
     }
-    Ok(Json(FeatureCollection {
+    Response::json(&FeatureCollection {
         bbox: None,
         features,
         foreign_members: None
-    }))
+    })
 }
