@@ -129,7 +129,7 @@ impl ServerContext {
     pub fn user_error(selfish: Arc<Self>, error_summary: String, reason: String, code: u16) -> Response {
         let tctx = TemplateContext {
             template: "user_error",
-            title: "".into(),
+            title: "Error".into(),
             body: UserErrorView {
                 error_summary,
                 reason
@@ -140,7 +140,7 @@ impl ServerContext {
     pub fn not_found(selfish: Arc<Self>, req: &Request) -> Response {
         let tctx = TemplateContext {
             template: "not_found",
-            title: "".into(),
+            title: "Error".into(),
             body: NotFoundView {
                 uri: req.url()
             }
