@@ -91,7 +91,14 @@ pub fn mvt_query<T: GenericConnection>(conn: &T, mvts: &[ScheduleMvt], auth_date
     // part III: process each movement
     let mut ret = vec![];
     for mvt in mvts {
-        let parent_sched = &scheds[&mvt.parent_sched];
+        let parent_sched = match scheds.get(&mvt.parent_sched) {
+            Some(ps) => ps,
+            None => {
+                // If we couldn't find the schedule, it wasn't authoritative
+                // when we looked for it earlier.
+                continue;
+            }
+        };
         let time_scheduled = TimeWithSource {
             source: parent_sched.source,
             mvt_id: mvt.id,
