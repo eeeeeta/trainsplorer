@@ -37,9 +37,12 @@ pub fn train(sctx: Sctx, id: i32) -> Response {
             time_expected: mvt.time_expected.map(|x| x.time.to_string()),
             time_actual: mvt.time_actual.map(|x| x.time.to_string()),
             starts_path: mvt.starts_path,
-            ends_path: mvt.ends_path
+            ends_path: mvt.ends_path,
+            _time: mvt.time_scheduled.time,
+            _action: mvt.action
         });
     }
+    descs.sort_by_key(|d| (d._time, d._action)); 
     
     let sd = TrainView {
         movements: descs,
@@ -68,9 +71,12 @@ pub fn schedule(sctx: Sctx, id: i32) -> Response {
             tiploc: mvt.tiploc,
             time_scheduled: mvt.time_scheduled.time.to_string(),
             starts_path: mvt.starts_path,
-            ends_path: mvt.ends_path
+            ends_path: mvt.ends_path,
+            _time: mvt.time_scheduled.time,
+            _action: mvt.action
         });
     }
+    descs.sort_by_key(|d| (d._time, d._action)); 
 
     let trains_db = try_or_ise!(sctx, Train::from_select(&*db, "WHERE parent_sched = $1 ORDER BY date ASC", &[&id]));
     let mut trains = vec![];
