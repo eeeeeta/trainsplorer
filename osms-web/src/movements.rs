@@ -1,10 +1,9 @@
-use super::Result;
 use sctx::{Sctx, MovementSearchView};
 use tmpl::TemplateContext;
 use osms_db::db::*;
 use osms_db::ntrod::types::*;
+use osms_db::ntrod;
 use chrono::*;
-use pool::DbConn;
 use rouille::{Request, Response};
 use std::collections::{BTreeMap, HashMap};
 use schedules;
@@ -20,24 +19,16 @@ pub struct MovementDesc {
     parent_sched: i32,
     parent_train: Option<i32>,
     tiploc: String,
-    live: bool,
-    prepped: bool,
-    canx: bool,
-    action: String,
-    _action: i32,
+    action: &'static str,
     time: String,
+    time_expected: Option<String>,
+    time_actual: Option<String>,
+    canx: bool,
+    #[serde(skip_serializing)]
+    _action: i32,
     #[serde(skip_serializing)]
     _time: NaiveTime,
-    orig_dest: Option<schedules::ScheduleOrigDest>
-}
-#[derive(Serialize)]
-pub struct ConnectionDesc {
-    origin: MovementDesc,
-    destination: MovementDesc
-}
-#[derive(Serialize)]
-pub struct ConnectionsView {
-    conns: Vec<ConnectionDesc>
+    orig_dest: Option<schedules::ScheduleOrigDest>,
 }
 pub fn post_index_movements(sctx: Sctx, req: &Request) -> Response {
     let (mut tiploc, mut date, mut time) = (None, None, None);
@@ -147,68 +138,6 @@ pub fn station_suggestions(sctx: Sctx, req: &Request) -> Response {
         suggestions: ret
     })
 }
-fn handle_movement_list(db: DbConn, mvts: Vec<ScheduleMvt>, date: NaiveDate, include_od: bool) -> Result<Vec<MovementDesc>> {
-    let ids = mvts.iter().map(|x| x.id).collect::<Vec<_>>();
-    let train_mvts = TrainMvt::from_select(&*db, "WHERE parent_mvt = ANY($1) AND EXISTS(SELECT * FROM trains WHERE id = train_movements.parent_train AND date = $2)", &[&ids, &date])?; 
-    let mut descs = vec![];
-    for mvt in mvts {
-        let sched = Schedule::from_select(&*db, "WHERE id = $1", &[&mvt.parent_sched])?
-            .into_iter().nth(0).unwrap();
-        if !sched.is_authoritative(&*db, date)? {
-            continue;
-        }
-        let orig_dest = if include_od {
-            match schedules::ScheduleOrigDest::get_for_schedule(&*db, mvt.parent_sched)? {
-                Some(od) => Some(od),
-                None => continue
-            }
-        }
-        else {
-            None
-        };
-        let action = schedule::action_to_str(mvt.action);
-        let mut parent_sched = sched.id;
-        let mut parent_train = None;
-        let mut _time = mvt.time;
-        let mut live = false;
-        let mut prepped = false;
-        let mut canx = false;
-        for tmvt in train_mvts.iter() {
-            if tmvt.parent_mvt == mvt.id {
-                parent_train = Some(tmvt.parent_train);
-                _time = tmvt.time;
-                live = true;
-            }
-        }
-        if parent_train.is_none() {
-            for train in Train::from_select(&*db, "WHERE parent_sched = $1 AND date = $2", &[&mvt.parent_sched, &date])? {
-                parent_train = Some(train.id);
-                prepped = true;
-                canx = train.cancelled;
-            }
-        }
-        else {
-            for train in Train::from_select(&*db, "WHERE id = $1", &[&parent_train.unwrap()])? {
-                canx = train.cancelled;
-            }
-        }
-        descs.push(MovementDesc {
-            parent_sched,
-            parent_train,
-            tiploc: mvt.tiploc,
-            _action: mvt.action,
-            time: _time.to_string(),
-            _time,
-            live,
-            prepped,
-            canx,
-            action: action.into(),
-            orig_dest
-        });
-    }
-    descs.sort_unstable_by(|a, b| a._time.cmp(&b._time));
-    Ok(descs)
-}
 pub fn movements(sctx: Sctx, station: String, date: String, time: String) -> Response {
     let db = get_db!(sctx);
     let mut tiplocs = try_or_ise!(sctx, MsnEntry::from_select(&*db, "WHERE crs = $1", &[&station]))
@@ -219,9 +148,26 @@ pub fn movements(sctx: Sctx, station: String, date: String, time: String) -> Res
     let date = try_or_badreq!(sctx, NaiveDate::parse_from_str(&date, "%Y-%m-%d"));
     let time = try_or_badreq!(sctx, NaiveTime::parse_from_str(&time, "%H:%M:%S"));
     let wd: i32 = date.weekday().number_from_monday() as _;
-    let mvts = ScheduleMvt::from_select(&*db, "WHERE tiploc = ANY($1) AND (CAST($4 AS time) + interval '1 hour') >= time AND (CAST($4 AS time) - interval '1 hour') <= time AND EXISTS(SELECT * FROM schedules WHERE id = schedule_movements.parent_sched AND start_date <= $2 AND end_date >= $2 AND days_value_for_iso_weekday((days), $3) = true AND darwin_id IS NULL)", &[&tiplocs, &date, &wd, &time]);
+    let mvts = ScheduleMvt::from_select(&*db, "WHERE tiploc = ANY($1) AND (CAST($4 AS time) + interval '1 hour') >= time AND (CAST($4 AS time) - interval '1 hour') <= time AND EXISTS(SELECT * FROM schedules WHERE id = schedule_movements.parent_sched AND start_date <= $2 AND end_date >= $2 AND days_value_for_iso_weekday((days), $3) = true)", &[&tiplocs, &date, &wd, &time]);
     let mvts = try_or_ise!(sctx, mvts);
-    let descs = try_or_ise!(sctx, handle_movement_list(db, mvts, date, true));
+    let mvt_query_result = try_or_ise!(sctx, ntrod::mvt_query(&*db, &mvts, Some(date))); 
+    let mut descs = vec![];
+    for mvt in mvt_query_result.mvts {
+        descs.push(MovementDesc {
+            parent_sched: mvt.parent_sched,
+            parent_train: mvt.parent_train,
+            tiploc: mvt.tiploc,
+            action: schedule::action_to_str(mvt.action),
+            _action: mvt.action,
+            time: mvt.time_scheduled.time.to_string(),
+            _time: mvt.time_scheduled.time,
+            time_expected: mvt.time_expected.map(|x| x.time.to_string()),
+            time_actual: mvt.time_actual.map(|x| x.time.to_string()),
+            canx: mvt.canx,
+            orig_dest: try_or_ise!(sctx, schedules::ScheduleOrigDest::get_for_schedule(&*db, mvt.parent_sched))
+        });
+    }
+    descs.sort_by_key(|d| (d._time, d._action));
     render!(sctx, TemplateContext {
         template: "movements",
         title: "Movement search".into(),
