@@ -33,11 +33,7 @@ pub struct Schedule {
     /// Signalling ID / headcode. Blank for freight services.
     pub signalling_id: Option<String>,
     pub geo_generation: i32,
-    /// Source - one of:
-    ///
-    /// - 0 for schedules from CIF/ITPS
-    /// - 1 for schedules from VSTP/TOPS
-    /// - 2 for schedules from Darwin
+    /// Source (see SOURCE_* associated consts)
     pub source: i32,
     /// The sequence number of the file this was imported from,
     /// if imported from CIF/ITPS
@@ -94,6 +90,13 @@ impl InsertableDbType for Schedule {
 
 
 impl Schedule {
+    /// Source value for schedules from CIF/ITPS.
+    pub const SOURCE_ITPS: i32 = 0;
+    /// Source value for schedules from VSTP/TOPS.
+    pub const SOURCE_VSTP: i32 = 1;
+    /// Source value for schedules from Darwin.
+    pub const SOURCE_DARWIN: i32 = 2;
+    
     /// Checks whether this schedule is authoritative on the given date.
     ///
     /// 'Authoritative' = not superseded by another schedule, like an overlay or
@@ -275,12 +278,8 @@ pub struct TrainMvt {
     pub parent_mvt: i32,
     /// The updated time.
     pub time: NaiveTime,
-    /// Source of this update - references the movement_sources table
-    /// Could be one of:
-    ///
-    /// - 0: TRUST Train Movements (built into schema)
-    /// - 1: Darwin Push Port (generic) (built into schema)
-    /// - anything else inserted into the movement_sources table
+    /// Source of this update - references the movement_sources table.
+    /// (See the MvtSource associated consts.)
     pub source: i32,
     /// Whether this movement is an estimation, or an actual report.
     pub estimated: bool,
@@ -321,13 +320,18 @@ impl InsertableDbType for TrainMvt {
 pub struct MvtSource {
     /// Movement source ID.
     pub id: i32,
-    /// Source type - one of:
-    ///
-    /// - 0: Network Rail Open Data
-    /// - 1: National Rail Enquiries
+    /// Source type - see associated consts.
     pub source_type: i32,
     /// Source text - free-form text describing the data source.
     pub source_text: String
+}
+impl MvtSource {
+    /// Source value for TRUST Train Movements.
+    pub const SOURCE_TRUST: i32 = 0;
+    /// Source value for Darwin Push Port.
+    pub const SOURCE_DARWIN: i32 = 1;
+    /// Source value for TRUST naïve estimations.
+    pub const SOURCE_TRUST_NAIVE_ESTIMATION: i32 = 2;
 }
 impl DbType for MvtSource {
     fn table_name() -> &'static str {

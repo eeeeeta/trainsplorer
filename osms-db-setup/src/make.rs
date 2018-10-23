@@ -206,8 +206,8 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
             debug!("apply_schedule_record: deleting schedules (UID {}, start {}, stp_indicator {:?})",
             train_uid, schedule_start_date, stp_indicator);
             conn.execute("DELETE FROM schedules
-                          WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3 AND source = 0",
-                          &[&train_uid, &schedule_start_date.naive_utc(), &stp_indicator])?;
+                          WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3 AND source = $4",
+                          &[&train_uid, &schedule_start_date.naive_utc(), &stp_indicator, &Schedule::SOURCE_ITPS])?;
             Ok(())
         },
         ScheduleRecord::Create {
@@ -233,7 +233,7 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
                 days: schedule_days_runs,
                 stp_indicator,
                 signalling_id,
-                source: 0,
+                source: Schedule::SOURCE_ITPS,
                 file_metaseq: Some(metaseq),
                 geo_generation: 0,
                 id: -1,

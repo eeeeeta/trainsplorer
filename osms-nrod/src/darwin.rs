@@ -87,7 +87,7 @@ pub fn get_train_for_rid_uid_ssd<T: GenericConnection>(conn: &T, worker: &mut Nt
     else if trains.len() > 1 {
         warn!("More than one possible train for RID {} (uid {}, start_date {})", rid, uid, start_date);
     }
-    let scheds = Schedule::from_select(&trans, "WHERE uid = $1 AND start_date <= $2 AND end_date >= $2 AND source = 0", &[&uid, &start_date])?;
+    let scheds = Schedule::from_select(&trans, "WHERE uid = $1 AND start_date <= $2 AND end_date >= $2 AND source = $3", &[&uid, &start_date, &Schedule::SOURCE_ITPS])?;
     debug!("{} potential schedules", scheds.len());
     let mut auth_schedule: Option<Schedule> = None;
     for sched in scheds {
@@ -221,7 +221,7 @@ pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
         end_date: sched.ssd.clone(),
         days: Days::all(),
         stp_indicator: StpIndicator::NewSchedule,
-        source: 2,
+        source: Schedule::SOURCE_DARWIN,
         file_metaseq: None,
         geo_generation: 0,
         darwin_id: Some(sched.rid.clone()),
@@ -333,8 +333,7 @@ pub fn process_ts<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, ts: 
         };
         if tstd.at_removed {
             worker.incr("darwin.ts.at_removed");
-            // TODO: make this source check less brittle
-            trans.execute("DELETE FROM train_movements WHERE parent_mvt = $1 AND source = 1", &[&mvt.id])?;
+            trans.execute("DELETE FROM train_movements WHERE parent_mvt = $1 AND source = $2", &[&mvt.id, &MvtSource::SOURCE_DARWIN])?;
         }
         if actual {
             worker.incr("darwin.ts.actual");
@@ -347,7 +346,7 @@ pub fn process_ts<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, ts: 
             parent_train: train.id,
             parent_mvt: mvt.id,
             time,
-            source: 1,
+            source: MvtSource::SOURCE_DARWIN,
             estimated: !actual
         };
         match tmvt.insert_self(&trans) {

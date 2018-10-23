@@ -32,13 +32,6 @@ pub enum NrodError {
         stp_indicator: StpIndicator,
         source: i32,
     },
-    #[fail(display = "Duplicate Darwin schedule (UID {}, start {}, stp_indicator {:?}, src {})", train_uid, start_date, stp_indicator, source)]
-    DuplicateDarwinSchedule {
-        train_uid: String,
-        start_date: NaiveDate, 
-        stp_indicator: StpIndicator,
-        source: i32,
-    },
     #[fail(display = "Failed to find a schedule (UID {}, start {}, stp_indicator {:?}, src {}) when processing activation for {} on {}", train_uid, start_date, stp_indicator, source, train_id, date)]
     NoSchedules {
         train_uid: String,
@@ -93,7 +86,6 @@ impl NrodError {
             Db(..) => "db",
             NoScheduleSegment => "no_schedule_segment",
             DuplicateVstpSchedule { .. } => "duplicate_vstp_schedule",
-            DuplicateDarwinSchedule { .. } => "duplicate_darwin_schedule",
             UnknownMvtBody(..) => "unknown_mvt_body",
             UnimplementedMessageType(..) => "unimplemented_message_type",
             DarwinTimingsMissing => "darwin_timings_missing",

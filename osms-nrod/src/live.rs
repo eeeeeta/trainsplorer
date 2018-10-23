@@ -24,8 +24,8 @@ pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()>
         } => {
             info!("Processing VSTP DELETE message id {} (UID {}, start {}, stp_indicator {:?})", msg.origin_msg_id, train_uid, schedule_start_date, stp_indicator);
             trans.execute("DELETE FROM schedules
-                          WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3 AND source = 1",
-                          &[&train_uid, &schedule_start_date, &stp_indicator])?;
+                          WHERE uid = $1 AND start_date = $2 AND stp_indicator = $3 AND source = $4",
+                          &[&train_uid, &schedule_start_date, &stp_indicator, &Schedule::SOURCE_VSTP])?;
         },
         VstpScheduleRecord::Create {
             train_uid,
@@ -51,7 +51,7 @@ pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()>
                 days: schedule_days_runs,
                 stp_indicator,
                 signalling_id,
-                source: 1,
+                source: Schedule::SOURCE_VSTP,
                 file_metaseq: None,
                 geo_generation: 0,
                 darwin_id: None,
@@ -63,7 +63,7 @@ pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()>
                     train_uid,
                     start_date: schedule_start_date,
                     stp_indicator,
-                    source: 1
+                    source: Schedule::SOURCE_VSTP
                 });
             }
             let mut mvts = vec![];
@@ -127,8 +127,8 @@ pub fn process_ntrod_event<T: GenericConnection>(conn: &T, worker: &mut NtrodWor
 pub fn process_activation<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, a: Activation) -> Result<()> {
     debug!("Processing activation of train {}...", a.train_id);
     let src = match a.schedule_source {
-        ScheduleSource::CifItps => 0,
-        ScheduleSource::VstpTops => 1,
+        ScheduleSource::CifItps => Schedule::SOURCE_ITPS,
+        ScheduleSource::VstpTops => Schedule::SOURCE_VSTP,
     };
     let scheds = Schedule::from_select(conn,
         "WHERE uid = $1 AND stp_indicator = $2 AND start_date = $3 AND source = $4",
@@ -234,7 +234,7 @@ pub fn process_movement<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
         parent_train: train.id,
         parent_mvt: mvt.id,
         time: m.actual_timestamp.time(),
-        source: 0,
+        source: MvtSource::SOURCE_TRUST,
         estimated: false
     };
     let id = tmvt.insert_self(conn)?;
@@ -250,7 +250,7 @@ pub fn process_movement<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
             parent_train: train.id,
             parent_mvt: mvt.id,
             time: mvt.time + delta,
-            source: 2,
+            source: MvtSource::SOURCE_TRUST_NAIVE_ESTIMATION,
             estimated: true
         };
         let id = tmvt.insert_self(conn)?;
