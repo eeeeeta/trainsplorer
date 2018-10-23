@@ -209,6 +209,14 @@ fn run() -> Result<(), Error> {
         }
         i.identify()?;
         let (tx, rx) = ::std::sync::mpsc::channel::<String>();
+        let stream = i.stream();
+        ::std::thread::spawn(move || {
+            for msg in stream.wait() {
+                if let Err(e) = msg {
+                    eprintln!("[!] Error on IRC stream: {}", e);
+                }
+            }
+        });
         ::std::thread::spawn(move || {
             // let the client connect (this is a bit hacky, but hey)
             while i.list_channels().unwrap().len() == 0 {
