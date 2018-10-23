@@ -219,7 +219,7 @@ pub fn movements(sctx: Sctx, station: String, date: String, time: String) -> Res
     let date = try_or_badreq!(sctx, NaiveDate::parse_from_str(&date, "%Y-%m-%d"));
     let time = try_or_badreq!(sctx, NaiveTime::parse_from_str(&time, "%H:%M:%S"));
     let wd: i32 = date.weekday().number_from_monday() as _;
-    let mvts = ScheduleMvt::from_select(&*db, "WHERE tiploc = ANY($1) AND (CAST($4 AS time) + interval '1 hour') >= time AND (CAST($4 AS time) - interval '1 hour') <= time AND EXISTS(SELECT * FROM schedules WHERE id = schedule_movements.parent_sched AND start_date <= $2 AND end_date >= $2 AND days_value_for_iso_weekday((days), $3) = true)", &[&tiplocs, &date, &wd, &time]);
+    let mvts = ScheduleMvt::from_select(&*db, "WHERE tiploc = ANY($1) AND (CAST($4 AS time) + interval '1 hour') >= time AND (CAST($4 AS time) - interval '1 hour') <= time AND EXISTS(SELECT * FROM schedules WHERE id = schedule_movements.parent_sched AND start_date <= $2 AND end_date >= $2 AND days_value_for_iso_weekday((days), $3) = true AND darwin_id IS NULL)", &[&tiplocs, &date, &wd, &time]);
     let mvts = try_or_ise!(sctx, mvts);
     let descs = try_or_ise!(sctx, handle_movement_list(db, mvts, date, true));
     render!(sctx, TemplateContext {
