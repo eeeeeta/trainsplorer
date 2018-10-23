@@ -21,6 +21,7 @@ extern crate config as cfg;
 pub mod pool;
 pub mod config;
 pub mod tmpl;
+pub mod templates;
 #[macro_use] pub mod sctx;
 pub mod qb;
 pub mod schedules;

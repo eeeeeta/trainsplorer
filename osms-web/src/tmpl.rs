@@ -42,7 +42,15 @@ macro_rules! partial {
         }
     }
 }
-static PARTIALS: [Partial; 16] = [
+
+// *** Instructions for adding a new partial ***
+// - 1. Create templates/NAME.html.hbs and src/templates/NAME.rs.
+// - 2. Add partial!("NAME") to the below array.
+// - 3. Increment the array length.
+// - 4. Put your HTML in the HBS file and all your views in the Rust one.
+// - 5. ???
+// - 6. Profit!
+static PARTIALS: [Partial; 15] = [
     partial!("connections"),
     partial!("footer"),
     partial!("header"),
@@ -55,7 +63,6 @@ static PARTIALS: [Partial; 16] = [
     partial!("not_found"),
     partial!("orig_dest"),
     partial!("schedule"),
-    partial!("schedule_table"),
     partial!("schedules"),
     partial!("user_error"),
     partial!("train"),

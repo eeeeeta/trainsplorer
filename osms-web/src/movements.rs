@@ -1,4 +1,4 @@
-use sctx::{Sctx, MovementSearchView};
+use sctx::Sctx;
 use tmpl::TemplateContext;
 use osms_db::db::*;
 use osms_db::ntrod::types::*;
@@ -8,28 +8,9 @@ use rouille::{Request, Response};
 use std::collections::{BTreeMap, HashMap};
 use schedules;
 use schedule;
+use templates::movements::{MovementsView, MovementDesc};
+use templates::movement_search::MovementSearchView;
 
-#[derive(Serialize)]
-pub struct MovementsView {
-    mvts: Vec<MovementDesc>,
-    mvt_search: MovementSearchView
-}
-#[derive(Serialize, Debug)]
-pub struct MovementDesc {
-    parent_sched: i32,
-    parent_train: Option<i32>,
-    tiploc: String,
-    action: &'static str,
-    time: String,
-    time_expected: Option<String>,
-    time_actual: Option<String>,
-    canx: bool,
-    #[serde(skip_serializing)]
-    _action: i32,
-    #[serde(skip_serializing)]
-    _time: NaiveTime,
-    orig_dest: Option<schedules::ScheduleOrigDest>,
-}
 pub fn post_index_movements(sctx: Sctx, req: &Request) -> Response {
     let (mut tiploc, mut date, mut time) = (None, None, None);
     let input = try_or_badreq!(sctx, ::rouille::input::post::raw_urlencoded_post_input(req));

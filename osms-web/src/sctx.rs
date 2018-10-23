@@ -9,29 +9,12 @@ use schedules;
 use schedule;
 use movements;
 use mapping;
+use templates::not_found::NotFoundView;
+use templates::user_error::UserErrorView;
+use templates::index::IndexView;
+use templates::movement_search::MovementSearchView;
 
 pub type Sctx = Arc<ServerContext>;
-
-#[derive(Serialize)]
-pub struct NotFoundView {
-    uri: String
-}
-#[derive(Serialize)]
-pub struct UserErrorView {
-    error_summary: String,
-    reason: String
-}
-#[derive(Serialize)]
-pub struct MovementSearchView {
-    pub error: Option<String>,
-    pub station: Option<String>,
-    pub date: String,
-    pub time: String
-}
-#[derive(Serialize)]
-pub struct IndexView {
-    mvt_search: MovementSearchView
-}
 
 pub struct ServerContext {
     pub hbs: Handlebars,
