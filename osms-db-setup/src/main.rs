@@ -21,6 +21,7 @@ extern crate atoc_msn;
 extern crate ntrod_types;
 extern crate fallible_iterator;
 extern crate serde_json;
+extern crate irc;
 
 use clap::{Arg, App, SubCommand, AppSettings};
 use std::fs::File;
@@ -34,6 +35,9 @@ use failure::{Error, ResultExt, err_msg};
 use reqwest::{Response, Client};
 use reqwest::header::{Authorization, Basic};
 use fallible_iterator::FallibleIterator;
+use irc::client::prelude::*;
+use irc::client::Client as IrcClientTrait;
+use irc::client::ext::ClientExt;
 
 pub mod make;
 
@@ -67,6 +71,11 @@ fn run() -> Result<(), Error> {
              .value_name("FILE")
              .help("Path to an optional logfile to write log messages to.")
              .takes_value(true))
+        .arg(Arg::with_name("ircconf")
+             .short("i")
+             .long("ircconf")
+             .value_name("FILE")
+             .help("Path to an IRC client configuration file, if you want to emit progress information to IRC."))
         .subcommand(SubCommand::with_name("setup")
                     .about("Sets up a blank database from scratch. Usually, run `init` first, then `osm` and `nrod`.")
                     .setting(AppSettings::SubcommandRequired)
@@ -174,6 +183,7 @@ fn run() -> Result<(), Error> {
                                      .takes_value(true)))
         )
         .get_matches();
+    println!("[+] osms-db-setup tool starting");
     let mut disp = fern::Dispatch::new()
         .format(|out, msg, record| {
             out.finish(format_args!("{} [{} {}] {}",
@@ -187,16 +197,41 @@ fn run() -> Result<(), Error> {
         .level_for("osms_db", log::LevelFilter::Debug)
         .chain(std::io::stdout());
     if let Some(f) = matches.value_of("logfile") {
+        println!("[+] Logging to logfile: {}", f);
         disp = disp.chain(fern::log_file(f)
                           .context(err_msg("couldn't open log file"))?);
+    }
+    if let Some(i) = matches.value_of("ircconf") {
+        println!("[+] Setting up IRC logging...");
+        let i = IrcClient::new(i)?;
+        if i.config().channels().len() == 0 {
+            bail!("[!] IRC client improperly configured: no channels to send to");
+        }
+        i.identify()?;
+        let (tx, rx) = ::std::sync::mpsc::channel::<String>();
+        ::std::thread::spawn(move || {
+            // let the client connect (this is a bit hacky, but hey)
+            while i.list_channels().unwrap().len() == 0 {
+                ::std::thread::sleep(::std::time::Duration::from_millis(100));
+            }
+            let chan = i.config().channels()[0];
+            while let Ok(msg) = rx.recv() {
+                if msg.contains("DEBUG") || msg.contains("TRACE") {
+                    continue; // this is even more hacky :P
+                }
+                if let Err(e) = i.send_privmsg(chan, msg) {
+                    eprintln!("[!] Failed to send IRC message: {}", e);
+                }
+            }
+        });
+        disp = disp.chain(tx);
     }
     disp
         .apply()
         .unwrap();
-    info!("osms-db-setup tool starting");
     let mut cli = Client::new();
     info!("Loading config...");
-    let conf: Config = envy::from_env()?;
+    let conf: Config = envy::from_env()?; 
     info!("Connecting to Postgres...");
     let tls = if conf.require_tls {
         let tls = NativeTls::new()
@@ -211,7 +246,6 @@ fn run() -> Result<(), Error> {
     let pool = r2d2::Pool::builder()
         .build(manager)
         .context(err_msg("couldn't make db pool"))?;
-
     match matches.subcommand() {
         ("setup", Some(opts)) => {
             match opts.subcommand() {
