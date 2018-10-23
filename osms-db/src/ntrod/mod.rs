@@ -64,9 +64,12 @@ pub fn mvt_query<T: GenericConnection>(conn: &T, mvts: &[ScheduleMvt], auth_date
     let mut scheds = HashMap::new();
     for mvt in mvts.iter() {
         if scheds.get(&mvt.parent_sched).is_none() {
-            let sched = Schedule::from_select(conn, "WHERE id = $1 AND start_date <= $2 AND end_date >= $2", &[&mvt.parent_sched, &auth_date])?
+            let sched = Schedule::from_select(conn, "WHERE id = $1", &[&mvt.parent_sched])?
                 .into_iter().nth(0).unwrap();
             if let Some(date) = auth_date {
+                if sched.start_date > date || sched.end_date < date {
+                    continue;
+                }
                 if !sched.is_authoritative(conn, date)? {
                     continue;
                 }
