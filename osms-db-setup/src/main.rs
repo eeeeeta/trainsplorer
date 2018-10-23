@@ -186,8 +186,7 @@ fn run() -> Result<(), Error> {
     println!("[+] osms-db-setup tool starting");
     let mut disp = fern::Dispatch::new()
         .format(|out, msg, record| {
-            out.finish(format_args!("{} [{} {}] {}",
-                                    chrono::Local::now().format("[%Y-%m-%d %H:%M:%S]"),
+            out.finish(format_args!("[{} {}] {}",
                                     record.target(),
                                     record.level(),
                                     msg))
@@ -227,8 +226,6 @@ fn run() -> Result<(), Error> {
                 if msg.contains("DEBUG") || msg.contains("TRACE") {
                     continue; // this is even more hacky :P
                 }
-                // don't log the timestamp
-                let msg = msg.split(" ").skip(1).collect::<String>();
                 if let Err(e) = i.send_privmsg(chan, msg) {
                     eprintln!("[!] Failed to send IRC message: {}", e);
                 }
