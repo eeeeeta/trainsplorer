@@ -1,6 +1,7 @@
 ALTER TABLE schedule_movements DROP CONSTRAINT schedule_movements_ends_path_fkey;
 ALTER TABLE schedule_movements DROP CONSTRAINT schedule_movements_starts_path_fkey;
 UPDATE schedule_movements SET starts_path = NULL, ends_path = NULL;
+UPDATE schedules SET geo_generation = 0;
 DROP TABLE problematic_stations;
 DROP TABLE station_overrides;
 DROP TABLE station_paths;
