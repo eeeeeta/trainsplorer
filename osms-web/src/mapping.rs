@@ -89,7 +89,13 @@ pub fn map(sctx: Sctx) -> Response {
             latlon
         });
     }
-    render!(sctx, TemplateContext::title("map", "Map data admin panel"))
+    render!(sctx, TemplateContext {
+        template: "map",
+        title: "Map data admin panel".into(),
+        body: MapView {
+            problem_stations
+        }
+    })
 }
 pub fn geo_correct_station(sctx: Sctx, req: &Request) -> Response {
     use geojson::conversion::TryInto;

@@ -19,7 +19,7 @@
 		<tr>
 			<td>{{this.name}}</td>
 			<td>{{#if this.stanox}}{{this.stanox}}{{/if}}</td>
-			<td><button onclick="map.setView({{this.latlon}}, 13)">→</button></td>
+			<td><button onclick="map.panTo({{this.latlon}})">→</button></td>
 		</tr>
 	{{/each}}
 </div>
