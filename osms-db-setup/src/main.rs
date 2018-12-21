@@ -22,6 +22,7 @@ extern crate ntrod_types;
 extern crate fallible_iterator;
 extern crate serde_json;
 extern crate irc;
+extern crate titlecase;
 
 use clap::{Arg, App, SubCommand, AppSettings};
 use std::fs::File;

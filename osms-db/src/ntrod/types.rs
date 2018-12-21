@@ -424,6 +424,7 @@ impl InsertableDbType for NaptanEntry {
         Ok(())
     }
 }
+
 /*
 /// A message from TRUST that we can't process yet, because we don't have the schedule data.
 #[derive(Debug, Clone)]

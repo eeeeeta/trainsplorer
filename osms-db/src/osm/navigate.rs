@@ -3,7 +3,7 @@ use db::{GenericConnection, DbType, InsertableDbType};
 use errors::*;
 use postgis::ewkb::LineString;
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet, BinaryHeap};
+use std::collections::{HashMap, BinaryHeap};
 use ordered_float::OrderedFloat;
 
 struct LightNode {
@@ -30,12 +30,6 @@ impl PartialOrd for State {
 }
 pub fn navigate_cached<T: GenericConnection>(conn: &T, from: i32, to: i32) -> Result<i32> {
     let paths = StationPath::from_select(conn, "WHERE s1 = $1 AND s2 = $2 FOR UPDATE", &[&from, &to])?;
-    let station_nav_problems = StationNavigationProblem::from_select(conn, "WHERE origin = $1 AND destination = $2 FOR UPDATE", &[&from, &to])?;
-    if station_nav_problems.len() > 0 {
-        let err = &station_nav_problems[0].desc;
-        debug!("navigate_cached: nav problem exists: {}", err);
-        return Err(OsmsError::NavProblem(err.to_owned()));
-    }
     if paths.len() > 0 {
         debug!("navigate_cached: returning memoized path from {} to {}", from, to);
         return Ok(paths.into_iter().nth(0).unwrap().id);
@@ -45,30 +39,28 @@ pub fn navigate_cached<T: GenericConnection>(conn: &T, from: i32, to: i32) -> Re
     Ok(path.insert_self(conn)?)
 }
 pub fn navigate<T: GenericConnection>(conn: &T, from: i32, to: i32) -> Result<StationPath> {
-    // Create a transaction: we don't actually want to modify the database here.
-    // This transaction will be reverted when we return.
-    let trans = conn.transaction()?;
+    let start = RailwayLocation::from_select(conn, "WHERE id = $1", &[&from])?.into_iter()
+        .nth(0).ok_or(OsmsError::StationNotFound(from.into()))?;
+    let starting_node = start.point;
 
-    let starting_node = Station::from_select(&trans, "WHERE id = $1", &[&from])?.into_iter()
-        .nth(0).ok_or(OsmsError::StationNotFound(from.into()))?.point;
+    let goal = RailwayLocation::from_select(conn, "WHERE id = $1", &[&to])?.into_iter()
+        .nth(0).ok_or(OsmsError::StationNotFound(to.into()))?;
+    let goal_node = goal.point;
 
-    let goal_node = Station::from_select(&trans, "WHERE id = $1", &[&to])?.into_iter()
-        .nth(0).ok_or(OsmsError::StationNotFound(to.into()))?.point;
-
-    debug!("navigate: navigating from {} ({}) to {} ({})",
-           from, starting_node, to, goal_node);
+    debug!("navigate: navigating from '{}' #{} ({}) to '{}' #{} ({})",
+           start.name, start.id, starting_node, goal.name, goal.id, goal_node);
 
     let mut heap: BinaryHeap<State> = BinaryHeap::new();
     let mut nodes: HashMap<i64, LightNode> = HashMap::new();
 
-    let start = Node::from_select(&trans, "WHERE id = $1", &[&starting_node])
+    let start = Node::from_select(conn, "WHERE id = $1", &[&starting_node])
         ?.into_iter().nth(0)
         .ok_or(OsmsError::DatabaseInconsistency("station's node doesn't exist"))?;
 
     nodes.insert(start.id, LightNode { dist: 0.0, parent: None});
     heap.push(State { cost: OrderedFloat(0.0), id: start.id });
 
-    let dest = Node::from_select(&trans, "WHERE id = $1 AND graph_part = $2",
+    let dest = Node::from_select(conn, "WHERE id = $1 AND graph_part = $2",
                                  &[&goal_node, &start.graph_part])
         ?.into_iter().nth(0)
         .ok_or(OsmsError::IncorrectGraphPart {
@@ -87,7 +79,7 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: i32, to: i32) -> Result<St
 
         trace!("considering node {} with dist {} ({}c/{}u)", id, dist, considered, updated);
 
-        let links = Link::from_select(&trans, "WHERE p1 = $1 OR p2 = $1", &[&id])?;
+        let links = Link::from_select(conn, "WHERE p1 = $1 OR p2 = $1", &[&id])?;
         for link in links {
             let tent_dist = link.distance + dist;
             let other_end = if link.p1 == id { link.p2 } else { link.p1 };
@@ -122,13 +114,7 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: i32, to: i32) -> Result<St
     let mut path_nodes = vec![dest.id];
     let mut path = vec![];
     let mut cur_node = nodes.get(&dest.id).unwrap();
-    let mut crossings = HashSet::new();
     loop {
-        let node = Node::from_select(conn, "WHERE id = $1", &[&path_nodes.last().unwrap()])?;
-        if let Some(id) = node[0].parent_crossing {
-            trace!("navigate: found intersecting crossing #{}", id);
-            crossings.insert(id);
-        }
         if let Some((ref parent_id, ref geom)) = cur_node.parent {
             let geom: LineString = conn.query(
                 "SELECT
@@ -146,22 +132,12 @@ pub fn navigate<T: GenericConnection>(conn: &T, from: i32, to: i32) -> Result<St
             break;
         }
     }
-    let crossings = crossings.into_iter().collect::<Vec<_>>();
     let path: LineString = conn.query("SELECT ST_MakeLine(CAST($1 AS geometry[]))", &[&path])
         ?.into_iter().nth(0).unwrap().get(0);
-    debug!("navigate: finding intersecting crossings...");
-    let mut crossing_locations = vec![];
-    for cx in Crossing::from_select(conn, "WHERE id = ANY($1)", &[&crossings])? {
-        for row in &trans.query("SELECT ST_LineLocatePoint($1, ST_Centroid($2))",
-                                &[&path, &cx.area])? {
-            let location: f64 = row.get(0);
-            crossing_locations.push(location);
-        }
-    }
     debug!("navigate: completed");
     Ok(StationPath {
         s1: from, s2: to, way: path,
-        nodes: path_nodes, crossings, crossing_locations,
+        nodes: path_nodes,
         id: -1
     })
 }

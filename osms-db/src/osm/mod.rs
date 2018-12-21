@@ -5,45 +5,28 @@ pub mod org;
 use db::*;
 use self::types::*;
 use ntrod::types::*;
-use ntrod;
 use geo::*;
 use std::collections::HashSet;
-use postgis::ewkb::Polygon as PgPolygon;
 
-pub enum ProcessStationError {
-    AlreadyProcessed,
-    Problematic(PgPolygon, i32),
-    Error(::failure::Error)
-}
-impl<T> From<T> for ProcessStationError where T: Into<::failure::Error> {
-    fn from(ty: T) -> Self {
-        ProcessStationError::Error(ty.into())
-    }
-}
-
-pub fn remove_station<T: GenericConnection>(conn: &T, nr_ref: &str) -> Result<(), ::failure::Error> {
-    let stations = Station::from_select(conn, "WHERE nr_ref = $1", &[&nr_ref])?;
+pub fn remove_railway_location<T: GenericConnection>(conn: &T, id: i32) -> Result<(), ::failure::Error> {
+    let stations = RailwayLocation::from_select(conn, "WHERE id = $1", &[&id])?;
     for sta in stations {
         conn.execute("DELETE FROM nodes WHERE id = $1", &[&sta.point])?;
     }
     Ok(())
 }
-pub fn process_station<T: GenericConnection>(conn: &T, nr_ref: &str, poly: Polygon<f64>) -> Result<i32, ProcessStationError> {
+pub fn process_railway_location<T: GenericConnection>(conn: &T, name: String, poly: Polygon<f64>) -> Result<i32, ::failure::Error> {
     use geo::algorithm::haversine_length::HaversineLength;
     use geo::algorithm::centroid::Centroid;
     use geo::algorithm::from_postgis::FromPostgis;
     use geo::algorithm::to_postgis::ToPostgis;
 
-    let sta = Station::from_select(conn, "WHERE nr_ref = $1", &[&nr_ref])?;
-    if sta.len() > 0 {
-        debug!("Station for {} already exists", nr_ref);
-        return Err(ProcessStationError::AlreadyProcessed);
-    }
     let pgpoly = poly.to_postgis_wgs84();
+    let mut defect = None;
     let lks = Link::from_select(conn, "WHERE ST_Intersects(way, $1)", &[&pgpoly])?;
     if lks.len() == 0 {
-        debug!("Polygon for {} doesn't connect to anything", nr_ref);
-        return Err(ProcessStationError::Problematic(pgpoly, 0));
+        warn!("Polygon for new station '{}' doesn't connect to anything", name);
+        defect = Some(1);
     }
     let centroid = poly.centroid().unwrap();
     let nd = Node::insert(conn, centroid.to_postgis_wgs84())?;
@@ -78,11 +61,15 @@ pub fn process_station<T: GenericConnection>(conn: &T, nr_ref: &str, poly: Polyg
             distance: s_lp2_dist as f32
         }.insert(conn)?;
     }
-    let ret = Station {
+    let ret = RailwayLocation {
         id: -1,
-        nr_ref: nr_ref.into(),
+        name,
         point: nd,
-        area: pgpoly
+        area: pgpoly,
+        stanox: None,
+        tiploc: vec![],
+        crs: vec![],
+        defect
     }.insert_self(conn)?;
     Ok(ret)
 }
@@ -90,13 +77,8 @@ pub fn geo_process_schedule<T: GenericConnection>(conn: &T, sched: Schedule) -> 
     let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 ORDER BY time ASC", &[&sched.id])?;
     debug!("geo_process_schedule: processing schedule {} ({} mvts)", sched.id, mvts.len());
     let mut connections: Vec<(i32, i32)> = vec![];
-    let gen = sched.geo_generation + 1;
     for mvt in mvts {
-        let stanox = match ntrod::get_stanox_for_tiploc(conn, &mvt.tiploc)? {
-            Some(x) => x,
-            None => continue
-        };
-        let stations = Station::from_select(conn, "WHERE nr_ref = $1", &[&stanox])?;
+        let stations = RailwayLocation::from_select(conn, "WHERE ANY(tiploc) = $1", &[&mvt.tiploc])?;
         let station = match stations.into_iter().nth(0) {
             Some(s) => s,
             None => continue
@@ -106,7 +88,7 @@ pub fn geo_process_schedule<T: GenericConnection>(conn: &T, sched: Schedule) -> 
                 continue;
             }
         }
-        trace!("geo_process_schedule: mvt #{} of action {} at STANOX {} (TIPLOC {}) (station #{}) works", mvt.id, mvt.action, stanox, &mvt.tiploc, station.id);
+        trace!("geo_process_schedule: mvt #{} of action {} at TIPLOC {} (rloc #{}) works", mvt.id, mvt.action, &mvt.tiploc, station.id);
         connections.push((mvt.id, station.id));
     }
     debug!("geo_process_schedule: connections = {:?}", connections);
@@ -123,7 +105,6 @@ pub fn geo_process_schedule<T: GenericConnection>(conn: &T, sched: Schedule) -> 
             },
             Err(e) => {
                 warn!("geo_process_schedule: error navigating from #{} to #{}: {}", s1, s2, e);
-                StationNavigationProblem::insert(&trans, gen, s1, s2, e.to_string())?;
             },
         }
         trans.commit()?;

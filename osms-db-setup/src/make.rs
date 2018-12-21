@@ -6,7 +6,6 @@ use std::io::{Read, BufRead, Seek, BufReader};
 use geo::*;
 use std::collections::HashSet;
 use postgis::ewkb::Point as PgPoint;
-use postgis::ewkb::Polygon as PgPolygon;
 use osms_db::db::*;
 use osms_db::util;
 use osms_db::osm::types::*;
@@ -15,9 +14,25 @@ use osms_db::ntrod::types::*;
 use ntrod_types::reference::{CorpusEntry, CorpusData};
 use ntrod_types::schedule::{self, ScheduleRecord};
 use failure::Error;
-use std::collections::HashMap;
 
 type Result<T> = ::std::result::Result<T, Error>;
+
+pub fn tiploc_to_readable<T: GenericConnection>(conn: &T, tl: &str) -> Result<String> {
+    let msn = MsnEntry::from_select(conn, "WHERE tiploc = $1", &[&tl])?;
+    let desc = match msn.into_iter().nth(0) {
+        Some(e) => Some(e.name),
+        None => {
+            let ce = CorpusEntry::from_select(conn, "WHERE nlcdesc IS NOT NULL AND tiploc = $1", &[&tl])?;
+            ce.into_iter().nth(0).map(|x| x.nlcdesc.unwrap())
+        }
+    };
+    Ok(if let Some(d) = desc {
+        ::titlecase::titlecase(&d)
+    }
+    else {
+        format!("[TIPLOC {}]", tl)
+    })
+}
 
 pub struct ImportContext<'a, R: 'a> {
     objs: Option<u64>,
@@ -156,7 +171,6 @@ pub fn msn_entries<R: BufRead, T: GenericConnection>(conn: &T, file: R) -> Resul
 
     let trans = conn.transaction()?;
     info!("Importing MSN entries...");
-    info!("(that's Master Station Names, not Microsoft Network...)");
     let mut done = 0;
     for line in file.lines() {
         let line = line?;
@@ -549,8 +563,6 @@ pub fn links<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
 pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     use geo::algorithm::haversine_destination::HaversineDestination;
     use geo::algorithm::from_postgis::FromPostgis;
-    use geo::algorithm::to_postgis::ToPostgis;
-
 
     if ctx.count("FROM stations")? != 0 { return Ok(()) };
     info!("Making stations...");
@@ -558,16 +570,24 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     let trans = conn.transaction()?;
     let naptan_entries = NaptanEntry::from_select(&trans, "", &[])?;
     let bar = ctx.make_custom_bar(naptan_entries.len() as _);
-    let mut polys: HashMap<String, Polygon<f64>> = HashMap::new();
     bar.set_message("Processing NAPTAN entries...");
     for ent in naptan_entries {
+        use osms_db::osm;
         bar.set_message(&format!("Processing naptan for {}", ent.tiploc));
+
         let entries = CorpusEntry::from_select(&trans, "WHERE tiploc = $1 AND stanox IS NOT NULL", &[&ent.tiploc])?;
         if entries.len() != 1 {
             warn!("TIPLOC {} doesn't map to one single STANOX\n", ent.tiploc);
             continue;
         }
-        let nr_ref = entries.into_iter().nth(0).unwrap().stanox.unwrap();
+
+        let stanox = entries.into_iter().nth(0).unwrap().stanox.unwrap();
+        let existing = RailwayLocation::from_select(&trans, "WHERE stanox = $1", &[&stanox])?;
+        if existing.len() > 0 {
+            warn!("Duplicate entry for STANOX {}\n", stanox);
+            continue;
+        }
+
         let pt = Point::from_postgis(&ent.loc);
         let mut nodes = vec![];
         for bearing in 0..360 {
@@ -576,37 +596,28 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
         let nd = nodes[0];
         nodes.push(nd);
         let mut poly = Polygon { exterior: LineString(nodes), interiors: vec![] };
-        if let Some(p2) = polys.get(&nr_ref) {
-            let p1 = poly.to_postgis_wgs84();
-            let p2 = p2.to_postgis_wgs84(); 
-            for row in &trans.query("SELECT ST_ConvexHull(ST_Collect($1, $2));", &[&p1, &p2])? {
-                let p: PgPolygon = row.get(0);
-                poly = Option::from_postgis(&p).unwrap();
-            }
-        }
-        polys.insert(nr_ref, poly);
-        bar.inc(1);
-    }
-    bar.finish();
-    let bar = ctx.make_custom_bar(polys.len() as _);
-    bar.set_message("Making stations...");
-    for (nr_ref, poly) in polys {
-        use osms_db::osm::{self, ProcessStationError};
+        let name = tiploc_to_readable(&trans, &ent.tiploc)?;
+        let mut tiplocs = HashSet::new();
+        let mut crses = HashSet::new();
 
-        bar.set_message(&format!("Processing station for {}", nr_ref));
-        match osm::process_station(&trans, &nr_ref, poly) {
-            Ok(_) => {},
-            Err(ProcessStationError::AlreadyProcessed) => {
-                debug!("Already processed station for {}\n", nr_ref);
-            },
-            Err(ProcessStationError::Problematic(poly, code)) => {
-                warn!("Station {} is problematic: code {}\n", nr_ref, code);
-                ProblematicStation::insert(&trans, &nr_ref, poly, code)?;
-            },
-            Err(ProcessStationError::Error(e)) => {
-                Err(e)?
+        for ent in CorpusEntry::from_select(&trans, "WHERE stanox = $1", &[&stanox])? {
+            if let Some(tpl) = ent.tiploc {
+                tiplocs.insert(tpl);
+            }
+            if let Some(crs) = ent.crs {
+                crses.insert(crs);
             }
         }
+        let crsvec = crses.clone().into_iter().collect::<Vec<_>>();
+        let tplvec = tiplocs.clone().into_iter().collect::<Vec<_>>();
+        for ent in MsnEntry::from_select(&trans, "WHERE crs = ANY($1) OR tiploc = ANY($2)", &[&crsvec, &tplvec])? {
+            tiplocs.insert(ent.tiploc);
+            crses.insert(ent.crs);
+        }
+        let crsvec = crses.clone().into_iter().collect::<Vec<_>>();
+        let tplvec = tiplocs.clone().into_iter().collect::<Vec<_>>();
+        let rloc_id = osm::process_railway_location(&trans, name, poly)?;
+        trans.execute("UPDATE railway_locations SET stanox = $1, tiploc = $2, crs = $3 WHERE id = $4", &[&stanox, &tplvec, &crsvec, &rloc_id])?;
         bar.inc(1);
     }
     trans.commit()?;

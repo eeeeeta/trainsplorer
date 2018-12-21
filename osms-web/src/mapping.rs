@@ -70,6 +70,7 @@ struct CorrectionDetails {
 pub fn map(sctx: Sctx) -> Response {
     render!(sctx, TemplateContext::title("map", "Slippy map"))
 }
+/*
 pub fn geo_correct_station(sctx: Sctx, req: &Request) -> Response {
     use geojson::conversion::TryInto;
     use geo::algorithm::to_postgis::ToPostgis;
@@ -98,12 +99,13 @@ pub fn geo_correct_station(sctx: Sctx, req: &Request) -> Response {
     }
     Response::empty_204()
 }
+*/
 pub fn geo_stations(sctx: Sctx, req: &Request) -> Response {
     let db = get_db!(sctx);
     let geo = try_or_badreq!(sctx, GeoParameters::get_from_req(req));
     let (limit, poly) = geo.get_limit_and_pg_poly();
     let mut features = vec![];
-    let stn_query = Station::from_select(&*db, "WHERE ST_Intersects(area, $1) LIMIT $2", &[&poly, &(limit as i64)]);
+    let stn_query = RailwayLocation::from_select(&*db, "WHERE ST_Intersects(area, $1) LIMIT $2", &[&poly, &(limit as i64)]);
     for stn in try_or_ise!(sctx, stn_query) {
         let mut ls = vec![];
         for point in stn.area.rings[0].points.iter() {
@@ -115,7 +117,8 @@ pub fn geo_stations(sctx: Sctx, req: &Request) -> Response {
             foreign_members: None
         };
         let mut props = ::serde_json::Map::new();
-        props.insert("nr_ref".to_string(), json!(stn.nr_ref));
+        props.insert("name".to_string(), json!(stn.name));
+        props.insert("id".to_string(), json!(stn.id));
         features.push(Feature {
             properties: Some(props),
             bbox: None,

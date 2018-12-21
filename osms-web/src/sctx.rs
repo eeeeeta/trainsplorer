@@ -156,9 +156,9 @@ impl ServerContext {
             (GET) (/map) => {
                 mapping::map(selfish.clone())
             },
-            (POST) (/geo/correct_station) => {
+            /*(POST) (/geo/correct_station) => {
                 mapping::geo_correct_station(selfish.clone(), req)
-            },
+            },*/
             (GET) (/geo/stations) => {
                 mapping::geo_stations(selfish.clone(), req)
             },
