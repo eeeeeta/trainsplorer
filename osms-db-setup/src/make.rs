@@ -560,9 +560,21 @@ pub fn links<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     });
     Ok(())
 }
-pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
+fn make_circle_from_point(pt: &Point<f64>) -> Polygon<f64> {
     use geo::algorithm::haversine_destination::HaversineDestination;
+
+    let mut nodes = vec![];
+    for bearing in 0..360 {
+        nodes.push(pt.haversine_destination(bearing as _, 50.0));
+    }
+    let nd = nodes[0];
+    nodes.push(nd);
+    Polygon { exterior: LineString(nodes), interiors: vec![] }
+}
+pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     use geo::algorithm::from_postgis::FromPostgis;
+    use geo::algorithm::to_postgis::ToPostgis;
+    use postgis::ewkb::Polygon as PgPolygon;
 
     if ctx.count("FROM railway_locations")? != 0 { return Ok(()) };
     info!("Making stations...");
@@ -571,41 +583,49 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     let naptan_entries = NaptanEntry::from_select(&trans, "", &[])?;
     let bar = ctx.make_custom_bar(naptan_entries.len() as _);
     bar.set_message("Processing NAPTAN entries...");
+
     for ent in naptan_entries {
         use osms_db::osm;
         bar.set_message(&format!("Processing naptan for {}", ent.tiploc));
 
         let entries = CorpusEntry::from_select(&trans, "WHERE tiploc = $1 AND stanox IS NOT NULL", &[&ent.tiploc])?;
-        if entries.len() != 1 {
+        if entries.len() > 1 {
             warn!("TIPLOC {} doesn't map to one single STANOX\n", ent.tiploc);
             continue;
         }
 
-        let stanox = entries.into_iter().nth(0).unwrap().stanox.unwrap();
-        let existing = RailwayLocation::from_select(&trans, "WHERE stanox = $1", &[&stanox])?;
+        let stanox = entries.into_iter().nth(0).map(|x| x.stanox.unwrap());
+        let existing = RailwayLocation::from_select(&trans, "WHERE stanox = $1 OR ANY(tiploc) = $2", &[&stanox, &ent.tiploc])?;
         if existing.len() > 0 {
-            warn!("Duplicate entry for STANOX {}\n", stanox);
             continue;
         }
-
         let pt = Point::from_postgis(&ent.loc);
-        let mut nodes = vec![];
-        for bearing in 0..360 {
-            nodes.push(pt.haversine_destination(bearing as _, 50.0));
+        let mut poly = make_circle_from_point(&pt);
+        if stanox.is_some() {
+            for ent in NaptanEntry::from_select(&trans, "WHERE EXISTS(SELECT * FROM corpus_entries
+                                                               WHERE corpus_entries.tiploc = naptan_entries.tiploc
+                                                               AND corpus_entries.stanox = $1)", &[&stanox])? {
+                let pt = Point::from_postgis(&ent.loc);
+                let p2 = make_circle_from_point(&pt);
+                let p1 = poly.to_postgis_wgs84();
+                let p2 = p2.to_postgis_wgs84(); 
+                for row in &trans.query("SELECT ST_ConvexHull(ST_Collect($1, $2));", &[&p1, &p2])? {
+                    let p: PgPolygon = row.get(0);
+                    poly = Option::from_postgis(&p).unwrap();
+                }
+            }
         }
-        let nd = nodes[0];
-        nodes.push(nd);
-        let mut poly = Polygon { exterior: LineString(nodes), interiors: vec![] };
         let name = tiploc_to_readable(&trans, &ent.tiploc)?;
         let mut tiplocs = HashSet::new();
         let mut crses = HashSet::new();
-
-        for ent in CorpusEntry::from_select(&trans, "WHERE stanox = $1", &[&stanox])? {
-            if let Some(tpl) = ent.tiploc {
-                tiplocs.insert(tpl);
-            }
-            if let Some(crs) = ent.crs {
-                crses.insert(crs);
+        if stanox.is_some() {
+            for ent in CorpusEntry::from_select(&trans, "WHERE stanox = $1", &[&stanox])? {
+                if let Some(tpl) = ent.tiploc {
+                    tiplocs.insert(tpl);
+                }
+                if let Some(crs) = ent.crs {
+                    crses.insert(crs);
+                }
             }
         }
         let crsvec = crses.clone().into_iter().collect::<Vec<_>>();
