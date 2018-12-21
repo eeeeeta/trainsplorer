@@ -23,8 +23,7 @@ CREATE TABLE station_paths (
 	s2 INT NOT NULL REFERENCES railway_locations ON DELETE RESTRICT,
 	way geometry NOT NULL,
 	nodes BIGINT[] NOT NULL,
-	UNIQUE(s1, s2),
-	CHECK(cardinality(crossings) = cardinality(crossing_locations))
+	UNIQUE(s1, s2)
 );
 ALTER TABLE schedule_movements ADD CONSTRAINT schedule_movements_starts_path_fkey FOREIGN KEY (starts_path) REFERENCES station_paths ON DELETE RESTRICT;
 ALTER TABLE schedule_movements ADD CONSTRAINT schedule_movements_ends_path_fkey FOREIGN KEY (ends_path) REFERENCES station_paths ON DELETE RESTRICT;
