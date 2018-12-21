@@ -564,7 +564,7 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
     use geo::algorithm::haversine_destination::HaversineDestination;
     use geo::algorithm::from_postgis::FromPostgis;
 
-    if ctx.count("FROM stations")? != 0 { return Ok(()) };
+    if ctx.count("FROM railway_locations")? != 0 { return Ok(()) };
     info!("Making stations...");
     let conn = ctx.get_conn();
     let trans = conn.transaction()?;
