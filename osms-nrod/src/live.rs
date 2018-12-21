@@ -186,17 +186,19 @@ pub fn process_activation<T: GenericConnection>(conn: &T, worker: &mut NtrodWork
 }
 pub fn process_cancellation<T: GenericConnection>(conn: &T, c: Cancellation) -> Result<()> {
     debug!("Processing cancellation of train {}...", c.train_id);
-    conn.execute("UPDATE trains SET cancelled = true WHERE trust_id = $1 AND date = $2", &[&c.train_id, &c.dep_timestamp.date()])?;
+    let trains = Train::from_select(conn, "WHERE trust_id = $1 AND (date = $2 OR date = ($2 - interval '1 day'))", &[&c.train_id, &c.canx_timestamp.date()])?;
+    let train = match trains.into_iter().nth(0) {
+        Some(t) => t,
+        None => return Err(NrodError::NoTrainFound(c.train_id, c.canx_timestamp.date())),
+    };
+    debug!("Train being cancelled is train #{}", train.id);
+    conn.execute("UPDATE trains SET cancelled = true WHERE id = $1", &[&train.id])?;
+    conn.execute("DELETE FROM train_movements WHERE parent_train = $1 AND estimated = true", &[&train.id])?;
     debug!("Train cancelled.");
     Ok(())
 }
 pub fn process_movement<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, m: Movement) -> Result<()> {
     debug!("Processing movement of train {} at STANOX {}...", m.train_id, m.loc_stanox);
-    if m.train_terminated {
-        worker.incr("nrod.mvt.terminated");
-        debug!("Train has terminated.");
-        conn.execute("UPDATE trains SET terminated = true WHERE trust_id = $1 AND (date = $2 OR date = ($2 - interval '1 day'))", &[&m.train_id, &m.actual_timestamp.date()])?;
-    }
     if m.offroute_ind {
         worker.incr("nrod.mvt.offroute");
         debug!("Train #{} off route.", m.train_id);
@@ -207,6 +209,12 @@ pub fn process_movement<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
         Some(t) => t,
         None => return Err(NrodError::NoTrainFound(m.train_id, m.actual_timestamp.date())),
     };
+    if m.train_terminated {
+        worker.incr("nrod.mvt.terminated");
+        debug!("Train has terminated.");
+        conn.execute("UPDATE trains SET terminated = true WHERE id = $1", &[&train.id])?;
+        conn.execute("DELETE FROM train_movements WHERE parent_train = $1 AND estimated = true", &[&train.id])?;
+    }
     let entries = CorpusEntry::from_select(conn, "WHERE stanox = $1 AND tiploc IS NOT NULL",
                                            &[&m.loc_stanox])?;
     let tiplocs = entries.into_iter().map(|x| x.tiploc.unwrap()).collect::<Vec<_>>();
