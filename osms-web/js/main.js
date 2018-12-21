@@ -7,8 +7,9 @@ function on_each_way(feature, layer) {
 	}
 }
 function on_each_station(feature, layer) {
-	if (feature.properties && feature.properties.nr_ref) {
-		layer.bindPopup("Station " + feature.properties.nr_ref);
+	if (feature.properties && feature.properties.name) {
+		layer.bindPopup(feature.properties.name);
+		layer.bindTooltip("ID: " + feature.properties.id);
 	}
 }
 function update_map(map) {
@@ -56,7 +57,7 @@ function update_map(map) {
 }
 function confirm_correction(poly, input, div) {
 	if (!input.value || input.value.length === 0) {
-		alert("Please input a STANOX.");
+		alert("Please input a station name.");
 		return;
 	}
 	var data = {

@@ -5,3 +5,4 @@ pub mod movement_search;
 pub mod movements;
 pub mod schedule;
 pub mod train;
+pub mod map;

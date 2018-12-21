@@ -6,9 +6,11 @@ use osms_db::db::*;
 use osms_db::util;
 use osms_db::osm;
 use osms_db::osm::types::*;
+use templates::map::*;
 use super::Result;
 use geojson::conversion;
 use geo::algorithm::from_postgis::FromPostgis;
+use geo::algorithm::centroid::Centroid;
 use rouille::{Request, Response};
 use tmpl::TemplateContext;
 
@@ -68,12 +70,29 @@ struct CorrectionDetails {
     poly: Feature
 }
 pub fn map(sctx: Sctx) -> Response {
-    render!(sctx, TemplateContext::title("map", "Slippy map"))
+    let db = get_db!(sctx);
+    let rlocs = try_or_ise!(sctx, RailwayLocation::from_select(&*db, "WHERE defect = 1", &[]));
+    let mut problem_stations = vec![];
+    for loc in rlocs {
+        let area = match Option::from_postgis(&loc.area) {
+            Some(a) => a,
+            None => continue
+        };
+        let pt = match area.centroid() {
+            Some(a) => a,
+            None => continue
+        };
+        let latlon = format!("[{}, {}]", pt.lat(), pt.lng());
+        problem_stations.push(ProblemStation {
+            name: loc.name,
+            stanox: loc.stanox,
+            latlon
+        });
+    }
+    render!(sctx, TemplateContext::title("map", "Map data admin panel"))
 }
-/*
 pub fn geo_correct_station(sctx: Sctx, req: &Request) -> Response {
     use geojson::conversion::TryInto;
-    use geo::algorithm::to_postgis::ToPostgis;
 
     let db = get_db!(sctx);
     let details: CorrectionDetails = try_or_badreq!(sctx, ::rouille::input::json::json_input(req));
@@ -82,24 +101,14 @@ pub fn geo_correct_station(sctx: Sctx, req: &Request) -> Response {
     // FIXME: postgis complains if you have an empty ring; this should
     // ideally be fixed in the geo library
     poly.interiors = vec![];
-    let pgpoly = poly.to_postgis_wgs84();
-    try_or_ise!(sctx, StationOverride::insert(&*db, &details.name, pgpoly));
-    try_or_ise!(sctx, osm::remove_station(&*db, &details.name));
-    match osm::process_station(&*db, &details.name, poly) {
-        Ok(_) => {},
-        Err(osm::ProcessStationError::AlreadyProcessed) => {
-            try_or_ise!(sctx, Err(format_err!("already processed, somehow")));
-        },
-        Err(osm::ProcessStationError::Problematic(_, id)) => {
-            warn!("FIXME: it was problematic: {}", id);
-        },
-        Err(osm::ProcessStationError::Error(e)) => {
-            try_or_ise!(sctx, Err(e));
-        }
+    let rlocs = try_or_ise!(sctx, RailwayLocation::from_select(&*db, "WHERE name = $1", &[&details.name]));
+    if rlocs.len() != 1 {
+        try_or_badreq!(sctx, Err(format_err!("The name provided does not uniquely identify a station.")));
     }
+    let rloc = rlocs.into_iter().nth(0).unwrap();
+    try_or_ise!(sctx, osm::update_railway_location(&*db, rloc.id, poly));
     Response::empty_204()
 }
-*/
 pub fn geo_stations(sctx: Sctx, req: &Request) -> Response {
     let db = get_db!(sctx);
     let geo = try_or_badreq!(sctx, GeoParameters::get_from_req(req));

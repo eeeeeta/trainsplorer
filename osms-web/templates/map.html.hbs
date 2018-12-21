@@ -5,4 +5,22 @@
 </div>
 <div id="notifs">
 </div>
+<div id="problem-stations">
+	<h3>Problematic stations</h3>
+	<table>
+		<thead>
+			<tr>
+				<th>Station name</th>
+				<th>STANOX</th>
+				<th>Jump to</th>
+			</tr>
+		</thead>
+	{{#each body.problem_stations}}
+		<tr>
+			<td>{{this.name}}</td>
+			<td>{{#if this.stanox}}{{this.stanox}}{{/if}}</td>
+			<td><button onclick="map.setView({{this.latlon}}, 13)">→</button></td>
+		</tr>
+	{{/each}}
+</div>
 {{> footer }}

@@ -23,7 +23,13 @@ pub fn tiploc_to_readable<T: GenericConnection>(conn: &T, tl: &str) -> Result<St
         Some(e) => Some(e.name),
         None => {
             let ce = CorpusEntry::from_select(conn, "WHERE nlcdesc IS NOT NULL AND tiploc = $1", &[&tl])?;
-            ce.into_iter().nth(0).map(|x| x.nlcdesc.unwrap())
+            match ce.into_iter().nth(0).map(|x| x.nlcdesc.unwrap()) {
+                Some(e) => Some(e),
+                None => {
+                    let ne = NaptanEntry::from_select(conn, "WHERE tiploc = $1", &[&tl])?;
+                    ne.into_iter().nth(0).map(|x| x.name.replace(" Rail Station", ""))
+                }
+            }
         }
     };
     Ok(if let Some(d) = desc {

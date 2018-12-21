@@ -1,12 +1,12 @@
 extern crate stomp;
-#[macro_use] extern crate osms_db;
+extern crate osms_db;
 #[macro_use] extern crate log;
 extern crate envy;
 extern crate fern;
 #[macro_use] extern crate serde_derive;
 extern crate futures;
 extern crate tokio_core;
-#[macro_use] extern crate failure;
+extern crate failure;
 extern crate flate2;
 extern crate darwin_types;
 

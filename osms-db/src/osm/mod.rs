@@ -8,6 +8,17 @@ use ntrod::types::*;
 use geo::*;
 use std::collections::HashSet;
 
+pub fn update_railway_location<T: GenericConnection>(conn: &T, id: i32, area: Polygon<f64>) -> Result<i32, ::failure::Error> {
+    let trans = conn.transaction()?;
+    let rlocs = RailwayLocation::from_select(conn, "WHERE id = $1", &[&id])?;
+    let rloc = rlocs.into_iter().nth(0).ok_or(format_err!("No such location."))?;
+    remove_railway_location(&trans, id)?;
+    let new_id = process_railway_location(&trans, rloc.name.clone(), area)?;
+    trans.execute("UPDATE railway_locations SET stanox = $1, tiploc = $2, crs = $3 WHERE id = $4",
+                  &[&rloc.stanox, &rloc.tiploc, &rloc.crs, &new_id])?;
+    trans.commit()?;
+    Ok(new_id)
+}
 pub fn remove_railway_location<T: GenericConnection>(conn: &T, id: i32) -> Result<(), ::failure::Error> {
     let stations = RailwayLocation::from_select(conn, "WHERE id = $1", &[&id])?;
     for sta in stations {
