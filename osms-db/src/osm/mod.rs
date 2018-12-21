@@ -89,7 +89,7 @@ pub fn geo_process_schedule<T: GenericConnection>(conn: &T, sched: Schedule) -> 
     debug!("geo_process_schedule: processing schedule {} ({} mvts)", sched.id, mvts.len());
     let mut connections: Vec<(i32, i32)> = vec![];
     for mvt in mvts {
-        let stations = RailwayLocation::from_select(conn, "WHERE ANY(tiploc) = $1", &[&mvt.tiploc])?;
+        let stations = RailwayLocation::from_select(conn, "WHERE $1 = ANY(tiploc)", &[&mvt.tiploc])?;
         let station = match stations.into_iter().nth(0) {
             Some(s) => s,
             None => continue
