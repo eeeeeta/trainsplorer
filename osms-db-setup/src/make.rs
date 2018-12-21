@@ -595,7 +595,7 @@ pub fn stations<R: Read + Seek>(ctx: &mut ImportContext<R>) -> Result<()> {
         }
 
         let stanox = entries.into_iter().nth(0).map(|x| x.stanox.unwrap());
-        let existing = RailwayLocation::from_select(&trans, "WHERE stanox = $1 OR ANY(tiploc) = $2", &[&stanox, &ent.tiploc])?;
+        let existing = RailwayLocation::from_select(&trans, "WHERE stanox = $1 OR $2 = ANY(tiploc)", &[&stanox, &ent.tiploc])?;
         if existing.len() > 0 {
             continue;
         }
