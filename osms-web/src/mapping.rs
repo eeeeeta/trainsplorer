@@ -89,11 +89,13 @@ pub fn map(sctx: Sctx) -> Response {
             latlon
         });
     }
+    let n_stations = problem_stations.len();
     render!(sctx, TemplateContext {
         template: "map",
         title: "Map data admin panel".into(),
         body: MapView {
-            problem_stations
+            problem_stations,
+            n_stations
         }
     })
 }

@@ -6,5 +6,6 @@ pub struct ProblemStation {
 }
 #[derive(Serialize)]
 pub struct MapView {
-    pub problem_stations: Vec<ProblemStation>
+    pub problem_stations: Vec<ProblemStation>,
+    pub n_stations: usize
 }
