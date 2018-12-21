@@ -8,8 +8,7 @@ function on_each_way(feature, layer) {
 }
 function on_each_station(feature, layer) {
 	if (feature.properties && feature.properties.name) {
-		layer.bindTooltip(feature.properties.name, {permanent: true});
-		layer.bindPopup("ID: " + feature.properties.id);
+		layer.bindTooltip(feature.properties.name);
 	}
 }
 function update_map(map) {

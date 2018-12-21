@@ -135,7 +135,6 @@ pub fn geo_stations(sctx: Sctx, req: &Request) -> Response {
         };
         let mut props = ::serde_json::Map::new();
         props.insert("name".to_string(), json!(stn.name));
-        props.insert("id".to_string(), json!(stn.id));
         features.push(Feature {
             properties: Some(props),
             bbox: None,
