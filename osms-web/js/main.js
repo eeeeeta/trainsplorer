@@ -9,6 +9,7 @@ function on_each_way(feature, layer) {
 function on_each_station(feature, layer) {
 	if (feature.properties && feature.properties.name) {
 		layer.bindTooltip(feature.properties.name);
+		layer.bindPopup("ID: " + feature.properties.id);
 	}
 }
 function update_map(map) {
