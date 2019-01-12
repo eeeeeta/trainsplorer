@@ -52,6 +52,7 @@ pub struct DeduplicatedMvt {
     pub canx: bool,
     pub starts_path: Option<i32>,
     pub ends_path: Option<i32>,
+    pub idx: Option<i32>
 }
 pub struct MvtQueryResult {
     pub mvts: Vec<DeduplicatedMvt>,
@@ -173,7 +174,8 @@ pub fn mvt_query<T: GenericConnection>(conn: &T, mvts: &[ScheduleMvt], auth_date
             time_actual,
             canx,
             starts_path: mvt.starts_path,
-            ends_path: mvt.ends_path
+            ends_path: mvt.ends_path,
+            idx: mvt.idx
         });
     }
     Ok(MvtQueryResult {

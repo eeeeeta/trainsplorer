@@ -155,8 +155,12 @@ pub struct ScheduleMvt {
     pub origterm: bool,
     /// The time at which this movement happens.
     pub time: NaiveTime,
+    /// Which `StationPath` starts at this movement.
     pub starts_path: Option<i32>,
-    pub ends_path: Option<i32>
+    /// Which `StationPath` ends at this movement.
+    pub ends_path: Option<i32>,
+    /// Index used for ordering; describes which number movement this is out of a set.
+    pub idx: Option<i32>
 }
 impl ScheduleMvt {
     /// `action` value for an arrival.
@@ -188,6 +192,7 @@ impl DbType for ScheduleMvt {
             time: row.get(5),
             starts_path: row.get(6),
             ends_path: row.get(7),
+            idx: row.get(8),
         }
     }
 }
@@ -195,11 +200,11 @@ impl InsertableDbType for ScheduleMvt {
     type Id = i32;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
         let qry = conn.query("INSERT INTO schedule_movements
-                              (parent_sched, tiploc, action, origterm, time)
-                              VALUES ($1, $2, $3, $4, $5)
+                              (parent_sched, tiploc, action, origterm, time, idx)
+                              VALUES ($1, $2, $3, $4, $5, $6)
                               RETURNING id",
                              &[&self.parent_sched, &self.tiploc,
-                               &self.action, &self.origterm, &self.time])?;
+                               &self.action, &self.origterm, &self.time, &self.idx])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))

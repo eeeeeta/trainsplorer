@@ -84,12 +84,13 @@ pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()>
                     }
                 }
             }
-            for (tiploc, time, action, origterm) in mvts {
+            for (i, (tiploc, time, action, origterm)) in mvts.into_iter().enumerate() {
                 let mvt = ScheduleMvt {
                     parent_sched: sid,
                     id: -1,
                     starts_path: None,
                     ends_path: None,
+                    idx: Some(i as _),
                     tiploc, time, action, origterm
                 };
                 mvt.insert_self(&trans)?;
@@ -231,7 +232,7 @@ pub fn process_movement<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
     let acceptable_actions = vec![2, action];
     debug!("Mapped STANOX {} to TIPLOCs {:?}", m.loc_stanox, tiplocs);
     debug!("Querying for movements - parent_sched = {}, tiplocs = {:?}, actions = {:?}", train.parent_sched, tiplocs, acceptable_actions);
-    let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = ANY($2) AND action = ANY($3) AND COALESCE(time = $4, TRUE) ORDER BY time ASC", &[&train.parent_sched, &tiplocs, &acceptable_actions, &m.planned_timestamp.map(|x| x.time())])?;
+    let mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND tiploc = ANY($2) AND action = ANY($3) AND COALESCE(time = $4, TRUE) ORDER BY (idx, time, action) ASC", &[&train.parent_sched, &tiplocs, &acceptable_actions, &m.planned_timestamp.map(|x| x.time())])?;
     if mvts.len() == 0 {
         return Err(NrodError::NoMovementsFound(train.parent_sched, acceptable_actions, tiplocs, m.planned_timestamp.map(|x| x.time())));
     }
@@ -251,7 +252,7 @@ pub fn process_movement<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
     debug!("Deleting any estimations...");
     conn.execute("DELETE FROM train_movements WHERE parent_mvt = $1 AND source = 2 AND estimated = true", &[&mvt.id])?;
     debug!("Creating/updating naïve estimation movements with delta {}", delta);
-    let remaining_sched_mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND time > $2 ORDER BY time ASC", &[&train.parent_sched, &mvt.time])?;
+    let remaining_sched_mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 AND time > $2 ORDER BY (idx, time, action) ASC", &[&train.parent_sched, &mvt.time])?;
     for mvt in remaining_sched_mvts {
         let tmvt = TrainMvt {
             id: -1,

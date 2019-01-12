@@ -151,6 +151,7 @@ pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
     let train = get_train_for_rid_uid_ssd(conn, worker, sched.rid.clone(), sched.uid.clone(), sched.ssd.clone())?;
     let trans = conn.transaction()?;
     let mut mvts: Vec<ScheduleMvt> = vec![];
+    let mut idx = 0;
     for loc in sched.locations {
         let tiploc;
         let primary_time;
@@ -193,8 +194,10 @@ pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
             origterm: false,
             time: primary_time + Duration::minutes(rdelay_mins_ as _),
             starts_path: None,
-            ends_path: None
+            ends_path: None,
+            idx: Some(idx)
         });
+        idx += 1;
         if let Some(time) = secondary_time {
             mvts.push(ScheduleMvt {
                 id: -1,
@@ -204,12 +207,14 @@ pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
                 origterm: false,
                 time: time + Duration::minutes(rdelay_mins_ as _),
                 starts_path: None,
-                ends_path: None
+                ends_path: None,
+                idx: Some(idx)
             });
+            idx += 1;
         }
     }
-    mvts.sort_by_key(|mvt| mvt.time);
-    let orig_mvts = ScheduleMvt::from_select(&trans, "WHERE parent_sched = $1 ORDER BY time ASC", &[&train.parent_sched])?;
+    mvts.sort_by_key(|mvt| mvt.idx);
+    let orig_mvts = ScheduleMvt::from_select(&trans, "WHERE parent_sched = $1 ORDER BY (idx, time, action) ASC", &[&train.parent_sched])?;
     if mvts == orig_mvts {
         worker.incr("darwin.sched.identical");
         debug!("Schedules are identical; doing nothing.");

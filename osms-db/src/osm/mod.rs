@@ -99,7 +99,7 @@ pub fn geo_process_schedule<T: GenericConnection>(conn: &T, sched: Schedule) -> 
                                                AND EXISTS(
                                                    SELECT * FROM railway_locations
                                                    WHERE schedule_movements.tiploc = ANY(railway_locations.tiploc))
-                                               ORDER BY time ASC", &[&sched.id])?;
+                                               ORDER BY (idx, time, action) ASC", &[&sched.id])?;
     debug!("geo_process_schedule: processing schedule {} ({} mvts)", sched.id, mvts.len());
     // step 2: loop through the movements, routing between adjacent stations, sort of
     let mut start_ptr; // current mvt we're trying to route _from_

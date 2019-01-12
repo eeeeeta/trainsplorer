@@ -25,9 +25,10 @@ pub fn train(sctx: Sctx, id: i32) -> Response {
     let train = try_or_nonexistent!(sctx, train);
 
     let sched_mvts = try_or_ise!(sctx, ScheduleMvt::from_select(&*db, "WHERE parent_sched = $1 OR parent_sched = $2", &[&train.parent_sched, &train.parent_nre_sched]));
-    let mvt_query_result = try_or_ise!(sctx, ntrod::mvt_query(&*db, &sched_mvts, Some(train.date)));
+    let mut mvt_query_result = try_or_ise!(sctx, ntrod::mvt_query(&*db, &sched_mvts, Some(train.date)));
 
     let mut descs = vec![];
+    mvt_query_result.mvts.sort_by_key(|m| (m.idx, m.time_scheduled.time, m.action));
     for mvt in mvt_query_result.mvts {
         descs.push(TrainMvtDesc {
             action: action_to_str(mvt.action),
@@ -38,11 +39,8 @@ pub fn train(sctx: Sctx, id: i32) -> Response {
             time_actual: mvt.time_actual.map(|x| x.time.to_string()),
             starts_path: mvt.starts_path,
             ends_path: mvt.ends_path,
-            _time: mvt.time_scheduled.time,
-            _action: mvt.action
         });
     }
-    descs.sort_by_key(|d| (d._time, d._action)); 
     
     let sd = TrainView {
         movements: descs,
@@ -61,7 +59,8 @@ pub fn schedule(sctx: Sctx, id: i32) -> Response {
         .ok_or(format_err!("Couldn't find a schedule with id #{}.", id));
     let sched = try_or_nonexistent!(sctx, sched);
     let movements = try_or_ise!(sctx, ScheduleMvt::from_select(&*db, "WHERE parent_sched = $1", &[&id]));
-    let mvt_query_result = try_or_ise!(sctx, ntrod::mvt_query(&*db, &movements, None));
+    let mut mvt_query_result = try_or_ise!(sctx, ntrod::mvt_query(&*db, &movements, None));
+    mvt_query_result.mvts.sort_by_key(|m| (m.idx, m.time_scheduled.time, m.action));
 
     let mut descs = vec![];
     for mvt in mvt_query_result.mvts {
@@ -72,11 +71,8 @@ pub fn schedule(sctx: Sctx, id: i32) -> Response {
             time_scheduled: mvt.time_scheduled.time.to_string(),
             starts_path: mvt.starts_path,
             ends_path: mvt.ends_path,
-            _time: mvt.time_scheduled.time,
-            _action: mvt.action
         });
     }
-    descs.sort_by_key(|d| (d._time, d._action)); 
 
     let trains_db = try_or_ise!(sctx, Train::from_select(&*db, "WHERE parent_sched = $1 ORDER BY date ASC", &[&id]));
     let mut trains = vec![];

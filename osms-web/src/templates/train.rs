@@ -1,5 +1,3 @@
-use chrono::NaiveTime;
-
 #[derive(Serialize)]
 pub struct TrainView {
     pub movements: Vec<TrainMvtDesc>
@@ -15,6 +13,4 @@ pub struct TrainMvtDesc {
     pub time_actual: Option<String>,
     pub ends_path: Option<i32>,
     pub starts_path: Option<i32>,
-    pub _time: NaiveTime,
-    pub _action: i32
 }

@@ -281,17 +281,21 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
             if updated {
                 warn!("apply_schedule_record: duplicate record (UID {}, start {}, stp_indicator {:?})",
                 train_uid, schedule_start_date, stp_indicator);
-                let orig_mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 ORDER BY time ASC", &[&sid])?;
+                let orig_mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 ORDER BY (idx, time, action) ASC", &[&sid])?;
                 let mut valid = true;
                 if orig_mvts.len() != mvts.len() {
                     warn!("apply_schedule_record: invalidating prior schedule movements due to length difference");
                     valid = false;
                 }
                 else {
-                    mvts.sort_by_key(|&(_, time, _, _)| time);
-                    for (mvt, &(ref tiploc, time, action, origterm)) in orig_mvts.iter().zip(mvts.iter()) {
+                    for (idx, (mvt, &(ref tiploc, time, action, origterm))) in orig_mvts.iter().zip(mvts.iter()).enumerate() {
                         if mvt.tiploc == tiploc as &str && mvt.time == time && mvt.action == action && mvt.origterm == origterm {
                             trace!("apply_schedule_record: mvt #{} matches", mvt.id);
+                            if mvt.idx.is_none() {
+                                warn!("apply_schedule_record: setting idx of mvt #{} to {}", mvt.id, idx);
+                                let idx: Option<i32> = Some(idx as _);
+                                conn.execute("UPDATE schedule_movements SET idx = $1 WHERE id = $2", &[&idx, &mvt.id])?;
+                            }
                         }
                         else {
                             warn!("apply_schedule_record: invalidating prior schedule movements due to mvt #{} mismatch", mvt.id);
@@ -308,12 +312,13 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
                     conn.execute("DELETE FROM schedule_movements WHERE parent_sched = $1", &[&sid])?;
                 }
             }
-            for (tiploc, time, action, origterm) in mvts {
+            for (idx, (tiploc, time, action, origterm)) in mvts.into_iter().enumerate() {
                 let mvt = ScheduleMvt {
                     parent_sched: sid,
                     id: -1,
                     starts_path: None,
                     ends_path: None,
+                    idx: Some(idx as _),
                     tiploc, time, action, origterm
                 };
                 mvt.insert_self(conn)?;
