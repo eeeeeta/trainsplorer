@@ -116,6 +116,7 @@ pub fn geo_process_schedule<T: GenericConnection>(conn: &T, sched: Schedule) -> 
                     .into_iter().nth(0).unwrap();
                 debug!("sched[{}]: found starting mvt {} (#{}) at '{}'", sched.id, idx, station.id, station.name);
                 new_start = Some((idx, station.id));
+                break; // forgetting this causes you some fun times
             }
         }
         if let Some((start_idx, start_stn)) = new_start {
@@ -136,6 +137,13 @@ pub fn geo_process_schedule<T: GenericConnection>(conn: &T, sched: Schedule) -> 
                 if end_mvt.action == ScheduleMvt::ACTION_ARRIVAL || end_mvt.action == ScheduleMvt::ACTION_PASS {
                     let end_stn = RailwayLocation::from_select(conn, "WHERE $1 = ANY(tiploc)", &[&end_mvt.tiploc])?
                         .into_iter().nth(0).unwrap();
+                    if end_stn.id == start_stn {
+                        // this can sometimes happen when our stations encompass multiple tiplocs.
+                        // the navigator will throw an assertion failure if you try and navigate
+                        // nowhere.
+                        warn!("sched[{}]: stations for movements {} (#{}) and {} (#{}) are the same!", sched.id, start_idx, start_mvt.id, end_idx, end_mvt.id);
+                        continue;
+                    }
                     let trans = conn.transaction()?;
                     debug!("sched[{}]: navigating from {} (mvt #{}) to {} (mvt #{})", sched.id, start_stn, start_mvt.id, end_stn.id, end_mvt.id);
                     match navigate::navigate_cached(&trans, start_stn, end_stn.id) {
