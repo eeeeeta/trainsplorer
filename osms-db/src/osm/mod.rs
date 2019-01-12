@@ -100,7 +100,7 @@ pub fn geo_process_schedule<T: GenericConnection>(conn: &T, sched: Schedule) -> 
                                                    SELECT * FROM railway_locations
                                                    WHERE schedule_movements.tiploc = ANY(railway_locations.tiploc))
                                                ORDER BY (idx, time, action) ASC", &[&sched.id])?;
-    debug!("geo_process_schedule: processing schedule {} ({} mvts)", sched.id, mvts.len());
+    debug!("sched[{}]: processing schedule ({} mvts)", sched.id, mvts.len());
     // step 2: loop through the movements, routing between adjacent stations, sort of
     let mut start_ptr; // current mvt we're trying to route _from_
     let mut end_ptr = 0; // current mvt we're trying to route _to_
@@ -114,6 +114,7 @@ pub fn geo_process_schedule<T: GenericConnection>(conn: &T, sched: Schedule) -> 
             if mvt.action == ScheduleMvt::ACTION_DEPARTURE || mvt.action == ScheduleMvt::ACTION_PASS {
                 let station = RailwayLocation::from_select(conn, "WHERE $1 = ANY(tiploc)", &[&mvt.tiploc])?
                     .into_iter().nth(0).unwrap();
+                debug!("sched[{}]: found starting mvt {} (#{}) at '{}'", sched.id, idx, station.id, station.name);
                 new_start = Some((idx, station.id));
             }
         }
@@ -123,7 +124,7 @@ pub fn geo_process_schedule<T: GenericConnection>(conn: &T, sched: Schedule) -> 
             if end_ptr >= mvts.len() {
                 // this shouldn't happen, since we should fail to find a start first.
                 // indicates either a programming error or a wacky schedule.
-                warn!("geo_process_schedule: end pointer overran for sched #{}", sched.id);
+                warn!("sched[{}]: end pointer overran", sched.id);
                 break;
             }
             // step two, search through mvts, starting @ end_ptr, for a valid arrival or pass
@@ -136,15 +137,15 @@ pub fn geo_process_schedule<T: GenericConnection>(conn: &T, sched: Schedule) -> 
                     let end_stn = RailwayLocation::from_select(conn, "WHERE $1 = ANY(tiploc)", &[&end_mvt.tiploc])?
                         .into_iter().nth(0).unwrap();
                     let trans = conn.transaction()?;
-                    debug!("geo_process_schedule: navigating from {} (mvt #{}) to {} (mvt #{})", start_stn, start_mvt.id, end_stn.id, end_mvt.id);
+                    debug!("sched[{}]: navigating from {} (mvt #{}) to {} (mvt #{})", sched.id, start_stn, start_mvt.id, end_stn.id, end_mvt.id);
                     match navigate::navigate_cached(&trans, start_stn, end_stn.id) {
                         Ok(pid) => {
-                            debug!("geo_process_schedule: navigation successful, got sp {} for {} and {}", pid, start_mvt.id, end_mvt.id);
+                            debug!("sched[{}]: navigation successful, got sp {} for {} and {}", sched.id, pid, start_mvt.id, end_mvt.id);
                             trans.execute("UPDATE schedule_movements SET starts_path = $1 WHERE id = $2", &[&pid, &start_mvt.id])?;
                             trans.execute("UPDATE schedule_movements SET ends_path = $1 WHERE id = $2", &[&pid, &end_mvt.id])?;
                         },
                         Err(e) => {
-                            warn!("geo_process_schedule: error navigating from #{} to #{}: {}", start_stn, end_stn.id, e);
+                            warn!("sched[{}]: error navigating from #{} to #{}: {}", sched.id, start_stn, end_stn.id, e);
                             if end_mvt.action == ScheduleMvt::ACTION_ARRIVAL {
                                 // prevent skipping over too many arrivals; there might be
                                 // something wrong with our start station!
@@ -152,7 +153,7 @@ pub fn geo_process_schedule<T: GenericConnection>(conn: &T, sched: Schedule) -> 
                                 // something which we won't have locations for)
                                 arrs_skipped += 1;
                                 if arrs_skipped > SCHEDULE_MAX_ARRIVAL_SKIPS {
-                                    warn!("geo_process_schedule: abandoning navigation from mvt #{}; too many arrivals skipped", start_mvt.id);
+                                    warn!("sched[{}]: abandoning navigation from mvt #{}; too many arrivals skipped", sched.id, start_mvt.id);
                                     break;
                                 }
                             }
