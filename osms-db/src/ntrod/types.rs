@@ -158,6 +158,14 @@ pub struct ScheduleMvt {
     pub starts_path: Option<i32>,
     pub ends_path: Option<i32>
 }
+impl ScheduleMvt {
+    /// `action` value for an arrival.
+    pub const ACTION_ARRIVAL: i32 = 0;
+    /// `action` value for a departure.
+    pub const ACTION_DEPARTURE: i32 = 1;
+    /// `action` value for a pass.
+    pub const ACTION_PASS: i32 = 2;
+}
 impl PartialEq for ScheduleMvt {
     fn eq(&self, other: &ScheduleMvt) -> bool {
         self.tiploc == other.tiploc
