@@ -2,7 +2,7 @@ osm-signal
 ==========
 
 [![Build Status](https://travis-ci.org/eeeeeta/osm-signal.svg?branch=master)](https://travis-ci.org/eeeeeta/osm-signal)
-[![IRC chat @ #osm-signal on freenode](https://img.shields.io/badge/irc-%23osm--signal%20on%20freenode-blue.svg)](https://matrix.to/#/#freenode_#osm-signal:matrix.org)
+[![IRC chat @ #osm-signal on freenode](https://img.shields.io/badge/irc-%23osm--signal%20on%20freenode-blue.svg)](https://kiwiirc.com/client/chat.freenode.net/#osm-signal)
 ![GNU AGPLv3 licensed](https://www.gnu.org/graphics/agplv3-155x51.png)
 [![Dependabot Status](https://api.dependabot.com/badges/status?host=github&identifier=101070217)](https://dependabot.com)
 
@@ -15,8 +15,8 @@ a live map of train locations (approximately, that is), predictions on level cro
 to find out which trains are going to pass any location on the railway at any given time. It's all written in
 [Rust](https://www.rust-lang.org/en-US/) as well, because Rust is cool.
 
-However, it's very much not done yet! Watch this space for further stuff! Also, feel free to join the [chatroom](https://matrix.to/#/#freenode_#osm-signal:matrix.org)
-(#osm-signal on chat.freenode.net), if empty chatrooms with the guy who wrote this thing and a whole bunch of robots are your thing.
+However, it's very much not done yet! Watch this space for further stuff! Also, feel free to join the [chatroom](https://kiwiirc.com/client/chat.freenode.net/#osm-signal)
+(#osm-signal on chat.freenode.net), if you'd like to discuss the project (or anything about trains in general, really)
 
 ## What are all these moving parts?
 
