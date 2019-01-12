@@ -76,7 +76,7 @@ macro_rules! migration {
         }
     }
 }
-pub static MIGRATIONS: [Migration; 12] = [
+pub static MIGRATIONS: [Migration; 13] = [
     migration!(0, "initial"),
     migration!(1, "darwin"),
     migration!(2, "tne"),
@@ -88,7 +88,8 @@ pub static MIGRATIONS: [Migration; 12] = [
     migration!(8, "delete_stale_mvts"),
     migration!(9, "delete_useless_mvt_indexes"),
     migration!(10, "advanced_stations"),
-    migration!(11, "schedule_mvt_order")
+    migration!(11, "schedule_mvt_order"),
+    migration!(12, "rloc_index")
 ];
 pub fn get_last_migration<T: GenericConnection>(conn: &T) -> Result<Option<i32>> {
     Ok(MigrationEntry::from_select(conn, "ORDER BY id DESC LIMIT 1", &[])?
