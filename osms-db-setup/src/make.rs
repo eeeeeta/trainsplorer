@@ -283,6 +283,7 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
                 train_uid, schedule_start_date, stp_indicator);
                 let orig_mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 ORDER BY (idx, time, action) ASC", &[&sid])?;
                 let mut valid = true;
+                let mut idxs_changed = false;
                 if orig_mvts.len() != mvts.len() {
                     warn!("apply_schedule_record: invalidating prior schedule movements due to length difference");
                     valid = false;
@@ -292,7 +293,8 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
                         if mvt.tiploc == tiploc as &str && mvt.time == time && mvt.action == action && mvt.origterm == origterm {
                             trace!("apply_schedule_record: mvt #{} matches", mvt.id);
                             if mvt.idx.is_none() {
-                                warn!("apply_schedule_record: setting idx of mvt #{} to {}", mvt.id, idx);
+                                trace!("apply_schedule_record: setting idx of mvt #{} to {}", mvt.id, idx);
+                                idxs_changed = true;
                                 let idx: Option<i32> = Some(idx as _);
                                 conn.execute("UPDATE schedule_movements SET idx = $1 WHERE id = $2", &[&idx, &mvt.id])?;
                             }
@@ -303,6 +305,9 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
                             break;
                         }
                     }
+                }
+                if idxs_changed {
+                    warn!("apply_schedule_record: updated idx fields of some mvts in schedule");
                 }
                 if valid {
                     debug!("apply_schedule_record: left movements untouched");
