@@ -134,16 +134,24 @@ pub fn movements(sctx: Sctx, station: String, date: String, time: String) -> Res
     let mvt_query_result = try_or_ise!(sctx, ntrod::mvt_query(&*db, &mvts, Some(date))); 
     let mut descs = vec![];
     for mvt in mvt_query_result.mvts {
+        let delayed = if let Some(te) = mvt.time_expected.as_ref().or(mvt.time_actual.as_ref()) {
+            te.time > mvt.time_scheduled.time
+        }
+        else {
+            false
+        };
         descs.push(MovementDesc {
             parent_sched: mvt.parent_sched,
             parent_train: mvt.parent_train,
             tiploc: mvt.tiploc,
-            action: schedule::action_to_str(mvt.action),
+            action: schedule::action_to_icon(mvt.action),
+            action_past_tense: schedule::action_past_tense(mvt.action),
+            delayed,
             _action: mvt.action,
-            time: mvt.time_scheduled.time.to_string(),
+            time: schedule::format_time_with_half(&mvt.time_scheduled.time),
             _time: mvt.time_scheduled.time,
-            time_expected: mvt.time_expected.map(|x| x.time.to_string()),
-            time_actual: mvt.time_actual.map(|x| x.time.to_string()),
+            time_expected: mvt.time_expected.map(|x| schedule::format_time_with_half(&x.time)),
+            time_actual: mvt.time_actual.map(|x| schedule::format_time_with_half(&x.time)),
             canx: mvt.canx,
             orig_dest: try_or_ise!(sctx, schedules::ScheduleOrigDest::get_for_schedule(&*db, mvt.parent_sched))
         });

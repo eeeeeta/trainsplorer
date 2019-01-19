@@ -16,6 +16,8 @@ pub struct MovementDesc {
     pub time: String,
     pub time_expected: Option<String>,
     pub time_actual: Option<String>,
+    pub action_past_tense: &'static str,
+    pub delayed: bool,
     pub canx: bool,
     #[serde(skip_serializing)]
     pub _action: i32,

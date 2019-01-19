@@ -22,30 +22,55 @@ strong, b {
     width: 50%;
   }
 }
-.osms-body {
-  max-width: calc(1000px - (30px * 2));
-  margin-right: auto;
-  margin-left: auto;
-  padding-right: 30px;
-  padding-left: 30px;
+/* movements */
+.mvt-action-time span {
+  @extend .govuk-body-l;
+  margin-bottom: 0px;
+  padding-left: 3px;
+  padding-right: 6px;
 }
-.osms-header {
-  text-align: center;
-  padding-top: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #999;
-  position: relative;
+span.mvt-action i.fas.fa-arrow-alt-circle-right {
+  color: govuk-colour("brown");
 }
-.osms-title {
-  font-size: 20px;
-  padding-bottom: 5px;
-  display: block;
+span.mvt-action i.fas.fa-arrow-alt-circle-left {
+  color: govuk-colour("orange");
 }
-.nav-link {
-  text-decoration: none;
-  padding-left: 5px;
-  padding-right: 5px;
+span.mvt-action i.fas.fa-arrow-alt-circle-up {
+  color: govuk-colour("bright-purple");
 }
+span.mvt-to {
+  color: $govuk-secondary-text-colour;
+}
+span.mvt-time {
+  font-weight: 700;
+}
+span.mvt-no-live-info {
+  color: $govuk-secondary-text-colour;
+}
+span.mvt-time-cancelled {
+  color: govuk-colour("red");
+  font-weight: 700;
+}
+span.mvt-time-delayed {
+  color: govuk-colour("bright-red");
+}
+span.mvt-time-regular {
+  color: govuk-colour("green");
+}
+.mvt-extra-info span {
+  @extend .govuk-body;
+  margin-bottom: 0px;
+  padding-left: 3px;
+  padding-right: 6px;
+}
+.mvts-list-mvt {
+  margin-bottom: govuk-spacing(1);
+  margin-top: govuk-spacing(1);
+  border-top: 1px solid $govuk-border-colour;
+}
+/* end movements */
+
+
 #mappy-map {
   height: 500px;
 }
