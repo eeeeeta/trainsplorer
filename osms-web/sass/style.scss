@@ -8,6 +8,12 @@ $govuk-font-family: "Source Sans Pro";
 body {
   font-family: $govuk-font-family;
 }
+.index-list-planned {
+  color: $govuk-secondary-text-colour;
+}
+.index-list-planned::after {
+  content: " (planned)";
+}
 strong, b {
   font-weight: 700;
 }
