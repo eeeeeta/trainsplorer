@@ -19,3 +19,4 @@ node_modules/
 osms-web/static/sass/*
 osms-web/static/js/*
 osms-web/static/ext/*
+osms-web/static/assets/*

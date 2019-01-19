@@ -1,17 +1,26 @@
 {{> header}}
-<div class="error-summary" role="alert" aria-labelledby="error-summary-heading-example-1" tabindex="-1">
-
-	<h2 class="heading-medium error-summary-heading" id="error-summary-heading-example-1">
-		URL not found (404)
+<div class="govuk-error-summary" aria-labelledby="error-summary-title" role="alert" tabindex="-1" data-module="error-summary">
+	<h2 class="govuk-error-summary__title" id="error-summary-title">
+		Not found (404)
 	</h2>
-
-	<p>
-	The requested URL, <code>{{body.uri}}</code>, couldn't be found.
-	If you typed in the URL manually, check that you typed it correctly.
-	If something else on this site linked you here...whoops, sorry about that.
-	We'll try to fix it.
-	<br>
-	<a href="javascript:history.back()">Go back</a> &middot; <a href="/">Go home</a>
-	</p>
+	<div class="govuk-error-summary__body">
+		<p>
+		The requested URL, <code>{{body.uri}}</code>, couldn't be found.
+		If you typed in the URL manually, check that you typed it correctly.
+		If something else on this site linked you here...whoops, sorry about that.
+		We'll try to fix it.
+		</p>
+		<ul class="govuk-list govuk-error-summary__list">
+			<li>
+				<a href="https://github.com/eeeeeta/osm-signal/issues">Report this issue to us!</a>
+			</li>
+			<li>
+				<a href="javascript:history.back()">Back one step</a>
+			</li>
+			<li>
+				<a href="/">Go to the homepage</a>
+			</li>
+		</ul>
+	</div>
 </div>
 {{> footer}}

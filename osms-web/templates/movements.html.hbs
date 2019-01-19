@@ -1,61 +1,65 @@
 {{> header}}
-<details>
-	<summary><span class="summary">Search again</span></summary>
+<details class="govuk-details">
+	<summary class="govuk-details__summary">
+		<span class="govuk-details__summary-text">Search again</span>
+	</summary>
 
-	<div class="panel panel-border-narrow">
+	<div class="govuk-details__text">
 		{{> movement_search}}
 	</div>
 </details>
-<table>
-	<thead>
-		<tr>
-			<th><abbr title="Parent schedule">Sch</abbr></th>
-			<th><abbr title="Parent train">Trn</abbr></th>
-			<th><abbr title="Cancelled?">C</abbr></th>
-			<th>Scheduled</th>
-			<th>Expected</th>
-			<th>Actual</th>
-			<th>Action</th>
-			<th>Service</th>
+<table class="govuk-table">
+	<thead class="govuk-table__head">
+		<tr class="govuk-table__row">
+			<th class="govuk-table__header"><abbr title="Parent schedule">Sch</abbr></th>
+			<th class="govuk-table__header"><abbr title="Parent train">Trn</abbr></th>
+			<th class="govuk-table__header"><abbr title="Cancelled?">C</abbr></th>
+			<th class="govuk-table__header">Scheduled</th>
+			<th class="govuk-table__header">Expected</th>
+			<th class="govuk-table__header">Actual</th>
+			<th class="govuk-table__header">Action</th>
+			<th class="govuk-table__header">Service</th>
 		</tr>
 	</thead>
+	<tbody class="govuk-table__body">
 		{{#each body.mvts}}
-		<tr {{#if this.canx}}class="movements-row-cancelled"{{/if}}>
-			<td>
+		<tr class="govuk-table__row" {{#if this.canx}}class="movements-row-cancelled"{{/if}}>
+			<td class="govuk-table__cell">
 				{{#if this.parent_sched}}
 					<a href="/schedule/{{this.parent_sched}}">→</a>
 				{{/if}}
 			</td>
-			<td>
+			<td class="govuk-table__cell">
 				{{#if this.parent_train}}
 					<a href="/train/{{this.parent_train}}">→</a>
 				{{/if}}
 			</td>
-			<td>
+			<td class="govuk-table__cell">
 				{{#if this.canx}}
 				<abbr title="This train was cancelled">❌</abbr>
 				{{/if}}
 			</td>
-			<td class="movements-cell-time">
+			<td class="govuk-table__cell movements-cell-time">
 				{{this.time}}
 			</td>
-			<td class="movements-cell-time">
+			<td class="govuk-table__cell movements-cell-time">
 				{{#if this.time_expected}}
 				{{this.time_expected}}
 				{{/if}}
 			</td>
-			<td class="movements-cell-time">
+			<td class="govuk-table__cell movements-cell-time">
 				{{#if this.time_actual}}
 				{{this.time_actual}}
 				{{/if}}
 			</td>
-			<td>
+			<td class="govuk-table__cell">
 				{{this.action}}
 			</td>
-			<td>
+			<td class="govuk-table__cell">
 				{{> orig_dest}}
 			</td>
 		</tr>
 		{{/each}}
+	</tbody>
 </table>
 {{> footer}}

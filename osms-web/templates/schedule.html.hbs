@@ -1,15 +1,15 @@
 {{> header }}
-<table>
-	<thead>
-		<tr>
-			<th scope="col">Location</th>
-			<th scope="col">Time</th>
-			<th scope="col">Path</th>
+<table class="govuk-table">
+	<th class="govuk-table__header"ead class="govuk-table__head">
+		<tr class="govuk-table__row">
+			<th class="govuk-table__header" scope="col">Location</th>
+			<th class="govuk-table__header" scope="col">Time</th>
+			<th class="govuk-table__header" scope="col">Path</th>
 		</tr>
 	</thead>
 	{{#each body.movements}}
-		<tr>
-			<td>
+		<tr class="govuk-table__row">
+			<td class="govuk-table__cell">
 				<p class="schedule-location">
 				<a href="/stations/{{this.tiploc}}">{{this.location}}</a>&nbsp;<span class="schedule-location-tiploc">({{this.tiploc}})</span>
 				</p>
@@ -17,8 +17,8 @@
 				({{this.action}})
 				</p>
 			</td>
-			<td>{{this.time_scheduled}}</td>
-			<td>
+			<td class="govuk-table__cell">{{this.time_scheduled}}</td>
+			<td class="govuk-table__cell">
 				{{#if this.ends_path}}
 					→<a href="/paths/{{this.ends_path}}">{{this.ends_path}}</a>
 					{{#if this.starts_path}}

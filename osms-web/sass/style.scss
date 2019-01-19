@@ -1,14 +1,12 @@
 @import url('https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700');
 
-$toolkit-font-stack: "Source Sans Pro";
-$toolkit-font-stack-tabular: $toolkit-font-stack;
-$nta-light: $toolkit-font-stack;
+$govuk-font-family: "Source Sans Pro";
 
-@import "govuk-elements";
+@import "../node_modules/govuk-frontend/all.scss";
 @import "../node_modules/accessible-autocomplete/dist/accessible-autocomplete.min.css";
 
 body {
-  font-family: $toolkit-font-stack;
+  font-family: $govuk-font-family;
 }
 strong, b {
   font-weight: 700;

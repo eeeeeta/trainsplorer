@@ -9,6 +9,9 @@ gulp.task('leaflet-images', () => {
     .pipe(flatten())
     .pipe(gulp.dest('./static/sass/images'));
 });
+gulp.task('govuk-assets', () => {
+  return gulp.src(['./node_modules/govuk-frontend/assets/**/*']).pipe(gulp.dest('./static/assets'));
+});
 gulp.task('sass', () => {
   return gulp.src('./sass/**/*.scss')
     .pipe(cssimport({
@@ -16,10 +19,8 @@ gulp.task('sass', () => {
     }))
     .pipe(sass({
       includePaths: [
-//        'node_modules/govuk_template_mustache/assets/stylesheets', // 1
-        'node_modules/accessible-autocomplete/dist', // 1
-        'node_modules/govuk_frontend_toolkit/stylesheets', // 1
-        'node_modules/govuk-elements-sass/public/sass'     // 2
+        'node_modules/accessible-autocomplete/dist',
+        'node_modules/govuk-frontend/',
       ]
     }).on('error', sass.logError))
     .pipe(gulp.dest('./static/sass/'));
@@ -29,4 +30,4 @@ gulp.task('js', () => {
     .pipe(jsImport({hideConsole: true}))
     .pipe(gulp.dest('./static/js/'));
 });
-gulp.task('default', gulp.parallel('sass', 'js', 'leaflet-images'));
+gulp.task('default', gulp.parallel('sass', 'js', 'leaflet-images', 'govuk-assets'));
