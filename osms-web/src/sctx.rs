@@ -13,6 +13,7 @@ use templates::not_found::NotFoundView;
 use templates::user_error::UserErrorView;
 use templates::index::IndexView;
 use templates::movement_search::MovementSearchView;
+use std::time::Instant;
 
 pub type Sctx = Arc<ServerContext>;
 
@@ -131,6 +132,7 @@ impl ServerContext {
         render!(selfish, tctx).with_status_code(404)
     }
     pub fn handle(selfish: Arc<Self>, req: &Request) -> Response {
+        let start = Instant::now();
         let ret = router!(req,
             (GET) (/) => {
                 ServerContext::index(selfish.clone())
@@ -175,7 +177,8 @@ impl ServerContext {
                 }
             }
         );
-        info!("{} {} \"{}\" - {}", req.remote_addr(), req.method(), req.raw_url(), ret.status_code);
+        let dur = start.elapsed();
+        info!("{} {} \"{}\" - {} [{}.{:03}s]", req.remote_addr(), req.method(), req.raw_url(), ret.status_code, dur.as_secs(), dur.subsec_millis());
         ret
     }
 }

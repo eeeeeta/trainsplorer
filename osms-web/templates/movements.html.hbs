@@ -13,7 +13,7 @@
 	{{#each body.mvts}}
 	<div class="mvts-list-mvt govuk-grid-row">
 		<div class="govuk-grid-column-one-half mvt-action-time">
-			<span class="mvt-action"><i class="fas fa-{{this.action}}"></i></span>
+			<span class="mvt-action"><i class="far fa-{{this.action}}"></i></span>
 			<span class="mvt-time">{{this.time}}</span>
 			<span class="mvt-to">to</span>
 			<span class="mvt-dest">{{this.orig_dest.dest}}</span>
@@ -46,7 +46,7 @@
 				{{#if this.parent_train}}
 				<a class="govuk-link" href="/train/{{this.parent_train}}">See all stops</a>
 				{{else}}
-				<a class="govuk-link" href="/train/{{this.parent_sched}}">See schedule</a>
+				<a class="govuk-link" href="/schedule/{{this.parent_sched}}">See schedule</a>
 				{{/if}}
 			</span>
 		</div>
