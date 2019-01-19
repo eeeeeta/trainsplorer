@@ -6,21 +6,17 @@
 <div id="notifs">
 </div>
 <div id="problem-stations">
-	<h2>Problematic stations ({{body.n_stations}})</h2>
-	<table>
-		<thead>
-			<tr>
-				<th>Station name</th>
-				<th>STANOX</th>
-				<th>Jump to</th>
-			</tr>
-		</thead>
+	<h2 class="govuk-heading-l">Problematic stations ({{body.n_stations}})</h2>
+	<ul class="govuk-list">
 	{{#each body.problem_stations}}
-		<tr>
-			<td>{{this.name}}</td>
-			<td>{{#if this.stanox}}{{this.stanox}}{{/if}}</td>
-			<td><button onclick="map.panTo({{this.latlon}})">→</button></td>
-		</tr>
+		<li>
+			<b>{{this.name}}</b>
+			{{#if this.stanox}}
+				(STANOX {{this.stanox}})
+			{{/if}}
+			(<a class="govuk-link" href="#" onclick="map.panTo({{this.latlon}})">jump to location</a>)
+		</li>
 	{{/each}}
+	</ul>
 </div>
 {{> footer }}

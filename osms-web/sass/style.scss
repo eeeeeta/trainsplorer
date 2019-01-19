@@ -72,11 +72,13 @@ span.mvt-time-regular {
   //border-top: 1px solid $govuk-border-colour;
 }
 /* end movements */
-
-
+/* map */
 #mappy-map {
   height: 500px;
+  margin-bottom: 20px;
 }
+/* end map */
+/* unconverted old code */
 .pagination-link {
   display: block;
   width: 100%;
@@ -87,13 +89,6 @@ span.mvt-time-regular {
   padding: 5px;
   margin: 5px;
   border-radius: 3px;
-}
-h1, h2, h3, h4, h5, h6 {
-  font-weight: normal;
-}
-.void {
-  font-style: italic;
-  color: gray;
 }
 .schedule-location {
   font-size: 20px;
