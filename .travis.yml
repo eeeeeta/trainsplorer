@@ -5,13 +5,7 @@ branches:
     - develop
     - master
 language: rust
-notifications:
-  irc:
-    channels:
-      - "chat.freenode.net#osm-signal"
-    on_success: change
-    on_failure: always
-    use_notice: true
+  webhooks: https://ingest.devmode.cloud/hooks/travisci?channel=%23osm-signal
 services:
   - postgresql
 addons:
