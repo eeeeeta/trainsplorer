@@ -54,24 +54,48 @@ pub fn train(sctx: Sctx, id: i32) -> Response {
     let mut descs = vec![];
     mvt_query_result.mvts.sort_by_key(|m| (m.idx, m.time_scheduled.time, m.action));
     for mvt in mvt_query_result.mvts {
+        let delayed = if let Some(te) = mvt.time_expected.as_ref().or(mvt.time_actual.as_ref()) {
+            te.time > mvt.time_scheduled.time
+        }
+        else {
+            false
+        };
         descs.push(TrainMvtDesc {
-            action: action_to_str(mvt.action),
+            action: action_to_icon(mvt.action),
+            action_past_tense: action_past_tense(mvt.action),
+            delayed,
             location: try_or_ise!(sctx, schedules::tiploc_to_readable(&*db, &mvt.tiploc)),
             tiploc: mvt.tiploc,
-            time_scheduled: mvt.time_scheduled.time.to_string(),
-            time_expected: mvt.time_expected.map(|x| x.time.to_string()),
-            time_actual: mvt.time_actual.map(|x| x.time.to_string()),
+            time_scheduled: format_time_with_half(&mvt.time_scheduled.time),
+            time_expected: mvt.time_expected.map(|x| format_time_with_half(&x.time)),
+            time_actual: mvt.time_actual.map(|x| format_time_with_half(&x.time)),
             starts_path: mvt.starts_path,
             ends_path: mvt.ends_path,
         });
     }
-    
+    let orig_dest = try_or_ise!(sctx, schedules::ScheduleOrigDest::get_for_schedule(&*db, train.parent_sched));
+    let orig_dest = try_or_ise!(sctx, orig_dest.ok_or(format_err!("Train schedule origdest is empty")));
+    let darwin_only = train.parent_nre_sched.is_some() && train.trust_id.is_none();
+    let scheds = try_or_ise!(sctx, Schedule::from_select(&*db, "WHERE id = $1", &[&train.parent_sched]));
+    let parent_sched = try_or_ise!(sctx, scheds.into_iter().nth(0).ok_or(format_err!("Couldn't find train parent schedule")));
+    let title = format!("{} service from {} to {}", orig_dest.time, orig_dest.orig, orig_dest.dest);
     let sd = TrainView {
         movements: descs,
+        trust_id: train.trust_id,
+        parent_sched: train.parent_sched,
+        date: train.date.to_string(),
+        parent_nre_sched: train.parent_nre_sched,
+        terminated: train.terminated,
+        cancelled: train.cancelled,
+        signalling_id: train.signalling_id,
+        nre_id: train.nre_id,
+        sched_uid: parent_sched.uid,
+        orig_dest,
+        darwin_only
     };
     render!(sctx, TemplateContext {
         template: "train",
-        title: format!("Train #{}", train.id).into(),
+        title: title.into(),
         body: sd
     })
 }

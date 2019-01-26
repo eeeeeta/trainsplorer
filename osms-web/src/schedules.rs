@@ -48,11 +48,11 @@ impl ScheduleOptions {
 }
 #[derive(Serialize, Debug)]
 pub struct ScheduleOrigDest {
-    time: String,
-    orig: String,
-    orig_tiploc: String,
-    dest: String,
-    dest_tiploc: String
+    pub time: String,
+    pub orig: String,
+    pub orig_tiploc: String,
+    pub dest: String,
+    pub dest_tiploc: String
 }
 impl ScheduleOrigDest {
     pub fn get_for_schedule<T: GenericConnection>(conn: &T, sid: i32) -> Result<Option<Self>> {
