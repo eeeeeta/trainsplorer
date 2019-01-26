@@ -97,6 +97,9 @@
 				{{this.action_past_tense}} {{this.time_actual}}
 			</span>
 			{{else}}
+			{{#if ../body.cancelled}}
+			<span class="mvt-time-cancelled">Cancelled</span>
+			{{else}}
 			{{#if this.time_expected}}
 			{{#if this.delayed}}
 			<span class="mvt-time-expected mvt-time-delayed">
@@ -109,6 +112,7 @@
 			{{/if}}
 			{{else}}
 			<span class="mvt-no-live-info">No live data available</span>
+			{{/if}}
 			{{/if}}
 			{{/if}}
 		</div>
