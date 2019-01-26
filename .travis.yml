@@ -24,9 +24,6 @@ matrix:
         - cargo test --verbose --all
         - source osms-db-setup/setup-travis.sh && cargo run -p osms-db-setup -- setup init
     - rust: stable
-      cache:
-        cargo: true
-        timeout: 1000
       script:
         - cargo build --verbose --all
         - cargo test --verbose --all
