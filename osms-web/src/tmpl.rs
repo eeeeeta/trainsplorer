@@ -50,7 +50,7 @@ macro_rules! partial {
 // - 4. Put your HTML in the HBS file and all your views in the Rust one.
 // - 5. ???
 // - 6. Profit!
-static PARTIALS: [Partial; 15] = [
+static PARTIALS: [Partial; 16] = [
     partial!("connections"),
     partial!("footer"),
     partial!("header"),
@@ -66,6 +66,7 @@ static PARTIALS: [Partial; 15] = [
     partial!("schedules"),
     partial!("user_error"),
     partial!("train"),
+    partial!("symbols_guide")
 ];
 pub fn handlebars_init() -> Result<Handlebars> {
     let mut hbs = Handlebars::new();
