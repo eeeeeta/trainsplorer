@@ -28,10 +28,9 @@ This repository contains many individual Rust crates. Here's a short overview of
 - `osms-db`: the main database library for the project; handles storing data into and retrieving data from a PostgreSQL database, as
   well as performing some other handy utility functions, such as navigating between two points on the railway
 - `osms-db-setup`: builds on `osms-db`, and contains a utility for loading data into the database in the first place
-- `osms-nrod`: connects to the Network Rail STOMP messaging service, and processes real-time train data, storing it in the database
+- `osms-nrod`: connects to the Network Rail STOMP messaging service and the National Rail Enquiries Darwin feed, and processes real-time train data, storing it in the database
   using `osms-db`
-- `osms-darwin`: connects to the National Rail Enquiries Darwin feed, and processes real-time train data (or, at least, it will do that,
-  when it's done)
+- `osms-darwin`: used for testing the Darwin feed
 - `osms-web`: a fancy webserver with lots of buttons to press that enables people to admire the wonderful collections of data in the
   database
 - `doc`: that's not a crate, that's a directory containing mostly incoherent design notes and the like
