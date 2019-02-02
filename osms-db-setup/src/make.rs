@@ -409,7 +409,7 @@ pub fn geo_process_schedules(pool: &DbPool, n_threads: usize) -> Result<()> {
     use std::sync::Arc;
     use osms_db::osm;
 
-    let n_schedules = util::count(&*pool.get().unwrap(), "FROM schedules WHERE geo_generation = 0", &[])?;
+    let n_schedules = util::count(&*pool.get().unwrap(), "FROM schedules WHERE geo_generation = 0 AND source != $1", &[&Schedule::SOURCE_DARWIN])?;
     let mut threads: Vec<::std::thread::JoinHandle<()>> = vec![];
     let processed = Arc::new(AtomicUsize::new(0));
     debug!("geo_process_schedules: {} schedules to process", n_schedules);
@@ -422,7 +422,7 @@ pub fn geo_process_schedules(pool: &DbPool, n_threads: usize) -> Result<()> {
             loop {
                 let conn2 = pool.get().unwrap();
                 let trans = conn.transaction().unwrap();
-                let scheds = Schedule::from_select(&trans, "WHERE geo_generation = 0 FOR UPDATE SKIP LOCKED LIMIT 1", &[]).unwrap();
+                let scheds = Schedule::from_select(&trans, "WHERE geo_generation = 0 AND source != $1 FOR UPDATE SKIP LOCKED LIMIT 1", &[&Schedule::SOURCE_DARWIN]).unwrap();
                 let sched = match scheds.into_iter().nth(0) {
                     Some(s) => s,
                     None => break

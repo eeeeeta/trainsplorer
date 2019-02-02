@@ -425,7 +425,7 @@ fn run() -> Result<(), Error> {
                     let mid = opts.value_of("migration").unwrap();
                     let mid = mid.parse::<i32>()?;
                     match a {
-                        x @ "apply" => {
+                        "apply" => {
                             if let Ok(elem) = migration::MIGRATIONS.binary_search_by_key(&mid, |m| m.id) {
                                 let elem = &migration::MIGRATIONS[elem];
                                 elem.up(&*conn)?;
