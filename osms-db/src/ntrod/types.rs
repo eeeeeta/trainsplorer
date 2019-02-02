@@ -203,7 +203,7 @@ impl InsertableDbType for ScheduleMvt {
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
         let qry = conn.query("INSERT INTO schedule_movements
                               (parent_sched, tiploc, action, time, idx, platform, public_time)
-                              VALUES ($1, $2, $3, $4, $5, $6)
+                              VALUES ($1, $2, $3, $4, $5, $6, $7)
                               RETURNING id",
                              &[&self.parent_sched, &self.tiploc,
                                &self.action, &self.time, &self.idx, &self.platform, &self.public_time])?;
