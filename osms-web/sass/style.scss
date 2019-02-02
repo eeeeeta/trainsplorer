@@ -57,6 +57,18 @@ span.mvt-time-delayed {
 span.mvt-time-regular {
   color: govuk-colour("green");
 }
+span.mvt-platform-changed {
+  color: govuk-colour("red");
+  text-decoration: underline govuk-colour("red");
+}
+.mvt-extra-info span.mvt-platform-number {
+  font-weight: 700;
+  padding-left: 0px;
+  padding-right: 0px;
+}
+span.mvt-platform-suppr {
+  color: $govuk-secondary-text-colour;
+}
 .mvt-extra-info {
   padding-top: 3px;
 }
@@ -65,6 +77,10 @@ span.mvt-time-regular {
   margin-bottom: 0px;
   padding-left: 3px;
   padding-right: 3px;
+}
+.mvt-extra-info span.mvt-platform-middot {
+  padding-left: 0px;
+  padding-right: 0px;
 }
 .mvts-list-mvt {
   margin-bottom: govuk-spacing(1);

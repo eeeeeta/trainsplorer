@@ -52,7 +52,13 @@ pub struct DeduplicatedMvt {
     pub canx: bool,
     pub starts_path: Option<i32>,
     pub ends_path: Option<i32>,
-    pub idx: Option<i32>
+    pub idx: Option<i32>,
+    /// The platform in the schedule for this movement (i.e. the one from TRUST).
+    pub pfm_scheduled: Option<String>,
+    /// The current expected or actual platform for this movement.
+    pub pfm_current: Option<String>,
+    /// Whether or not platform information should be suppressed (i.e. not shown to users).
+    pub pfm_suppr: bool
 }
 pub struct MvtQueryResult {
     pub mvts: Vec<DeduplicatedMvt>,
@@ -110,6 +116,8 @@ pub fn mvt_query<T: GenericConnection>(conn: &T, mvts: &[ScheduleMvt], auth_date
         };
         let mut time_expected: Option<TimeWithSource> = None;
         let mut time_actual: Option<TimeWithSource> = None;
+        let mut pfm_current: Option<String> = None;
+        let mut pfm_suppr = false;
         let mut ptid = None;
         let mut canx = false;
 
@@ -152,6 +160,12 @@ pub fn mvt_query<T: GenericConnection>(conn: &T, mvts: &[ScheduleMvt], auth_date
                         time: tmvt.time
                     });
                 }
+                if tmvt.pfm_suppr {
+                    pfm_suppr = true;
+                }
+                if tmvt.platform.is_some() {
+                    pfm_current = tmvt.platform;
+                }
             }
             if parent_train.cancelled {
                 canx = true;
@@ -173,6 +187,9 @@ pub fn mvt_query<T: GenericConnection>(conn: &T, mvts: &[ScheduleMvt], auth_date
             time_expected,
             time_actual,
             canx,
+            pfm_scheduled: mvt.platform.clone(),
+            pfm_current,
+            pfm_suppr,
             starts_path: mvt.starts_path,
             ends_path: mvt.ends_path,
             idx: mvt.idx

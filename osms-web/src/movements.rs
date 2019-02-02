@@ -140,6 +140,12 @@ pub fn movements(sctx: Sctx, station: String, date: String, time: String) -> Res
         else {
             false
         };
+        let pfm_changed = if let Some(ref pfms) = mvt.pfm_scheduled {
+            mvt.pfm_current.as_ref().map(|x| x != pfms).unwrap_or(false)
+        }
+        else {
+            false
+        };
         descs.push(MovementDesc {
             parent_sched: mvt.parent_sched,
             parent_train: mvt.parent_train,
@@ -153,7 +159,10 @@ pub fn movements(sctx: Sctx, station: String, date: String, time: String) -> Res
             time_expected: mvt.time_expected.map(|x| schedule::format_time_with_half(&x.time)),
             time_actual: mvt.time_actual.map(|x| schedule::format_time_with_half(&x.time)),
             canx: mvt.canx,
-            orig_dest: try_or_ise!(sctx, schedules::ScheduleOrigDest::get_for_schedule(&*db, mvt.parent_sched))
+            orig_dest: try_or_ise!(sctx, schedules::ScheduleOrigDest::get_for_schedule(&*db, mvt.parent_sched)),
+            platform: mvt.pfm_current.or(mvt.pfm_scheduled),
+            pfm_changed,
+            pfm_suppr: mvt.pfm_suppr
         });
     }
     descs.sort_by_key(|d| (d._time, d._action));

@@ -60,6 +60,12 @@ pub fn train(sctx: Sctx, id: i32) -> Response {
         else {
             false
         };
+        let pfm_changed = if let Some(ref pfms) = mvt.pfm_scheduled {
+            mvt.pfm_current.as_ref().map(|x| x != pfms).unwrap_or(false)
+        }
+        else {
+            false
+        };
         descs.push(TrainMvtDesc {
             action: action_to_icon(mvt.action),
             action_past_tense: action_past_tense(mvt.action),
@@ -71,6 +77,9 @@ pub fn train(sctx: Sctx, id: i32) -> Response {
             time_actual: mvt.time_actual.map(|x| format_time_with_half(&x.time)),
             starts_path: mvt.starts_path,
             ends_path: mvt.ends_path,
+            platform: mvt.pfm_current.or(mvt.pfm_scheduled),
+            pfm_changed,
+            pfm_suppr: mvt.pfm_suppr
         });
     }
     let orig_dest = try_or_ise!(sctx, schedules::ScheduleOrigDest::get_for_schedule(&*db, train.parent_sched));
