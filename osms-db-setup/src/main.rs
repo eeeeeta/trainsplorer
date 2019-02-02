@@ -155,15 +155,6 @@ fn run() -> Result<(), Error> {
                                      .help("ID of the migration to use.")
                                      .required(true)
                                      .takes_value(true)))
-                    .subcommand(SubCommand::with_name("undo")
-                                .about("Undo a migration.")
-                                .arg(Arg::with_name("migration")
-                                     .short("m")
-                                     .long("migration")
-                                     .value_name("ID")
-                                     .help("ID of the migration to use.")
-                                     .required(true)
-                                     .takes_value(true)))
                     .subcommand(SubCommand::with_name("fudge")
                                 .about("Pretend as if a migration was applied, whilst doing nothing (DANGEROUS!)")
                                 .arg(Arg::with_name("migration")
@@ -434,15 +425,10 @@ fn run() -> Result<(), Error> {
                     let mid = opts.value_of("migration").unwrap();
                     let mid = mid.parse::<i32>()?;
                     match a {
-                        x @ "apply" | x @ "undo" => {
+                        x @ "apply" => {
                             if let Ok(elem) = migration::MIGRATIONS.binary_search_by_key(&mid, |m| m.id) {
                                 let elem = &migration::MIGRATIONS[elem];
-                                if x == "apply" {
-                                    elem.up(&*conn)?;
-                                }
-                                else {
-                                    elem.down(&*conn)?;
-                                }
+                                elem.up(&*conn)?;
                             }
                             else {
                                 error!("no such migration");

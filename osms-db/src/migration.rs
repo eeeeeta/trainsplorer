@@ -30,7 +30,6 @@ pub struct Migration {
     pub id: i32,
     pub name: &'static str,
     pub up: &'static str,
-    pub down: &'static str
 }
 impl Migration {
     pub fn up<T: GenericConnection>(&self, conn: &T) -> Result<()> {
@@ -49,22 +48,6 @@ impl Migration {
         trans.commit()?;
         Ok(())
     }
-    pub fn down<T: GenericConnection>(&self, conn: &T) -> Result<()> {
-        let trans = conn.transaction()?;
-        debug!("executing down stage for migration {}: {}", self.id, self.name);
-        if MigrationEntry::from_select(&trans, "WHERE id > $1", &[&self.id])?.len() > 0 {
-            error!("Attempted to undo migration out of order!");
-            return Err(OsmsError::MigrationOutOfOrder(self.id));
-        }
-        if MigrationEntry::from_select(&trans, "WHERE id = $1", &[&self.id])?.len() == 0 {
-            error!("Attempted to undo migration that hasn't been applied!");
-            return Err(OsmsError::MigrationNotApplied(self.id));
-        }
-        trans.batch_execute(self.down)?;
-        trans.execute("DELETE FROM migration_entries WHERE id = $1", &[&self.id])?;
-        trans.commit()?;
-        Ok(())
-    }
 }
 macro_rules! migration {
     ($id:expr, $name:expr) => {
@@ -72,11 +55,10 @@ macro_rules! migration {
             id: $id,
             name: $name,
             up: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/", $id, "_", $name, "_up.sql")),
-            down: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/", $id, "_", $name, "_down.sql")),
         }
     }
 }
-pub static MIGRATIONS: [Migration; 13] = [
+pub static MIGRATIONS: [Migration; 14] = [
     migration!(0, "initial"),
     migration!(1, "darwin"),
     migration!(2, "tne"),
@@ -89,7 +71,8 @@ pub static MIGRATIONS: [Migration; 13] = [
     migration!(9, "delete_useless_mvt_indexes"),
     migration!(10, "advanced_stations"),
     migration!(11, "schedule_mvt_order"),
-    migration!(12, "rloc_index")
+    migration!(12, "rloc_index"),
+    migration!(13, "schedule_mvt_pfm_etc")
 ];
 pub fn get_last_migration<T: GenericConnection>(conn: &T) -> Result<Option<i32>> {
     Ok(MigrationEntry::from_select(conn, "ORDER BY id DESC LIMIT 1", &[])?
@@ -120,17 +103,5 @@ pub fn run_pending_migrations<T: GenericConnection>(conn: &T) -> Result<()> {
         }
     }
     debug!("migrations complete");
-    Ok(())
-}
-pub fn undo_migrations_to<T: GenericConnection>(conn: &T, id: i32) -> Result<()> {
-    debug!("rolling back migrations greater than id {}", id);
-    let migrations = MigrationEntry::from_select(conn, "WHERE id > $1 ORDER BY id DESC", &[])?;
-    for ent in migrations {
-        if let Ok(elem) = MIGRATIONS.binary_search_by_key(&ent.id, |m| m.id) {
-            let mig = &MIGRATIONS[elem];
-            mig.down(conn)?;
-        }
-    }
-    debug!("done!");
     Ok(())
 }

@@ -149,10 +149,6 @@ pub struct ScheduleMvt {
     /// - 1: departure
     /// - 2: pass
     pub action: i32,
-    /// Whether the train originates or terminates here.
-    ///
-    /// (Obviously, look at `action` to determine which)
-    pub origterm: bool,
     /// The time at which this movement happens.
     pub time: NaiveTime,
     /// Which `StationPath` starts at this movement.
@@ -160,7 +156,12 @@ pub struct ScheduleMvt {
     /// Which `StationPath` ends at this movement.
     pub ends_path: Option<i32>,
     /// Index used for ordering; describes which number movement this is out of a set.
-    pub idx: Option<i32>
+    pub idx: Option<i32>,
+    /// Platform number this train will arrive/depart/pass at.
+    pub platform: Option<String>,
+    /// Public (GBTT) time for this movement - i.e. the time shown to passengers,
+    /// instead of the working time.
+    pub public_time: Option<NaiveTime>
 }
 impl ScheduleMvt {
     /// `action` value for an arrival.
@@ -188,11 +189,12 @@ impl DbType for ScheduleMvt {
             parent_sched: row.get(1),
             tiploc: row.get(2),
             action: row.get(3),
-            origterm: row.get(4),
-            time: row.get(5),
-            starts_path: row.get(6),
-            ends_path: row.get(7),
-            idx: row.get(8),
+            time: row.get(4),
+            starts_path: row.get(5),
+            ends_path: row.get(6),
+            idx: row.get(7),
+            platform: row.get(8),
+            public_time: row.get(9),
         }
     }
 }
@@ -200,11 +202,11 @@ impl InsertableDbType for ScheduleMvt {
     type Id = i32;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
         let qry = conn.query("INSERT INTO schedule_movements
-                              (parent_sched, tiploc, action, origterm, time, idx)
+                              (parent_sched, tiploc, action, time, idx, platform, public_time)
                               VALUES ($1, $2, $3, $4, $5, $6)
                               RETURNING id",
                              &[&self.parent_sched, &self.tiploc,
-                               &self.action, &self.origterm, &self.time, &self.idx])?;
+                               &self.action, &self.time, &self.idx, &self.platform, &self.public_time])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))
@@ -296,6 +298,11 @@ pub struct TrainMvt {
     pub source: i32,
     /// Whether this movement is an estimation, or an actual report.
     pub estimated: bool,
+    /// Platform data for this movement.
+    pub platform: Option<String>,
+    /// Whether or not platform data should be suppressed (not displayed
+    /// to the public) at this location.
+    pub pfm_suppr: bool
 }
 impl DbType for TrainMvt {
     fn table_name() -> &'static str {
@@ -308,7 +315,9 @@ impl DbType for TrainMvt {
             parent_mvt: row.get(2),
             time: row.get(3),
             source: row.get(4),
-            estimated: row.get(5)
+            estimated: row.get(5),
+            platform: row.get(6),
+            pfm_suppr: row.get(7)
         }
     }
 }
@@ -316,11 +325,11 @@ impl InsertableDbType for TrainMvt {
     type Id = i32;
     fn insert_self<T: GenericConnection>(&self, conn: &T) -> Result<i32> {
         let qry = conn.query("INSERT INTO train_movements
-                              (parent_train, parent_mvt, time, source, estimated)
-                              VALUES ($1, $2, $3, $4, $5)
-                              ON CONFLICT ON CONSTRAINT train_movements_parent_train_parent_mvt_source_unique DO UPDATE SET time = EXCLUDED.time, estimated = EXCLUDED.estimated
+                              (parent_train, parent_mvt, time, source, estimated, platform, pfm_suppr)
+                              VALUES ($1, $2, $3, $4, $5, $6, $7)
+                              ON CONFLICT ON CONSTRAINT train_movements_parent_train_parent_mvt_source_unique DO UPDATE SET time = EXCLUDED.time, estimated = EXCLUDED.estimated, platform = EXCLUDED.platform, pfm_suppr = EXCLUDED.pfm_suppr
                               RETURNING id",
-                             &[&self.parent_train, &self.parent_mvt, &self.time, &self.source, &self.estimated])?;
+                             &[&self.parent_train, &self.parent_mvt, &self.time, &self.source, &self.estimated, &self.platform, &self.pfm_suppr])?;
         let mut ret = None;
         for row in &qry {
             ret = Some(row.get(0))

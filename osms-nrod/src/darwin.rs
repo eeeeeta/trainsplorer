@@ -11,7 +11,7 @@ use ntrod_types::schedule::Days;
 use ntrod_types::cif::StpIndicator;
 use std::collections::HashSet;
 use super::NtrodWorker;
-use chrono::{Local, NaiveDate, Duration};
+use chrono::{Local, NaiveDate, Duration, NaiveTime};
 
 type Result<T> = ::std::result::Result<T, NrodError>;
 
@@ -154,61 +154,82 @@ pub fn process_schedule<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
     let mut idx = 0;
     for loc in sched.locations {
         let tiploc;
-        let primary_time;
+        let primary_time: (NaiveTime, Option<NaiveTime>);
         let mut primary_action = 1;
-        let mut secondary_time = None;
+        let mut secondary_time: (Option<NaiveTime>, Option<NaiveTime>) = (None, None);
         let mut secondary_action = 0;
         let mut rdelay_mins_ = 0;
         match loc {
-            Or(LocOr { sla, wta, wtd, .. }) | OpOr(LocOpOr { sla, wta, wtd, .. }) => {
+            Or(LocOr { sla, wta, wtd, cpa, .. }) => {
                 tiploc = sla.tpl;
-                primary_time = wtd;
-                secondary_time = wta;
+                primary_time = (wtd, cpa.ptd);
+                secondary_time = (wta, cpa.pta);
             },
-            Ip(LocIp { sla, wta, wtd, rdelay_mins, .. }) | OpIp(LocOpIp { sla, wta, wtd, rdelay_mins }) => {
+            OpOr(LocOpOr { sla, wta, wtd, .. }) => {
                 tiploc = sla.tpl;
-                primary_time = wtd;
-                secondary_time = Some(wta);
+                primary_time = (wtd, None);
+                secondary_time = (wta, None);
+            }
+            Ip(LocIp { sla, wta, wtd, rdelay_mins, cpa, .. }) => {
+                tiploc = sla.tpl;
+                primary_time = (wtd, cpa.ptd);
+                secondary_time = (Some(wta), cpa.pta);
+                rdelay_mins_ = rdelay_mins;
+            },
+            OpIp(LocOpIp { sla, wta, wtd, rdelay_mins }) => {
+                tiploc = sla.tpl;
+                primary_time = (wtd, None);
+                secondary_time = (Some(wta), None);
                 rdelay_mins_ = rdelay_mins;
             },
             Pp(LocPp { sla, wtp, rdelay_mins }) => {
                 tiploc = sla.tpl;
-                primary_time = wtp;
+                primary_time = (wtp, None);
                 primary_action = 2;
                 rdelay_mins_ = rdelay_mins;
             },
-            Dt(LocDt { sla, wta, wtd, rdelay_mins, .. }) | OpDt(LocOpDt { sla, wta, wtd, rdelay_mins }) => {
+            Dt(LocDt { sla, wta, wtd, rdelay_mins, cpa, .. }) => {
                 tiploc = sla.tpl;
-                primary_time = wta;
+                primary_time = (wta, cpa.pta);
                 primary_action = 0;
-                secondary_time = wtd;
+                secondary_time = (wtd, cpa.ptd);
                 secondary_action = 1;
                 rdelay_mins_ = rdelay_mins;
             },
+            OpDt(LocOpDt { sla, wta, wtd, rdelay_mins }) => {
+                tiploc = sla.tpl;
+                primary_time = (wta, None);
+                primary_action = 0;
+                secondary_time = (wtd, None);
+                secondary_action = 1;
+                rdelay_mins_ = rdelay_mins;
+            }
         }
         mvts.push(ScheduleMvt {
             id: -1,
             parent_sched: -1,
             tiploc: tiploc.clone(),
             action: primary_action,
-            origterm: false,
-            time: primary_time + Duration::minutes(rdelay_mins_ as _),
+            time: primary_time.0 + Duration::minutes(rdelay_mins_ as _),
             starts_path: None,
             ends_path: None,
-            idx: Some(idx)
+            idx: Some(idx),
+            public_time: primary_time.1.map(|x| x + Duration::minutes(rdelay_mins_ as _)),
+            platform: None
         });
         idx += 1;
-        if let Some(time) = secondary_time {
+        if let Some(time) = secondary_time.0 {
             mvts.push(ScheduleMvt {
                 id: -1,
                 parent_sched: -1,
                 tiploc: tiploc,
                 action: secondary_action,
-                origterm: false,
                 time: time + Duration::minutes(rdelay_mins_ as _),
                 starts_path: None,
                 ends_path: None,
-                idx: Some(idx)
+                idx: Some(idx),
+                public_time: secondary_time.1.map(|x| x + Duration::minutes(rdelay_mins_ as _)),
+                platform: None
             });
             idx += 1;
         }
@@ -280,22 +301,22 @@ pub fn process_ts<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, ts: 
             let st = loc.timings.wta
                 .or(loc.timings.pta)
                 .ok_or(NrodError::DarwinTimingsMissing)?;
-            updates.push((loc.tiploc.clone(), 0, st, arr));
+            updates.push((loc.tiploc.clone(), ScheduleMvt::ACTION_ARRIVAL, st, arr, loc.plat.clone()));
         }
         if let Some(dep) = loc.dep {
             let st = loc.timings.wtd
                 .or(loc.timings.ptd)
                 .ok_or(NrodError::DarwinTimingsMissing)?;
-            updates.push((loc.tiploc.clone(), 1, st, dep));
+            updates.push((loc.tiploc.clone(), ScheduleMvt::ACTION_DEPARTURE, st, dep, loc.plat.clone()));
         }
         if let Some(pass) = loc.pass {
             let st = loc.timings.wtp
                 .ok_or(NrodError::DarwinTimingsMissing)?;
-            updates.push((loc.tiploc, 2, st, pass));
+            updates.push((loc.tiploc, ScheduleMvt::ACTION_PASS, st, pass, loc.plat));
         }
     }
     let mut errs = vec![];
-    for (tiploc, action, time, tstd) in updates {
+    for (tiploc, action, time, tstd, plat) in updates {
         let trans = trans.transaction()?;
         debug!("Querying for movements - parent_sched = {}, tiploc = {}, action = {}, time = {}", train.parent_sched, tiploc, action, time);
         let mvts = ScheduleMvt::from_select(&trans, "WHERE parent_sched = $1 AND tiploc = $2 AND action = $3 AND time = $4", &[&train.parent_sched, &tiploc, &action, &time])?;
@@ -346,13 +367,20 @@ pub fn process_ts<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker, ts: 
         else {
             worker.incr("darwin.ts.estimated");
         }
+        let (platform, pfm_suppr) = if let Some(p) = plat {
+            (Some(p.platform), p.platsup)
+        }
+        else {
+            (None, false)
+        };
         let tmvt = TrainMvt {
             id: -1,
             parent_train: train.id,
             parent_mvt: mvt.id,
             time,
             source: MvtSource::SOURCE_DARWIN,
-            estimated: !actual
+            estimated: !actual,
+            platform, pfm_suppr
         };
         match tmvt.insert_self(&trans) {
             Ok(id) => {

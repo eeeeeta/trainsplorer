@@ -69,29 +69,29 @@ pub fn process_vstp<T: GenericConnection>(conn: &T, r: VstpRecord) -> Result<()>
             let mut mvts = vec![];
             for loc in schedule_location {
                 match loc {
-                    Originating(VstpLocationRecordOriginating { location, scheduled_departure_time, .. }) => {
-                        mvts.push((location.tiploc.tiploc_id, scheduled_departure_time, 1, true));
+                    Originating(VstpLocationRecordOriginating { location, scheduled_departure_time, public_departure_time, platform, .. }) => {
+                        mvts.push((location.tiploc.tiploc_id, scheduled_departure_time, ScheduleMvt::ACTION_DEPARTURE, platform, public_departure_time));
                     },
-                    Intermediate(VstpLocationRecordIntermediate { location, scheduled_arrival_time, scheduled_departure_time, .. }) => {
-                        mvts.push((location.tiploc.tiploc_id.clone(), scheduled_arrival_time, 0, false));
-                        mvts.push((location.tiploc.tiploc_id, scheduled_departure_time, 1, false));
+                    Intermediate(VstpLocationRecordIntermediate { location, scheduled_arrival_time, scheduled_departure_time, platform, public_arrival_time, public_departure_time, .. }) => {
+                        mvts.push((location.tiploc.tiploc_id.clone(), scheduled_arrival_time, ScheduleMvt::ACTION_ARRIVAL, platform.clone(), public_arrival_time));
+                        mvts.push((location.tiploc.tiploc_id, scheduled_departure_time, ScheduleMvt::ACTION_DEPARTURE, platform, public_departure_time));
                     },
                     Pass(VstpLocationRecordPass { location, scheduled_pass_time, .. }) => {
-                        mvts.push((location.tiploc.tiploc_id, scheduled_pass_time, 2, false));
+                        mvts.push((location.tiploc.tiploc_id, scheduled_pass_time, ScheduleMvt::ACTION_PASS, None, None));
                     },
-                    Terminating(VstpLocationRecordTerminating { location, scheduled_arrival_time, .. }) => {
-                        mvts.push((location.tiploc.tiploc_id, scheduled_arrival_time, 0, true));
+                    Terminating(VstpLocationRecordTerminating { location, scheduled_arrival_time, platform, public_arrival_time, .. }) => {
+                        mvts.push((location.tiploc.tiploc_id, scheduled_arrival_time, ScheduleMvt::ACTION_ARRIVAL, platform, public_arrival_time));
                     }
                 }
             }
-            for (i, (tiploc, time, action, origterm)) in mvts.into_iter().enumerate() {
+            for (i, (tiploc, time, action, platform, public_time)) in mvts.into_iter().enumerate() {
                 let mvt = ScheduleMvt {
                     parent_sched: sid,
                     id: -1,
                     starts_path: None,
                     ends_path: None,
                     idx: Some(i as _),
-                    tiploc, time, action, origterm
+                    tiploc, time, action, platform, public_time
                 };
                 mvt.insert_self(&trans)?;
             }
@@ -244,7 +244,9 @@ pub fn process_movement<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
         parent_mvt: mvt.id,
         time: m.actual_timestamp.time(),
         source: MvtSource::SOURCE_TRUST,
-        estimated: false
+        estimated: false,
+        platform: m.platform,
+        pfm_suppr: false,
     };
     let id = tmvt.insert_self(conn)?;
     debug!("Registered train movement #{}.", id);
@@ -260,7 +262,9 @@ pub fn process_movement<T: GenericConnection>(conn: &T, worker: &mut NtrodWorker
             parent_mvt: mvt.id,
             time: mvt.time + delta,
             source: MvtSource::SOURCE_TRUST_NAIVE_ESTIMATION,
-            estimated: true
+            estimated: true,
+            platform: None,
+            pfm_suppr: false
         };
         let id = tmvt.insert_self(conn)?;
         worker.incr("nrod.mvt.estimated");

@@ -1,1 +1,0 @@
-ALTER TABLE train_movements DROP CONSTRAINT IF EXISTS train_movements_parent_mvt_source_unique;

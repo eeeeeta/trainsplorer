@@ -263,18 +263,18 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
             let mut mvts = vec![];
             for loc in schedule_location {
                 match loc {
-                    Originating { tiploc_code, departure, .. } => {
-                        mvts.push((tiploc_code, departure, 1, true));
+                    Originating { tiploc_code, departure, platform, public_departure, .. } => {
+                        mvts.push((tiploc_code, departure, ScheduleMvt::ACTION_DEPARTURE, platform, public_departure));
                     },
-                    Intermediate { tiploc_code, arrival, departure, .. } => {
-                        mvts.push((tiploc_code.clone(), arrival, 0, false));
-                        mvts.push((tiploc_code, departure, 1, false));
+                    Intermediate { tiploc_code, arrival, public_arrival, public_departure, departure, platform, .. } => {
+                        mvts.push((tiploc_code.clone(), arrival, ScheduleMvt::ACTION_ARRIVAL, platform.clone(), public_arrival));
+                        mvts.push((tiploc_code, departure, ScheduleMvt::ACTION_DEPARTURE, platform, public_departure));
                     },
                     Pass { tiploc_code, pass, .. } => {
-                        mvts.push((tiploc_code, pass, 2, false));
+                        mvts.push((tiploc_code, pass, ScheduleMvt::ACTION_PASS, None, None));
                     },
-                    Terminating { tiploc_code, arrival, .. } => {
-                        mvts.push((tiploc_code, arrival, 0, true));
+                    Terminating { tiploc_code, arrival, public_arrival, platform, .. } => {
+                        mvts.push((tiploc_code, arrival, ScheduleMvt::ACTION_ARRIVAL, platform, public_arrival));
                     }
                 }
             }
@@ -283,18 +283,28 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
                 train_uid, schedule_start_date, stp_indicator);
                 let orig_mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = $1 ORDER BY (idx, time, action) ASC", &[&sid])?;
                 let mut valid = true;
-                let mut idxs_changed = false;
+                let mut mvts_changed = false;
                 if orig_mvts.len() != mvts.len() {
                     warn!("apply_schedule_record: invalidating prior schedule movements due to length difference");
                     valid = false;
                 }
                 else {
-                    for (idx, (mvt, &(ref tiploc, time, action, origterm))) in orig_mvts.iter().zip(mvts.iter()).enumerate() {
-                        if mvt.tiploc == tiploc as &str && mvt.time == time && mvt.action == action && mvt.origterm == origterm {
+                    for (idx, (mvt, &(ref tiploc, time, action, ref platform, public_time))) in orig_mvts.iter().zip(mvts.iter()).enumerate() {
+                        if mvt.tiploc == tiploc as &str && mvt.time == time && mvt.action == action {
                             trace!("apply_schedule_record: mvt #{} matches", mvt.id);
+                            if mvt.platform.as_ref() != platform.as_ref() {
+                                trace!("apply_schedule_record: setting platform of mvt #{} to {:?}", mvt.id, platform.as_ref());
+                                mvts_changed = true;
+                                conn.execute("UPDATE schedule_movements SET platform = $1 WHERE id = $2", &[platform, &mvt.id])?;
+                            }
+                            if mvt.public_time != public_time {
+                                trace!("apply_schedule_record: setting public time of mvt #{} to {:?}", mvt.id, public_time);
+                                mvts_changed = true;
+                                conn.execute("UPDATE schedule_movements SET public_time = $1 WHERE id = $2", &[&public_time, &mvt.id])?;
+                            }
                             if mvt.idx.is_none() {
                                 trace!("apply_schedule_record: setting idx of mvt #{} to {}", mvt.id, idx);
-                                idxs_changed = true;
+                                mvts_changed = true;
                                 let idx: Option<i32> = Some(idx as _);
                                 conn.execute("UPDATE schedule_movements SET idx = $1 WHERE id = $2", &[&idx, &mvt.id])?;
                             }
@@ -306,8 +316,8 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
                         }
                     }
                 }
-                if idxs_changed {
-                    warn!("apply_schedule_record: updated idx fields of some mvts in schedule");
+                if mvts_changed {
+                    warn!("apply_schedule_record: updated fields of some mvts in schedule");
                 }
                 if valid {
                     debug!("apply_schedule_record: left movements untouched");
@@ -317,14 +327,14 @@ fn apply_schedule_record<T: GenericConnection>(conn: &T, rec: ScheduleRecord, me
                     conn.execute("DELETE FROM schedule_movements WHERE parent_sched = $1", &[&sid])?;
                 }
             }
-            for (idx, (tiploc, time, action, origterm)) in mvts.into_iter().enumerate() {
+            for (idx, (tiploc, time, action, platform, public_time)) in mvts.into_iter().enumerate() {
                 let mvt = ScheduleMvt {
                     parent_sched: sid,
                     id: -1,
                     starts_path: None,
                     ends_path: None,
                     idx: Some(idx as _),
-                    tiploc, time, action, origterm
+                    tiploc, time, action, platform, public_time
                 };
                 mvt.insert_self(conn)?;
             }
