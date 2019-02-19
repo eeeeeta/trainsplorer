@@ -1,5 +1,5 @@
-osm-signal
-==========
+the trainsplorer (aka osm-signal)
+=================================
 
 [![Build Status](https://travis-ci.org/eeeeeta/osm-signal.svg?branch=master)](https://travis-ci.org/eeeeeta/osm-signal)
 [![IRC chat @ #osm-signal on freenode](https://img.shields.io/badge/irc-%23osm--signal%20on%20freenode-blue.svg)](https://kiwiirc.com/client/chat.freenode.net/#osm-signal)

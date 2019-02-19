@@ -6,7 +6,7 @@ branches:
     - master
 language: rust
 notifications:
-  webhooks: https://ingest.devmode.cloud/hooks/travisci?channel=%23osm-signal
+  webhooks: https://ingest.devmode.cloud/hooks/travisci?channel=%23trainsplorer
 services:
   - postgresql
 addons:
