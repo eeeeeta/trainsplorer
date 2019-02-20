@@ -3,6 +3,7 @@ the trainsplorer (aka osm-signal)
 
 [![Build Status](https://travis-ci.org/eeeeeta/osm-signal.svg?branch=master)](https://travis-ci.org/eeeeeta/osm-signal)
 [![IRC chat @ #trainsplorer on freenode](https://img.shields.io/badge/irc-%23trainsplorer%20on%20freenode-blue.svg)](https://kiwiirc.com/client/chat.freenode.net/#trainsplorer)
+[![IRC chat logs](https://img.shields.io/badge/irc%20logs-on%20logbot-orange.svg)](https://freenode.logbot.info/trainsplorer/20190220)
 ![GNU AGPLv3 licensed](https://www.gnu.org/graphics/agplv3-155x51.png)
 
 ## What is this?
@@ -15,7 +16,8 @@ to find out which trains are going to pass any location on the railway at any gi
 [Rust](https://www.rust-lang.org/en-US/) as well, because Rust is cool.
 
 However, it's very much not done yet! Watch this space for further stuff! Also, feel free to join the [chatroom](https://kiwiirc.com/client/chat.freenode.net/#trainsplorer)
-(#trainsplorer on chat.freenode.net), if you'd like to discuss the project (or anything about trains in general, really)
+(#trainsplorer on chat.freenode.net), if you'd like to discuss the project (or anything about trains in general, really).
+(We also keep [logs](https://freenode.logbot.info/trainsplorer) for that chatroom, in case you're interested in seeing what we've been up to.)
 
 ## What are all these moving parts?
 
