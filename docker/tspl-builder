@@ -1,5 +1,3 @@
-# trainsplorer dockerfile (oh dear)
-
 ## BUILDER IMAGE: builds the entire monorepo
 FROM archlinux/base:latest AS tspl-builder
 
@@ -35,34 +33,3 @@ ENV CARGO_INCREMENTAL=0
 RUN ~/.cargo/bin/cargo build --all-targets --release
 # remove the dummy src/ lib.rs files
 RUN /bin/bash -c 'rm -rf /tspl/*/src'
-
-# The following bits build the actual code.
-
-# Copy in the source.
-COPY . /tspl
-# Delete all the dummy build artefacts that we made earlier when building dependencies.
-# NB: this list should be updated as new crates are made.
-RUN ~/.cargo/bin/cargo clean --release -p osms-db -p osms-darwin -p darwin-types -p osms-nrod -p ntrod-types -p osms-db-setup -p osms-web -p atoc-msn
-# Actually build the damn code already :P
-RUN ~/.cargo/bin/cargo build --all-targets --release
-
-## INDIVIDUAL IMAGES for each service
-# These COPY the build artefacts from the builder container.
-
-FROM debian:stable-slim AS osms-nrod
-WORKDIR /tspl
-RUN apt-get update && apt-get install -y libssl1.1 ca-certificates
-COPY --from=tspl-builder /tspl/target/release/osms-nrod /tspl
-ENTRYPOINT ["/tspl/osms-nrod"]
-
-FROM debian:stable-slim AS osms-web
-WORKDIR /tspl
-RUN apt-get update && apt-get install -y libssl1.1 ca-certificates
-COPY --from=tspl-builder /tspl/target/release/osms-web /tspl
-ENTRYPOINT ["/tspl/osms-web"]
-
-FROM debian:stable-slim AS osms-db-setup
-WORKDIR /tspl
-RUN apt-get update && apt-get install -y libssl1.1 ca-certificates
-COPY --from=tspl-builder /tspl/target/release/osms-db-setup /tspl
-ENTRYPOINT ["/tspl/osms-db-setup"]
