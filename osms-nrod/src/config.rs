@@ -29,7 +29,7 @@ impl Config {
     pub fn load() -> Result<Self, failure::Error> {
         let mut settings = cfg::Config::default();
         settings
-            .merge(cfg::File::with_name("osms-nrod"))?
+//            .merge(cfg::File::with_name("osms-nrod"))?
             .merge(cfg::Environment::with_prefix("OSMS"))?;
         let ret = settings.try_into()?;
         Ok(ret)
