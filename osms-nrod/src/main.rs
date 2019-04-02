@@ -16,6 +16,7 @@ extern crate r2d2_postgres;
 extern crate crossbeam_channel;
 extern crate darwin_types;
 extern crate flate2;
+extern crate config as cfg;
 
 use stomp::session::{SessionEvent, Session};
 use stomp::header::Header;
@@ -23,10 +24,6 @@ use stomp::session_builder::SessionBuilder;
 use stomp::subscription::AckOrNack;
 use stomp::connection::*;
 use std::net::UdpSocket;
-use std::env;
-use std::fs::File;
-use std::io::Read;
-use std::collections::HashMap;
 use tokio_core::reactor::{Timeout, Handle, Core};
 use std::time::Duration;
 use futures::*;
@@ -35,7 +32,7 @@ use cadence::{StatsdClient, QueuingMetricSink, BufferedUdpMetricSink, DEFAULT_PO
 use std::sync::Arc;
 use crossbeam_channel::{Sender, Receiver};
 use flate2::read::GzDecoder;
-
+use config::Config;
 use ntrod_types::movements::{Records, MvtBody};
 use ntrod_types::vstp::Record as VstpRecord;
 use r2d2_postgres::{PostgresConnectionManager, TlsMode};
@@ -43,31 +40,8 @@ use r2d2_postgres::{PostgresConnectionManager, TlsMode};
 mod errors;
 mod live;
 mod darwin;
+mod config;
 
-#[derive(Deserialize)]
-pub struct Config {
-    database_url: String,
-    #[serde(default)]
-    statsd_url: Option<String>,
-    username: String,
-    password: String,
-    darwin_username: String,
-    darwin_password: String,
-    darwin_queue_name: String,
-    n_threads: u32,
-    #[serde(default)]
-    log_level_general: Option<String>,
-    #[serde(default)]
-    log_level: HashMap<String, String>,
-    #[serde(default)]
-    nrod_url: Option<String>,
-    #[serde(default)]
-    nrod_port: Option<u16>,
-    #[serde(default)]
-    darwin_url: Option<String>,
-    #[serde(default)]
-    darwin_port: Option<u16>
-}
 pub enum WorkerMessage {
     Movement(String),
     Vstp(String),
@@ -312,14 +286,8 @@ impl<E> r2d2::CustomizeConnection<Conn, E> for AppNameSetter {
 }
 fn main() {
     println!("osms-nrod starting");
-    let args = env::args().skip(1).collect::<Vec<_>>();
-    let path = args.get(0).map(|x| x as &str).unwrap_or("config.toml");
-    println!("Loading config from file {}...", path);
-    let mut file = File::open(path).unwrap();
-    let mut contents = String::new();
-    file.read_to_string(&mut contents).unwrap();
-    println!("Parsing config...");
-    let conf: Config = toml::de::from_str(&contents).unwrap();
+    println!("Loading config...");
+    let conf: Config = Config::load().unwrap();
     let log_level_g: log::LevelFilter = conf.log_level_general
         .as_ref()
         .map(|x| x as &str)

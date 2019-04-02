@@ -1,6 +1,5 @@
 extern crate osms_db;
 extern crate fern;
-extern crate envy;
 extern crate r2d2;
 extern crate r2d2_postgres;
 extern crate flate2;
@@ -23,6 +22,7 @@ extern crate fallible_iterator;
 extern crate serde_json;
 extern crate irc;
 extern crate titlecase;
+extern crate config as cfg;
 
 use clap::{Arg, App, SubCommand, AppSettings};
 use std::fs::File;
@@ -39,17 +39,11 @@ use fallible_iterator::FallibleIterator;
 use irc::client::prelude::*;
 use irc::client::Client as IrcClientTrait;
 use irc::client::ext::ClientExt;
+use config::Config;
 
 pub mod make;
+pub mod config;
 
-#[derive(Deserialize, Debug)]
-pub struct Config {
-    database_url: String,
-    username: String,
-    password: String,
-    require_tls: bool,
-    n_threads: usize,
-}
 fn download(url: &str, cli: &mut Client, user: &str, pass: &str) -> Result<Response, Error> {
     let creds = Basic {
         username: user.to_string(),
@@ -230,7 +224,7 @@ fn run() -> Result<(), Error> {
         .unwrap();
     let mut cli = Client::new();
     info!("Loading config...");
-    let conf: Config = envy::from_env()?; 
+    let conf = Config::load()?;
     info!("Connecting to Postgres...");
     let tls = if conf.require_tls {
         let tls = NativeTls::new()

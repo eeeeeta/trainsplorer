@@ -30,6 +30,10 @@ serde_json = "1.0.26"
 titlecase = "0.10.0"
 toml = "0.4"
 
+[dependencies.config]
+features = ["toml"]
+version = "0.9"
+
 [dependencies.atoc-msn]
 path = "../atoc-msn"
 

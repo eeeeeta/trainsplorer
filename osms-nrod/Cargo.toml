@@ -24,6 +24,10 @@ serde_json = "1.0"
 tokio-core = "0.1"
 toml = "0.4"
 
+[dependencies.config]
+features = ["toml"]
+version = "0.9"
+
 [dependencies.darwin-types]
 path = "../darwin-types"
 
