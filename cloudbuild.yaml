@@ -21,6 +21,8 @@ steps:
   - |
     pkgs=("tspl-builder" "osms-nrod" "osms-db-setup" "osms-web"); for thing in ${pkgs[@]}; do docker tag "$thing" "gcr.io/trainsplorer/$thing"; done
 
+options:
+  machineType: 'N1_HIGHCPU_8'
 images: ['gcr.io/trainsplorer/tspl-builder:latest','gcr.io/trainsplorer/osms-nrod:latest', 'gcr.io/trainsplorer/osms-db-setup:latest', 'gcr.io/trainsplorer/osms-web:latest']
 timeout: 4400s
 
