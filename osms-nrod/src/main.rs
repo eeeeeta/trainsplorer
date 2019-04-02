@@ -323,7 +323,13 @@ fn main() {
         metrics = Some(Arc::new(StatsdClient::from_sink("ntrod", queuing_sink)));
     }
     info!("Connecting to database...");
-    let manager = PostgresConnectionManager::new(conf.database_url, TlsMode::None).unwrap();
+    let manager = if conf.database_tls {
+        let ssl = postgres::tls::openssl::OpenSsl::new().unwrap();
+        PostgresConnectionManager::new(conf.database_url, TlsMode::Require(Box::new(ssl))).unwrap()
+    }
+    else {
+        PostgresConnectionManager::new(conf.database_url, TlsMode::None).unwrap()
+    };
     let pool = r2d2::Pool::builder()
         .connection_customizer(Box::new(AppNameSetter))
         .build(manager)

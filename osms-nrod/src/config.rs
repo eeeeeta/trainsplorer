@@ -3,6 +3,8 @@ use std::collections::HashMap;
 pub struct Config {
     pub database_url: String,
     #[serde(default)]
+    pub database_tls: bool,
+    #[serde(default)]
     pub statsd_url: Option<String>,
     pub username: String,
     pub password: String,
