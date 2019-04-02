@@ -1,0 +1,23 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    docker pull gcr.io/trainsplorer/tspl-builder:latest || exit 0
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+            'build',
+            '--cache-from', 'gcr.io/trainsplorer/tspl-builder:latest',
+            '.'
+        ]
+  timeout: 2400s
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    pkgs=("tspl-builder" "osms-nrod" "osms-db-setup" "osms-web"); for thing in ${pkgs[@]}; do docker tag "$thing" "gcr.io/trainsplorer/$thing"; done
+
+images: ['gcr.io/trainsplorer/tspl-builder:latest','gcr.io/trainsplorer/osms-nrod:latest', 'gcr.io/trainsplorer/osms-db-setup:latest', 'gcr.io/trainsplorer/osms-web:latest']
+timeout: 3600s
