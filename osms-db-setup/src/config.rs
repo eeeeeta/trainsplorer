@@ -10,9 +10,12 @@ pub struct Config {
 impl Config {
     pub fn load() -> Result<Self, ::failure::Error> {
         let mut settings = cfg::Config::default();
-        settings
-            .merge(cfg::File::with_name("osms-db-setup"))?
-            .merge(cfg::Environment::with_prefix("OSMS"))?;
+        if let Err(e) = settings.merge(cfg::File::with_name("osms-db-setup")) {
+            eprintln!("Error loading config from file: {}", e);
+        }
+        if let Err(e) = settings.merge(cfg::Environment::with_prefix("OSMS")) {
+            eprintln!("Error loading config from env: {}", e);
+        }
         let ret = settings.try_into()?;
         Ok(ret)
     }
