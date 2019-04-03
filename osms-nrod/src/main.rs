@@ -330,6 +330,7 @@ fn main() {
     else {
         PostgresConnectionManager::new(conf.database_url, TlsMode::None).unwrap()
     };
+    info!("Initialising database pool...");
     let pool = r2d2::Pool::builder()
         .connection_customizer(Box::new(AppNameSetter))
         .build(manager)

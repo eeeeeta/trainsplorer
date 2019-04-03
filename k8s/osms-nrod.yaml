@@ -6,6 +6,8 @@ metadata:
     app: osms-nrod
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: osms-nrod
