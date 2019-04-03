@@ -23,7 +23,7 @@ steps:
 
 steps:
 - name: gcr.io/cloud-builders/gcloud
-  args: ['container' 'clusters' 'get-credentials' 'tspl-cluster-ii']
+  args: ['container', 'clusters', 'get-credentials', 'tspl-cluster-ii']
   env:
   - 'CLOUDSDK_COMPUTE_ZONE=europe-west1-d'
   - 'CLOUDSDK_CONTAINER_CLUSTER=tspl-cluster-ii'
