@@ -1,5 +1,5 @@
 FROM tspl-compiled AS osms-web-compiled
-RUN pacman -S --needed --noconfirm npm
+RUN pacman -S --needed --noconfirm npm node-gyp python python2
 WORKDIR /tspl/osms-web
 RUN npm i
 RUN npx gulp
