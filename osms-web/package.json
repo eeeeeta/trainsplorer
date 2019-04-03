@@ -1,9 +1,9 @@
 {
   "name": "osms-web",
   "version": "0.0.1",
-  "description": "web frontend for osm-signal",
+  "description": "web frontend for trainsplorer",
   "license": "AGPL-3.0",
-  "repository": "https://github.com/eeeeeta/osm-signal",
+  "repository": "https://github.com/eeeeeta/trainsplorer",
   "author": "eta <https://theta.eu.org>",
   "dependencies": {
     "accessible-autocomplete": "^1.6.1",

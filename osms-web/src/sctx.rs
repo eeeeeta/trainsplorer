@@ -93,7 +93,7 @@ impl ServerContext {
         let time = now.format("%H:%M").to_string();
         let tctx = TemplateContext {
             template: "index",
-            title: "Welcome to osm-signal".into(),
+            title: "Welcome to trainsplorer".into(),
             body: IndexView {
                 mvt_search: MovementSearchView {
                     error: None,
