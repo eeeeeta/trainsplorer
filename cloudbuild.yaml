@@ -21,8 +21,7 @@ steps:
   - |
     pkgs=("tspl-builder" "osms-nrod" "osms-db-setup" "osms-web"); for thing in ${pkgs[@]}; do docker tag "$thing" "gcr.io/trainsplorer/$thing"; docker push "gcr.io/trainsplorer/$thing"; done
 
-steps:
-- name: gcr.io/cloud-builders/gcloud
+- name: 'gcr.io/cloud-builders/gcloud'
   args: ['container', 'clusters', 'get-credentials', 'tspl-cluster-ii']
   env:
   - 'CLOUDSDK_COMPUTE_ZONE=europe-west1-d'
