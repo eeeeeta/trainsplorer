@@ -19,6 +19,11 @@ spec:
       containers:
       - name: osms-nrod
         image: gcr.io/trainsplorer/osms-nrod:latest
+        resources:
+          requests:
+            cpu: "50m"
+          limits:
+            cpu: "100m"
         env:
         - name: RUST_BACKTRACE
           value: "full"

@@ -17,6 +17,11 @@ spec:
       containers:
       - name: osms-web
         image: gcr.io/trainsplorer/osms-web:latest
+        resources:
+          requests:
+            cpu: "50m"
+          limits:
+            cpu: "100m"
         env:
         - name: RUST_BACKTRACE
           value: "full"
