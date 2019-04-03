@@ -2,5 +2,6 @@ FROM debian:stable-slim AS osms-web
 WORKDIR /tspl
 RUN apt-get update && apt-get install -y libssl1.1 ca-certificates
 COPY --from=tspl-compiled /tspl/target/release/osms-web /tspl
+COPY --from=tspl-compiled /tspl/osms-web/static /tspl/static
 ENTRYPOINT ["/tspl/osms-web"]
 

@@ -1,0 +1,13 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: osms-web-svc
+spec:
+  selector:
+    app: osms-web
+  type: NodePort
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
+    nodePort: 30509
