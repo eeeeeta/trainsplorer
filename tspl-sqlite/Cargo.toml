@@ -1,0 +1,19 @@
+[package]
+authors = ["eeeeeta <eeeeeta@users.noreply.github.com>"]
+edition = "2018"
+name = "tspl-sqlite"
+version = "0.1.0"
+
+[dependencies]
+chrono = "0.4"
+uuid = "0.7"
+failure = "0.1"
+failure_derive = "0.1"
+log = "0.4"
+
+[dependencies.tspl-util]
+path = "../tspl-util"
+
+[dependencies.rusqlite]
+features = ["blob", "chrono", "uuid"]
+git = "https://github.com/jgallagher/rusqlite"

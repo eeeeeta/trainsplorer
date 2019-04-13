@@ -1,5 +1,5 @@
 [workspace]
-members = ["./osms-db", "./osms-nrod", "./ntrod-types", "./osms-db-setup", "./atoc-msn", "./osms-darwin", "./darwin-types", "./osms-web"]
+members = ["./osms-db", "./osms-nrod", "./ntrod-types", "./osms-db-setup", "./atoc-msn", "./osms-darwin", "./darwin-types", "./osms-web", "./tspl-sqlite", "./tspl-fahrplan", "./tspl-util"]
 
 [replace]
 "openssl:0.9.24" = { git = "https://github.com/ishitatsuyuki/rust-openssl", branch = "0.9.x" }
