@@ -5,6 +5,7 @@
 pub use rusqlite::{Connection, Row};
 pub use rusqlite::Result as RowResult;
 pub use rusqlite::params;
+pub use uuid::Uuid;
 use crate::errors::Result;
 use rusqlite::types::ToSql;
 
@@ -32,5 +33,5 @@ pub trait InsertableDbType: DbType {
     /// The primary key type.
     type Id;
     /// Insert this type into the database, returning its new primary key (if any).
-    fn insert_self(&self, conn: &Connection) -> Result<Self::Id>;
+    fn insert_self(&self, conn: &Connection) -> RowResult<Self::Id>;
 }

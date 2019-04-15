@@ -21,3 +21,4 @@ osms-web/static/js/*
 osms-web/static/ext/*
 osms-web/static/assets/*
 k8s/tspl-secrets.yaml
+*.sqlite

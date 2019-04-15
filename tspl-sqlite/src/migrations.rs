@@ -21,9 +21,9 @@ impl DbType for MigrationEntry {
 }
 impl InsertableDbType for MigrationEntry {
     type Id = ();
-    fn insert_self(&self, conn: &Connection) -> Result<()> {
+    fn insert_self(&self, conn: &Connection) -> RowResult<()> {
         let mut stmt = conn.prepare("INSERT INTO migration_entries
-                                     (id, timestmap) VALUES (?, ?)")?;
+                                     (id, timestamp) VALUES (?, ?)")?;
         stmt.insert(params![self.id, self.timestamp])?;
         Ok(())
     }
@@ -69,10 +69,10 @@ pub fn get_last_migration(conn: &Connection) -> Result<Option<i32>> {
 }
 pub fn initialize_migrations(conn: &Connection) -> Result<()> {
     debug!("initializing migrations...");
-    conn.execute(r#"CREATE TABLE IF NOT EXISTS migration_entries (
+    conn.execute_batch(r#"CREATE TABLE IF NOT EXISTS migration_entries (
         id INT UNIQUE NOT NULL,
         timestamp TIMESTAMP NOT NULL
-    )"#, rusqlite::NO_PARAMS)?;
+    )"#)?;
     Ok(())
 }
 pub fn run_pending_migrations(conn: &mut Connection, migrations: &[Migration]) -> Result<()> {
