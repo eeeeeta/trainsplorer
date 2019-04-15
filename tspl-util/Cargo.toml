@@ -1,7 +1,10 @@
 [package]
-name = "tspl-util"
-version = "0.1.0"
 authors = ["eeeeeta <eeeeeta@users.noreply.github.com>"]
 edition = "2018"
+name = "tspl-util"
+version = "0.1.0"
 
 [dependencies]
+failure = "0.1.5"
+fern = "0.5.8"
+log = "0.4.6"

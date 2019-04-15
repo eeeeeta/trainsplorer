@@ -1,4 +1,6 @@
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, is_enum_variant)]
+use std::fmt::Display;
+
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, is_enum_variant, Display)]
 #[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]
 pub enum TrainStatus {
     #[serde(rename = "B")]
@@ -27,7 +29,7 @@ pub enum TrainStatus {
     None,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, is_enum_variant)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, is_enum_variant, Display)]
 #[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]
 pub enum StpIndicator {
     #[serde(rename = "")]
@@ -58,7 +60,7 @@ END IF;
 END$$;"#
     }
 }
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, is_enum_variant)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, is_enum_variant, Display)]
 #[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]
 pub enum PowerType {
     #[serde(rename = "D")]
@@ -80,7 +82,7 @@ pub enum PowerType {
     #[serde(rename = "")]
     None
 }
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, is_enum_variant)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, is_enum_variant, Display)]
 #[cfg_attr(feature = "postgres-traits", derive(FromSql, ToSql))]
 pub enum TrainCategory {
     #[serde(rename="OL")]

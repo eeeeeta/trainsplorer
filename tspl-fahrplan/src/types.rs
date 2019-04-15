@@ -4,7 +4,9 @@ use tspl_sqlite::traits::*;
 use tspl_sqlite::migrations::Migration;
 use tspl_sqlite::migration;
 use bitflags::bitflags;
+use ntrod_types::schedule::Days as NtrodDays;
 use chrono::*;
+use std::cmp::Ordering;
 
 pub static MIGRATIONS: [Migration; 1] = [
     migration!(0, "initial")
@@ -21,7 +23,31 @@ bitflags! {
     }
 }
 
+impl From<NtrodDays> for ScheduleDays {
+    fn from(d: NtrodDays) -> ScheduleDays {
+        let mut ret = ScheduleDays::empty();
+        if d.mon { ret.insert(ScheduleDays::MONDAY); }
+        if d.tue { ret.insert(ScheduleDays::TUESDAY); }
+        if d.wed { ret.insert(ScheduleDays::WEDNESDAY); }
+        if d.thu { ret.insert(ScheduleDays::THURSDAY); }
+        if d.fri { ret.insert(ScheduleDays::FRIDAY); }
+        if d.sat { ret.insert(ScheduleDays::SATURDAY); }
+        if d.sun { ret.insert(ScheduleDays::SUNDAY); }
+        ret
+    }
+}
+
 /// A schedule from NROD, describing how trains should theoretically run.
+/// 
+/// ## Identification
+///
+/// Schedules themselves can be uniquely identified by their uid,
+/// start_date, stp_indicator, and source (indeed, there's a UNIQUE
+/// index on those fields).
+/// 
+/// The "trainsplorer ID" (`tspl_id`) field uniquely identifies one *version*
+/// of a schedule. If a schedule uniquely identified by uid etc.
+/// is updated, its trainsplorer ID will change.
 #[derive(Debug, Clone)]
 pub struct Schedule {
     /// Internal primary key.
@@ -89,14 +115,20 @@ impl InsertableDbType for Schedule {
 }
 impl Schedule {
     /// Source value for schedules from CIF/ITPS.
-    pub const SOURCE_ITPS: i32 = 0;
+    pub const SOURCE_ITPS: u8 = 0;
     /// Source value for schedules from VSTP/TOPS.
-    pub const SOURCE_VSTP: i32 = 1;
+    pub const SOURCE_VSTP: u8 = 1;
     /// Source value for schedules from Darwin.
-    pub const SOURCE_DARWIN: i32 = 2;
+    pub const SOURCE_DARWIN: u8 = 2;
 } 
 
 /// Describes a movement a train makes within a schedule.
+///
+/// ## Sorting
+///
+/// Schedule movements should ideally be sorted by (day_offset, time, action),
+/// for comparison to other lists of movements.
+/// (indeed, this is how `Ord` is implemented)
 #[derive(Debug, Clone, Hash)]
 pub struct ScheduleMvt {
     /// Internal primary key.
@@ -132,6 +164,21 @@ impl ScheduleMvt {
     pub const ACTION_DEPARTURE: u8 = 1;
     /// `action` value for a pass.
     pub const ACTION_PASS: u8 = 2;
+
+    /// Returns a 'dummy' ScheduleMvt with all fields set to useless/default values
+    /// and `id`s set to -1.
+    pub fn dummy() -> Self {
+        ScheduleMvt {
+            id: -1,
+            parent_sched: -1,
+            tiploc: String::new(),
+            action: ::std::u8::MAX,
+            time: NaiveTime::from_hms(0, 0, 0),
+            day_offset: 0,
+            platform: None,
+            public_time: None
+        }
+    }
 }
 impl PartialEq for ScheduleMvt {
     fn eq(&self, other: &ScheduleMvt) -> bool {
@@ -142,6 +189,18 @@ impl PartialEq for ScheduleMvt {
     }
 }
 impl Eq for ScheduleMvt {}
+impl PartialOrd for ScheduleMvt {
+    fn partial_cmp(&self, other: &ScheduleMvt) -> Option<Ordering> {
+        Some(self.day_offset.cmp(&other.day_offset)
+             .then(self.time.cmp(&other.time))
+             .then(self.action.cmp(&other.action)))
+    }
+}
+impl Ord for ScheduleMvt {
+    fn cmp(&self, other: &ScheduleMvt) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
 impl DbType for ScheduleMvt {
     fn table_name() -> &'static str {
         "schedule_movements"
@@ -157,6 +216,19 @@ impl DbType for ScheduleMvt {
             platform: row.get(6)?,
             public_time: row.get(7)?,
         })
+    }
+}
+impl InsertableDbType for ScheduleMvt {
+    type Id = i64;
+    fn insert_self(&self, conn: &Connection) -> RowResult<i64> {
+        let mut stmt = conn.prepare("INSERT INTO schedule_movements
+                                     (parent_sched, tiploc, action, time,
+                                      day_offset, platform, public_time)
+                                     VALUES (?, ?, ?, ?, ?, ?, ?)")?;
+        let rid = stmt.insert(params![self.parent_sched, self.tiploc,
+                              self.action, self.time, self.day_offset,
+                              self.platform, self.public_time])?;
+        Ok(rid)
     }
 }
 

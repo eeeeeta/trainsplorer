@@ -9,6 +9,7 @@ extern crate serde_json;
 #[macro_use] extern crate postgres_derive;
 #[cfg(feature = "postgres-traits")]
 #[macro_use] extern crate postgres;
+#[macro_use] extern crate enum_display_derive;
 
 mod fns;
 pub mod schedule;
