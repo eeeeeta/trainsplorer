@@ -29,7 +29,7 @@ pub fn apply_schedule_record(conn: &Connection, rec: ScheduleRecord, metaseq: u3
             train_uid, schedule_start_date, stp_indicator);
             conn.execute("DELETE FROM schedules
                           WHERE uid = ? AND start_date = ? AND stp_indicator = ? AND source = ?",
-                          params![train_uid, schedule_start_date.naive_utc(), stp_indicator.to_string(), Schedule::SOURCE_ITPS])?;
+                          params![train_uid, schedule_start_date.naive_utc(), stp_indicator.as_char().to_string(), Schedule::SOURCE_ITPS])?;
             Ok(())
         },
         ScheduleRecord::Create {
@@ -74,7 +74,7 @@ pub fn apply_schedule_record(conn: &Connection, rec: ScheduleRecord, metaseq: u3
                         start_date: schedule_start_date.naive_utc(),
                         end_date: schedule_end_date.naive_utc(),
                         days: schedule_days_runs.into(),
-                        stp_indicator: stp_indicator.to_string(),
+                        stp_indicator: stp_indicator.as_char().to_string(),
                         signalling_id,
                         source: Schedule::SOURCE_ITPS,
                         file_metaseq: Some(metaseq),

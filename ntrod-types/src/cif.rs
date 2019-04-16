@@ -44,6 +44,17 @@ pub enum StpIndicator {
     Cancellation
 }
 impl StpIndicator {
+    pub fn as_char(self) -> char {
+        use self::StpIndicator::*;
+
+        match self {
+            None => ' ',
+            Permanent => 'P',
+            Overlay => 'O',
+            NewSchedule => 'N',
+            Cancellation => 'C'
+        }
+    }
     pub fn create_type() -> &'static str {
         r#"
 DO $$
