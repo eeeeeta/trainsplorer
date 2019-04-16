@@ -195,12 +195,15 @@ pub fn apply_schedule_record(conn: &Connection, rec: ScheduleRecord, metaseq: u3
 }
 
 /// Imports a file containing schedule records into the database.
-pub fn apply_schedule_records<R: BufRead>(conn: &mut Connection, rdr: R) -> Result<()> {
+pub fn apply_schedule_records<R: BufRead>(conn: &mut Connection, mut rdr: R) -> Result<()> {
     let mut inserted = 0;
     let trans = conn.transaction()?;
     let mut metaseq = None;
-    for line in rdr.lines() {
-        let line = line?;
+    let mut line = String::new();
+    // Reduce allocations!
+    while rdr.read_line(&mut line)? > 0 {
+        // (I mean, we still allocate here...)
+        // FIXME(perf): could potentially use serde zero-copy here
         let rec: ::std::result::Result<schedule::Record, _> = serde_json::from_str(&line);
         let rec = match rec {
             Ok(r) => r,
@@ -243,6 +246,7 @@ pub fn apply_schedule_records<R: BufRead>(conn: &mut Connection, rdr: R) -> Resu
             },
             _ => {}
         }
+        line.clear();
     }
     trans.commit()?;
     info!("applied {} schedule entries", inserted);

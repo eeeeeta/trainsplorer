@@ -24,3 +24,4 @@ k8s/tspl-secrets.yaml
 *.sqlite
 *.json
 *.sqlite-*
+tspl-*/*.toml
