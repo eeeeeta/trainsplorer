@@ -6,14 +6,18 @@ version = "0.1.0"
 
 [dependencies]
 chrono = "0.4"
-uuid = { version = "0.7", features = ["serde", "v4"] }
 failure = "0.1"
 failure_derive = "0.1"
 log = "0.4"
-
-[dependencies.tspl-util]
-path = "../tspl-util"
+r2d2 = "0.8.4"
 
 [dependencies.rusqlite]
 features = ["blob", "chrono", "uuid"]
 git = "https://github.com/jgallagher/rusqlite"
+
+[dependencies.tspl-util]
+path = "../tspl-util"
+
+[dependencies.uuid]
+features = ["serde", "v4"]
+version = "0.7"

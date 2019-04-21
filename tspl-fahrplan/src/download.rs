@@ -10,6 +10,7 @@ use std::io::BufReader;
 use tspl_sqlite::traits::*;
 use crate::import;
 use crate::config::Config;
+use serde_derive::{Serialize, Deserialize};
 
 pub struct Downloader {
     username: String,
@@ -17,6 +18,7 @@ pub struct Downloader {
     base_url: String,
     cli: Client,
 }
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub enum JobType {
     Init,
     Recover,

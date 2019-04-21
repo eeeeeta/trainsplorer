@@ -7,11 +7,14 @@ use bitflags::bitflags;
 use ntrod_types::schedule::Days as NtrodDays;
 use chrono::*;
 use std::cmp::Ordering;
+use serde_derive::{Serialize, Deserialize};
 
 pub static MIGRATIONS: [Migration; 1] = [
     migration!(0, "initial")
 ];
 bitflags! {
+    /// Bitflags showing which days a schedule runs on.
+    #[derive(Serialize, Deserialize)]
     pub struct ScheduleDays: u8 {
         const MONDAY = 1;
         const TUESDAY = 2;
@@ -48,7 +51,7 @@ impl From<NtrodDays> for ScheduleDays {
 /// The "trainsplorer ID" (`tspl_id`) field uniquely identifies one *version*
 /// of a schedule. If a schedule uniquely identified by uid etc.
 /// is updated, its trainsplorer ID will change.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Schedule {
     /// Internal primary key.
     pub id: i64,
@@ -129,7 +132,7 @@ impl Schedule {
 /// Schedule movements should ideally be sorted by (day_offset, time, action),
 /// for comparison to other lists of movements.
 /// (indeed, this is how `Ord` is implemented)
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Hash, Serialize, Deserialize)]
 pub struct ScheduleMvt {
     /// Internal primary key.
     pub id: i64,

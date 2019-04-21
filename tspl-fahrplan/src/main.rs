@@ -4,11 +4,13 @@ pub mod errors;
 pub mod types;
 pub mod import;
 pub mod download;
+pub mod dl_scheduler;
 pub mod config;
+pub mod proto;
 
+use tspl_sqlite::r2d2;
 use tspl_util::ConfigExt;
 use self::config::Config;
-use self::download::{Downloader, JobType};
 use log::*;
 
 fn main() -> errors::Result<()> {
@@ -17,9 +19,11 @@ fn main() -> errors::Result<()> {
     info!("loading config");
     let cfg = Config::load()?;
     info!("initializing db");
-    let mut conn = tspl_sqlite::initialize_db(&cfg.database_path, &types::MIGRATIONS)?;
-    info!("testing importing a daily update");
-    let mut dl = Downloader::new(&cfg);
-    dl.do_job(&mut conn, JobType::Init)?;
+    let manager = tspl_sqlite::TsplConnectionManager::initialize(&cfg.database_path, &types::MIGRATIONS)?;
+    let pool = r2d2::Pool::new(manager)?;
+    info!("initializing update scheduler");
+    let mut dls = dl_scheduler::UpdateScheduler::new(pool.clone(), &cfg)?;
+    let dls_tx = dls.take_sender();
+    dls.run();
     Ok(())
 }

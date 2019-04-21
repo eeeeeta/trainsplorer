@@ -9,7 +9,13 @@ pub struct Config {
     pub username: String,
     pub password: String,
     #[serde(default)]
-    pub base_url: Option<String>
+    pub base_url: Option<String>,
+    #[serde(default)]
+    pub update_hour: Option<u32>,
+    #[serde(default)]
+    pub update_timeout_ms: Option<u32>,
+    #[serde(default)]
+    pub update_retries: Option<u32>
 }
 
 impl ConfigExt for Config {

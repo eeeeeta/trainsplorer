@@ -4,9 +4,6 @@
 //!
 //! - random macros
 //! - logging
-//!
-//! Will probably soon contain:
-//!
 //! - config
 
 use config as cfg;
