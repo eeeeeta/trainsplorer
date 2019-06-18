@@ -8,6 +8,7 @@ pub struct Config {
     pub database_path: String,
     pub username: String,
     pub password: String,
+    pub listen_url: String,
     #[serde(default)]
     pub base_url: Option<String>,
     #[serde(default)]

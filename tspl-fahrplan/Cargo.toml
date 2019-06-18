@@ -27,3 +27,6 @@ path = "../tspl-sqlite"
 
 [dependencies.tspl-util]
 path = "../tspl-util"
+
+[dependencies.tspl-proto]
+path = "../tspl-proto"

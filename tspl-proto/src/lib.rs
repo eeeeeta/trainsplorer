@@ -7,7 +7,6 @@ use nng::{Socket, Protocol};
 use errors::{Result, ProtoError};
 use wire::RpcResponse;
 use failure::Fail;
-use std::convert::TryFrom;
 
 pub static API_VERSION: u8 = 0;
 pub type StdResult<T, E> = ::std::result::Result<T, E>;
@@ -38,17 +37,16 @@ pub struct RpcRequestInProgress<'a, P> {
     msg: nng::Message
 }
 impl<'a, P> RpcRequestInProgress<'a, P> where P: RpcInterface {
-    pub fn decode<T>(&self) -> Result<T> where T: DeserializeOwned {
+    pub fn decode(&self) -> Result<P::Request> {
         let data = self.msg.as_slice();
         if data.len() < 3 {
             Err(ProtoError::MalformedResponse("message way too short"))?
         }
         wire::check_header::<P>(data)?;
-        let ret: T = rmp_serde::decode::from_slice(&data[2..])?;
+        let ret = rmp_serde::decode::from_slice(&data[2..])?;
         Ok(ret)
     }
-    pub fn reply<T>(mut self, val: StdResult<T, P::Error>) -> Result<()> where T: Serialize {
-        let resp: RpcResponse<P> = RpcResponse::try_from(val)?;
+    pub fn reply(mut self, resp: RpcResponse<P>) -> Result<()> {
         self.msg.clear();
         resp.to_wire(&mut self.msg)?;
         self.listener.socket.send(self.msg).map_err(|(_msg, e)| e)?;

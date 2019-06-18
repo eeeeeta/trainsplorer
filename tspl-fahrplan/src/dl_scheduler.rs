@@ -13,6 +13,8 @@ use tspl_sqlite::traits::*;
 use crate::types::ScheduleFile;
 use crate::errors::Result;
 
+pub type DlSender = Sender<JobType>;
+
 /// The hour of the day when schedule update jobs are started (default value)
 static UPDATE_HOUR: u32 = 5;
 /// How many milliseconds to wait before retrying a failed update job.

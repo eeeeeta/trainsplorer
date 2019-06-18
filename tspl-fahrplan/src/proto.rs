@@ -6,20 +6,24 @@ use failure_derive::{Fail};
 use chrono::NaiveDate;
 use crate::types::{Schedule, ScheduleMvt};
 use crate::download::JobType;
+use tspl_proto::RpcInterface;
+use tspl_proto::wire::RpcResponse;
 
-/// Response type for all `tspl-fahrplan` calls.
-pub type FahrplanResult<T> = Result<T, FahrplanError>;
+pub type FahrplanResponse<'a> = RpcResponse<'a, FahrplanRpc>;
 
 /// Error that could occur when processing a request.
 #[derive(Serialize, Deserialize, Fail, Debug)]
 pub enum FahrplanError {
     /// The given entity was not found.
     #[fail(display = "fahrplan entity not found")]
-    NotFound
+    NotFound,
+    /// Some internal error occurred while processing the request.
+    #[fail(display = "Internal service error: {}", _0)]
+    InternalError(String)
 }
 
 /// A request issued to `tspl-fahrplan` by another microservice.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum FahrplanRequest {
     /// Find all schedules with a given `uid`.
     ///
@@ -94,4 +98,15 @@ pub struct ScheduleDetails {
     pub sched: Schedule,
     /// Schedule movements, in the proper order.
     pub mvts: Vec<ScheduleMvt>
+}
+/// tspl-fahrplan RPC interface.
+pub struct FahrplanRpc;
+
+impl RpcInterface for FahrplanRpc {
+    type Request = FahrplanRequest;
+    type Error = FahrplanError;
+
+    fn api_version() -> u8 {
+        0
+    }
 }
