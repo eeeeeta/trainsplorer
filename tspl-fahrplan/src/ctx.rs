@@ -28,6 +28,11 @@ impl App {
                     .try_into()?;
                 Ok(ret)
             },
+            Ping => {
+                let ret = format!("Hi from {}!", env!("CARGO_PKG_VERSION"));
+                let ret = Ok(ret).try_into()?;
+                Ok(ret)
+            },
             _ => {
                 let res: std::result::Result<(), _> = Err(FahrplanError::InternalError("not implemented".into()));
                 let ret = res

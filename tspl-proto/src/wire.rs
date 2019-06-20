@@ -89,9 +89,18 @@ impl<'a, P> RpcResponse<'a, P> where P: RpcInterface {
             }
         }
     }
+    /// Get the type byte representing this response's type.
+    pub fn typebyte(&self) -> u8 {
+        use self::RpcResponse::*;
+
+        match self {
+            Successful { .. } => Self::MESSAGE_SUCCESSFUL,
+            Failure { .. } => Self::MESSAGE_FAILURE,
+        }
+    }
     /// Serialize this response to wire format.
     pub fn to_wire<W: std::io::Write>(&self, mut writer: W) -> Result<()> {
-        writer.write_all(&[API_VERSION, P::api_version()])?;
+        writer.write_all(&[API_VERSION, P::api_version(), self.typebyte()])?;
         writer.write_all(self.as_ref())?;
         Ok(())
     }
@@ -105,13 +114,13 @@ impl<'a, P> RpcResponse<'a, P> where P: RpcInterface {
         match ty {
             Self::MESSAGE_SUCCESSFUL => {
                 Ok(RpcResponse::Successful {
-                    data: Cow::Borrowed(&bytes[2..]),
+                    data: Cow::Borrowed(&bytes[3..]),
                     _proto: PhantomData
                 })
             },
             Self::MESSAGE_FAILURE => {
                 Ok(RpcResponse::Failure {
-                    error_data: Cow::Borrowed(&bytes[2..]),
+                    error_data: Cow::Borrowed(&bytes[3..]),
                     _proto: PhantomData
                 })
             },

@@ -25,6 +25,14 @@ pub enum FahrplanError {
 /// A request issued to `tspl-fahrplan` by another microservice.
 #[derive(Serialize, Deserialize, Debug)]
 pub enum FahrplanRequest {
+    /// Check if the service is alive.
+    ///
+    /// Returns current version.
+    ///
+    /// ## Returns
+    ///
+    /// `String`
+    Ping,
     /// Find all schedules with a given `uid`.
     ///
     /// ## Returns

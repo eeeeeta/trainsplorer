@@ -3156,6 +3156,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tspl-cli"
+version = "0.1.0"
+dependencies = [
+ "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tspl-fahrplan 0.1.0",
+ "tspl-proto 0.1.0",
+]
+
+[[package]]
 name = "tspl-fahrplan"
 version = "0.1.0"
 dependencies = [
