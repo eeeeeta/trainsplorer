@@ -37,7 +37,7 @@ fn main() -> errors::Result<()> {
         let req = listener.recv()?;
         match req.decode() {
             Ok(v) => {
-                println!("got request: {:?}", v);
+                info!("got request: {:?}", v);
                 let ret = app.process_request(v)?;
                 req.reply(ret)?;
             },

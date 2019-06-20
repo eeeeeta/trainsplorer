@@ -1,5 +1,7 @@
 use clap::{Arg, App, SubCommand, AppSettings};
 use tspl_fahrplan::proto::{FahrplanRequest, FahrplanRpc};
+use tspl_fahrplan::types::Schedule;
+use tspl_fahrplan::download::JobType;
 use tspl_proto::RpcClient;
 
 fn main() {
@@ -20,6 +22,10 @@ fn main() {
                     .setting(AppSettings::SubcommandRequired)
                     .subcommand(SubCommand::with_name("ping")
                                 .about("Tests the connection."))
+                    .subcommand(SubCommand::with_name("recover")
+                                .about("Recover after a few missed schedule updates."))
+                    .subcommand(SubCommand::with_name("init")
+                                .about("Initialize the schedule database."))
                     .subcommand(SubCommand::with_name("search_uid")
                                 .about("Find all schedules with a given NROD `uid`.")
                                 .arg(Arg::with_name("uid")
@@ -45,7 +51,21 @@ fn main() {
                     println!("[+] result: {:?}", res);
                 },
                 ("search_uid", Some(opts)) => {
+                    let uid = opts.value_of("uid").unwrap();
+                    println!("[+] Searching for schedules with UID {}", uid);
+                    let res: Result<Result<Vec<Schedule>, _>, _> = rc.request(FahrplanRequest::FindSchedulesWithUid { uid: uid.into() });
+                    println!("[+] result: {:#?}", res);
                 },
+                (x @ "init", _) | (x @ "recover", _) => {
+                    let jt = match x {
+                        "init" => JobType::Init,
+                        "recover" => JobType::Recover,
+                        _ => unreachable!()
+                    };
+                    println!("[+] Queuing schedule job: {:?}", jt);
+                    let res: Result<Result<(), _>, _> = rc.request(FahrplanRequest::QueueUpdateJob(jt));
+                    println!("[+] result: {:?}", res);
+                }
                 _ => unreachable!()
             }
         },

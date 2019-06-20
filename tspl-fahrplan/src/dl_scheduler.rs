@@ -100,21 +100,23 @@ impl UpdateScheduler {
         thread::Builder::new()
             .name("tspl-fahrplan: update scheduler".into())
             .spawn(move || {
-                let now = Local::now();
-                if now.date() != self.last_update.date() && now.time() >= self.update_time {
-                    info!("Schedule update job triggered (last update: {})", self.last_update);
-                    self.update();
-                    self.last_update = now;
-                }
-                if let Ok(j) = self.rx.try_recv() {
-                    info!("Performing manual job: {:?}", j);
-                    let mut conn = self.pool.get().unwrap();
-                    match self.dl.do_job(&mut conn, j) {
-                        Ok(_) => info!("Job completed successfully."),
-                        Err(e) => error!("Manual job failed: {}", e)
+                loop {
+                    let now = Local::now();
+                    if now.date() != self.last_update.date() && now.time() >= self.update_time {
+                        info!("Schedule update job triggered (last update: {})", self.last_update);
+                        self.update();
+                        self.last_update = now;
                     }
+                    if let Ok(j) = self.rx.try_recv() {
+                        info!("Performing manual job: {:?}", j);
+                        let mut conn = self.pool.get().unwrap();
+                        match self.dl.do_job(&mut conn, j) {
+                            Ok(_) => info!("Job completed successfully."),
+                            Err(e) => error!("Manual job failed: {}", e)
+                        }
+                    }
+                    thread::sleep(::std::time::Duration::from_millis(1000));
                 }
-                thread::sleep(::std::time::Duration::from_millis(1000));
             })?;
         Ok(())
     }

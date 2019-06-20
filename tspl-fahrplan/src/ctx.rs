@@ -33,6 +33,12 @@ impl App {
                 let ret = Ok(ret).try_into()?;
                 Ok(ret)
             },
+            QueueUpdateJob(jt) => {
+                let ret = self.dls_tx.send(jt)
+                    .map_err(|e| FahrplanError::InternalError(e.to_string()))
+                    .try_into()?;
+                Ok(ret)
+            },
             _ => {
                 let res: std::result::Result<(), _> = Err(FahrplanError::InternalError("not implemented".into()));
                 let ret = res
