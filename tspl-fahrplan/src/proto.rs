@@ -10,6 +10,7 @@ use tspl_proto::RpcInterface;
 use tspl_proto::wire::RpcResponse;
 
 pub type FahrplanResponse<'a> = RpcResponse<'a, FahrplanRpc>;
+pub type FahrplanResult<T> = ::std::result::Result<T, FahrplanError>;
 
 /// Error that could occur when processing a request.
 #[derive(Serialize, Deserialize, Fail, Debug)]

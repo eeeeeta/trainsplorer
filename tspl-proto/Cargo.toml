@@ -1,0 +1,16 @@
+[package]
+name = "tspl-proto"
+version = "0.1.0"
+authors = ["eta <hi@theta.eu.org>"]
+edition = "2018"
+
+[dependencies]
+failure = "0.1"
+failure_derive = "0.1"
+serde = "1.0"
+serde_derive = "1.0"
+rmp-serde = "0.13"
+nng = "0.5.0-rc.2"
+
+[dependencies.tspl-util]
+path = "../tspl-util"

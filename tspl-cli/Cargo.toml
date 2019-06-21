@@ -1,0 +1,14 @@
+[package]
+name = "tspl-cli"
+version = "0.1.0"
+authors = ["eta <hi@theta.eu.org>"]
+edition = "2018"
+
+[dependencies]
+clap = "2.32"
+
+[dependencies.tspl-fahrplan]
+path = "../tspl-fahrplan"
+
+[dependencies.tspl-proto]
+path = "../tspl-proto"
