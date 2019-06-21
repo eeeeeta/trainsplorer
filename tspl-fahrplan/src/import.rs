@@ -61,7 +61,7 @@ pub fn apply_schedule_record(conn: &Connection, rec: ScheduleRecord, metaseq: u3
             let sid: Option<i64> = conn.query_row(
                 "SELECT id FROM schedules
                  WHERE uid = ? AND start_date = ? AND stp_indicator = ? AND source = ?",
-                 params![train_uid, schedule_start_date.naive_utc(), stp_indicator.to_string(), Schedule::SOURCE_ITPS],
+                 params![train_uid, schedule_start_date.naive_utc(), stp_indicator.as_char().to_string(), Schedule::SOURCE_ITPS],
                  |row| row.get(0))
                 .optional()?;
             let (sid, updated) = match sid {
@@ -173,7 +173,7 @@ pub fn apply_schedule_record(conn: &Connection, rec: ScheduleRecord, metaseq: u3
                 //
                 // (Yay, microservices!)
                 info!("duplicate record (UID {}, start {}, stp_indicator {:?})", train_uid, schedule_start_date, stp_indicator);
-                let orig_mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = ? ORDER BY (day_offset, time, action) ASC", &[&sid])?;
+                let orig_mvts = ScheduleMvt::from_select(conn, "WHERE parent_sched = ? ORDER BY day_offset, time, action ASC", &[&sid])?;
                 if orig_mvts != mvts {
                     info!("replacing movements; record is new version");
                     // Ahahaha, so much simpler!
