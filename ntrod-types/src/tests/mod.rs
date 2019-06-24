@@ -6,7 +6,7 @@ macro_rules! mktest {
         $(
         #[test]
         fn $name() {
-            let data = include_str!($path);
+            let data = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tests/", $path));
             let _: $ty = serde_json::from_str(&data).unwrap();
         }
         )*
