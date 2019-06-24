@@ -2,8 +2,7 @@
 FROM archlinux/base:latest AS tspl-builder
 
 # update OS
-RUN pacman -Syu --noconfirm
-RUN pacman -S --needed --noconfirm base-devel
+RUN pacman -Syu --needed --noconfirm base-devel cmake
 
 # install Rust: download rustup
 RUN curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain stable -y
@@ -14,7 +13,7 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain stable -y
 WORKDIR /tspl
 # add all the cargo files, to get deps
 
-RUN /bin/bash -c 'pkgs=("osms-db" "osms-darwin" "darwin-types" "osms-nrod" "ntrod-types" "osms-db-setup" "osms-web" "atoc-msn"); for thing in ${pkgs[@]}; do mkdir "/tspl/$thing"; done'
+RUN /bin/bash -c 'pkgs=("osms-db" "osms-darwin" "darwin-types" "osms-nrod" "ntrod-types" "osms-db-setup" "osms-web" "atoc-msn" "tspl-sqlite" "tspl-fahrplan" "tspl-util" "tspl-proto" "tspl-cli"); for thing in ${pkgs[@]}; do mkdir "/tspl/$thing"; done'
 ADD ./osms-db/Cargo.toml /tspl/osms-db/
 ADD ./osms-db-setup/Cargo.toml /tspl/osms-db-setup/
 ADD ./osms-darwin/Cargo.toml /tspl/osms-darwin/
@@ -23,6 +22,11 @@ ADD ./osms-web/Cargo.toml /tspl/osms-web/
 ADD ./atoc-msn/Cargo.toml /tspl/atoc-msn/
 ADD ./ntrod-types/Cargo.toml /tspl/ntrod-types/
 ADD ./darwin-types/Cargo.toml /tspl/darwin-types/
+ADD ./tspl-sqlite/Cargo.toml /tspl/tspl-sqlite/
+ADD ./tspl-fahrplan/Cargo.toml /tspl/tspl-fahrplan/
+ADD ./tspl-util/Cargo.toml /tspl/tspl-util/
+ADD ./tspl-proto/Cargo.toml /tspl/tspl-proto/
+ADD ./tspl-cli/Cargo.toml /tspl/tspl-cli/
 ADD ./Cargo.lock /tspl/
 ADD ./Cargo.toml /tspl/
 # make dummy src/lib.rs files, to satisfy cargo
