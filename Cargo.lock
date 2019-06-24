@@ -3159,9 +3159,11 @@ dependencies = [
 name = "tspl-cli"
 version = "0.1.0"
 dependencies = [
+ "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tspl-fahrplan 0.1.0",
  "tspl-proto 0.1.0",
+ "uuid 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

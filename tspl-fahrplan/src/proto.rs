@@ -64,7 +64,7 @@ pub enum FahrplanRequest {
         /// is only really used in TRUST activations.
         source: u8
     },
-    /// Find the appropriate authoritative schedule for a TRUST activation.
+    /// Find the appropriate schedule for a TRUST activation.
     ///
     /// ## Usecases
     ///
@@ -74,7 +74,11 @@ pub enum FahrplanRequest {
     ///
     /// ## Returns
     ///
-    /// `Schedule` (or `NotFound`)
+    /// `Schedule`
+    /// 
+    /// ## Errors
+    ///
+    /// - `NotFound`
     FindScheduleForActivation {
         /// Schedule UID (e.g. 'W91071').
         uid: String,
@@ -90,7 +94,11 @@ pub enum FahrplanRequest {
     ///
     /// ## Returns
     ///
-    /// `Option<ScheduleDetails>`
+    /// `ScheduleDetails`
+    /// 
+    /// ## Errors
+    ///
+    /// - `NotFound`
     RequestScheduleDetails(Uuid),
     /// Queue the given database update job.
     ///
@@ -101,7 +109,7 @@ pub enum FahrplanRequest {
 }
 
 /// The complete details about a schedule stored in the database.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ScheduleDetails {
     /// Actual schedule object.
     pub sched: Schedule,

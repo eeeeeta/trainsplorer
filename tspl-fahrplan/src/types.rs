@@ -39,6 +39,20 @@ impl From<NtrodDays> for ScheduleDays {
         ret
     }
 }
+impl ScheduleDays {
+    pub fn runs_on_iso_weekday(&self, wd: u32) -> bool {
+        match wd {
+            1 => self.contains(ScheduleDays::MONDAY),
+            2 => self.contains(ScheduleDays::TUESDAY),
+            3 => self.contains(ScheduleDays::WEDNESDAY),
+            4 => self.contains(ScheduleDays::THURSDAY),
+            5 => self.contains(ScheduleDays::FRIDAY),
+            6 => self.contains(ScheduleDays::SATURDAY),
+            7 => self.contains(ScheduleDays::SUNDAY),
+            _ => false
+        }
+    }
+}
 
 /// A schedule from NROD, describing how trains should theoretically run.
 /// 
