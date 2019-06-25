@@ -6,4 +6,4 @@ COPY . /tspl
 RUN ~/.cargo/bin/cargo clean --release -p osms-db -p osms-darwin -p darwin-types -p osms-nrod -p ntrod-types -p osms-db-setup -p osms-web -p atoc-msn -p tspl-sqlite -p tspl-fahrplan -p tspl-util -p tspl-proto -p tspl-cli
 
 # Actually build the damn code already :P
-RUN ~/.cargo/bin/cargo build --all-targets --release
+RUN ~/.cargo/bin/cargo build --bins --release
