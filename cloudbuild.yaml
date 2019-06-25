@@ -40,5 +40,5 @@ images:
 - 'gcr.io/trainsplorer/osms-db-setup:$COMMIT_SHA'
 - 'gcr.io/trainsplorer/osms-web:$COMMIT_SHA'
 - 'gcr.io/trainsplorer/tspl-fahrplan:$COMMIT_SHA'
-timeout: 4400s
+timeout: 5000s
 
