@@ -12,7 +12,7 @@ steps:
   - '-c'
   - |
     pkgs=("tspl-builder" "tspl-compiled" "osms-nrod" "osms-db-setup" "osms-web" "tspl-fahrplan"); for thing in ${pkgs[@]}; do docker build -f "docker/$thing" -t "$thing" --cache-from gcr.io/trainsplorer/tspl-builder:latest .; done
-  timeout: 3600s
+  timeout: 4000s
 
 - name: 'gcr.io/cloud-builders/docker'
   entrypoint: 'bash'
