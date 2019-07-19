@@ -11,6 +11,7 @@ use tspl_sqlite::traits::*;
 use crate::import;
 use crate::config::Config;
 use serde_derive::{Serialize, Deserialize};
+use std::str::FromStr;
 
 pub struct Downloader {
     username: String,
@@ -25,6 +26,18 @@ pub enum JobType {
     Update
 }
 
+impl FromStr for JobType {
+    type Err = ();
+
+    fn from_str(s: &str) -> ::std::result::Result<Self, ()> {
+        match s {
+            "init" => Ok(JobType::Init),
+            "recover" => Ok(JobType::Recover),
+            "update" => Ok(JobType::Update),
+            _ => Err(())
+        }
+    }
+}
 // FIXME(perf): Yes, two layers of buffering.
 //
 // - The first layer of buffering is to avoid copious syscalls

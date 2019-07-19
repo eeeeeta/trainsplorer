@@ -1,28 +1,9 @@
 //! Microservice protocol - i.e. what this thing actually exposes to the world.
 
-use tspl_sqlite::uuid::Uuid;
-use serde_derive::{Serialize, Deserialize};
-use failure_derive::{Fail};
-use chrono::NaiveDate;
 use crate::types::{Schedule, ScheduleMvt};
-use crate::download::JobType;
-use tspl_proto::RpcInterface;
-use tspl_proto::wire::RpcResponse;
+use serde_derive::{Serialize, Deserialize};
 
-pub type FahrplanResponse<'a> = RpcResponse<'a, FahrplanRpc>;
-pub type FahrplanResult<T> = ::std::result::Result<T, FahrplanError>;
-
-/// Error that could occur when processing a request.
-#[derive(Serialize, Deserialize, Fail, Debug)]
-pub enum FahrplanError {
-    /// The given entity was not found.
-    #[fail(display = "fahrplan entity not found")]
-    NotFound,
-    /// Some internal error occurred while processing the request.
-    #[fail(display = "Internal service error: {}", _0)]
-    InternalError(String)
-}
-
+/*
 /// A request issued to `tspl-fahrplan` by another microservice.
 #[derive(Serialize, Deserialize, Debug)]
 pub enum FahrplanRequest {
@@ -107,7 +88,7 @@ pub enum FahrplanRequest {
     /// `()`
     QueueUpdateJob(JobType)
 }
-
+*/
 /// The complete details about a schedule stored in the database.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ScheduleDetails {
@@ -115,15 +96,4 @@ pub struct ScheduleDetails {
     pub sched: Schedule,
     /// Schedule movements, in the proper order.
     pub mvts: Vec<ScheduleMvt>
-}
-/// tspl-fahrplan RPC interface.
-pub struct FahrplanRpc;
-
-impl RpcInterface for FahrplanRpc {
-    type Request = FahrplanRequest;
-    type Error = FahrplanError;
-
-    fn api_version() -> u8 {
-        0
-    }
 }

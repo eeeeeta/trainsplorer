@@ -3,6 +3,7 @@
 use tspl_util::impl_from_for_error;
 use failure_derive::Fail;
 use rusqlite::Error as SqliteError;
+pub use r2d2::Error as PoolError;
 
 pub type Result<T> = ::std::result::Result<T, SqlError>;
 

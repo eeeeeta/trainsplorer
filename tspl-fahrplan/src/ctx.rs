@@ -2,34 +2,19 @@
 
 use tspl_sqlite::TsplPool;
 use tspl_sqlite::traits::*;
+use crate::download::JobType;
 use crate::dl_scheduler::DlSender;
-use crate::proto::{FahrplanRequest, FahrplanResponse, FahrplanError, FahrplanResult, ScheduleDetails};
+use crate::proto::ScheduleDetails;
 use crate::types::{Schedule, ScheduleMvt};
-use ::serde::Serialize;
-use crate::errors::Result;
-use std::convert::TryInto;
+use crate::errors::{FahrplanResult, FahrplanError};
 use tspl_sqlite::rusqlite::Connection;
 use log::*;
 use chrono::*;
-use failure::format_err;
+use rouille::{Request, Response, router};
+use std::time::Instant;
+use std::sync::Mutex;
 
-pub trait FahrplanResultExt {
-    fn collapse(self) -> Result<FahrplanResponse<'static>>;
-}
-impl<T: Serialize> FahrplanResultExt for Result<FahrplanResult<T>> {
-    fn collapse(self) -> Result<FahrplanResponse<'static>> {
-        match self {
-            Ok(r) => Ok(r.try_into()?),
-            Err(e) => {
-                warn!("Error processing request: {}", e);
-                let res: ::std::result::Result<(), FahrplanError> = Err(FahrplanError::InternalError(e.to_string()));
-                Ok(res.try_into()?)
-            }
-        }
-    }
-}
-
-fn get_auth_schedule(conn: &Connection, uid: String, on_date: NaiveDate, source: u8) -> Result<Option<Schedule>> {
+fn get_auth_schedule(conn: &Connection, uid: String, on_date: NaiveDate, source: u8) -> FahrplanResult<Option<Schedule>> {
     debug!("Finding authoritative schedule for (uid, on_date, source) = ({}, {}, {})", uid, on_date, source);
     let scheds = Schedule::from_select(conn, "WHERE uid = $1 AND start_date <= $2 AND end_date >= $2 AND source = $3",
                                        &[&uid, &on_date, &source])?;
@@ -52,7 +37,7 @@ fn get_auth_schedule(conn: &Connection, uid: String, on_date: NaiveDate, source:
         }
         else if sched.stp_indicator == other.stp_indicator && sched.stp_indicator != "C" {
             error!("Inconsistency: schedule #{} has a STP indicator equal to #{}", sched.id, other.id);
-            return Err(format_err!("STP indicators equal"));
+            return Err(FahrplanError::StpIndicatorsEqual);
         }
         else {
             debug!("...doesn't supersede current schedule");
@@ -64,74 +49,82 @@ fn get_auth_schedule(conn: &Connection, uid: String, on_date: NaiveDate, source:
 
 pub struct App {
     pub(crate) pool: TsplPool,
-    pub(crate) dls_tx: DlSender
+    pub(crate) dls_tx: Mutex<DlSender>
 }
 
 impl App {
-    pub fn find_schedules_with_uid(&mut self, uid: String) -> Result<Vec<Schedule>> {
+    pub fn find_schedules_with_uid(&self, uid: String) -> FahrplanResult<Vec<Schedule>> {
         let db = self.pool.get()?;
         let scheds = Schedule::from_select(&db, "WHERE uid = ?", &[&uid])?;
         Ok(scheds)
     }
-    pub fn find_schedule_for_activation(&mut self, uid: String, stp_indicator: String, start_date: NaiveDate, source: u8) -> Result<FahrplanResult<Schedule>> {
+    pub fn find_schedule_for_activation(&self, uid: String, stp_indicator: String, start_date: NaiveDate, source: u8) -> FahrplanResult<Schedule> {
         let db = self.pool.get()?;
         let scheds = Schedule::from_select(&db, "WHERE uid = ?, stp_indicator = ?, start_date = ?, source = ?", 
                                            &[&uid, &stp_indicator, &start_date, &source])?;
-        Ok(scheds.into_iter().nth(0).ok_or(FahrplanError::NotFound))
+        Ok(scheds.into_iter().nth(0).ok_or(FahrplanError::NotFound)?)
     }
-    pub fn find_schedule_on_date(&mut self, uid: String, on_date: NaiveDate, source: u8) -> Result<FahrplanResult<Schedule>> {
+    pub fn find_schedule_on_date(&self, uid: String, on_date: NaiveDate, source: u8) -> FahrplanResult<Schedule> {
         let db = self.pool.get()?;
-        let auth_sched = get_auth_schedule(&db, uid, on_date, source)?.ok_or(FahrplanError::NotFound);
+        let auth_sched = get_auth_schedule(&db, uid, on_date, source)?
+            .ok_or(FahrplanError::NotFound)?;
         Ok(auth_sched)
     }
-    pub fn request_schedule_details(&mut self, uu: Uuid) -> Result<FahrplanResult<ScheduleDetails>> {
+    pub fn request_schedule_details(&self, uu: Uuid) -> FahrplanResult<ScheduleDetails> {
         let db = self.pool.get()?;
         let scheds = Schedule::from_select(&db, "WHERE tspl_id = ?", &[&uu])?;
-        let sched = match scheds.into_iter().nth(0) {
-            Some(s) => s,
-            None => return Ok(Err(FahrplanError::NotFound))
-        };
+        let sched = scheds.into_iter().nth(0)
+            .ok_or(FahrplanError::NotFound)?;
         let mvts = ScheduleMvt::from_select(&db, "WHERE parent_sched = ? ORDER BY day_offset, time, action ASC", &[&sched.id])?;
-        Ok(Ok(ScheduleDetails {
+        Ok(ScheduleDetails {
             sched,
             mvts
-        }))
+        })
     }
-    pub fn process_request(&mut self, req: FahrplanRequest) -> Result<FahrplanResponse<'static>> {
-        use self::FahrplanRequest::*;
-        match req {
-            FindSchedulesWithUid { uid } => {
-                let ret = self.find_schedules_with_uid(uid)
-                    .map_err(|e| FahrplanError::InternalError(e.to_string()))
-                    .try_into()?;
-                Ok(ret)
+    pub fn process_request(&self, req: &Request) -> Response {
+        let start = Instant::now();
+        let ret = router!(req,
+            (GET) (/) => {
+                Ok(Response::text(concat!("tspl-fahrplan ", env!("CARGO_PKG_VERSION"), "\n")))
             },
-            FindScheduleOnDate { uid, on_date, source } => {
-                let ret = self.find_schedule_on_date(uid, on_date, source)
-                    .collapse()?;
-                Ok(ret)
+            (GET) (/schedules/by-uid/{uid}) => {
+                self.find_schedules_with_uid(uid)
+                    .map(|x| Response::json(&x))
             },
-            FindScheduleForActivation { uid, start_date, source, stp_indicator } => {
-                let ret = self.find_schedule_for_activation(uid, stp_indicator, start_date, source)
-                    .collapse()?;
-                Ok(ret)
+            (GET) (/schedules/by-uid-on-date/{uid}/{on_date}/{source}) => {
+                self.find_schedule_on_date(uid, on_date, source)
+                    .map(|x| Response::json(&x))
             },
-            RequestScheduleDetails(uu) => {
-                let ret = self.request_schedule_details(uu)
-                    .collapse()?;
-                Ok(ret)
+            (GET) (/schedules/for-activation/{uid}/{start_date}/{stp_indicator}/{source}) => {
+                self.find_schedule_for_activation(uid, stp_indicator, start_date, source)
+                    .map(|x| Response::json(&x))
             },
-            Ping => {
-                let ret = format!("Hi from {}!", env!("CARGO_PKG_VERSION"));
-                let ret = Ok(ret).try_into()?;
-                Ok(ret)
+            (GET) (/schedule/{uuid}) => {
+                self.request_schedule_details(uuid)
+                    .map(|x| Response::json(&x))
             },
-            QueueUpdateJob(jt) => {
-                let ret = self.dls_tx.send(jt)
-                    .map_err(|e| FahrplanError::InternalError(e.to_string()))
-                    .try_into()?;
-                Ok(ret)
+            (POST) (/update/{jt: JobType}) => {
+                self.dls_tx
+                    .lock().unwrap()
+                    .send(jt)
+                    .map(|_| Response::json(&()))
+                    .map_err(|_| FahrplanError::JobQueueError)
+            },
+            _ => {
+                Err(FahrplanError::NotFound)
             }
-        }
+        );
+        let ret = match ret {
+            Ok(r) => r,
+            Err(e) => {
+                let sc = e.status_code();
+                warn!("Processing request failed ({}): {}", sc, e);
+                Response::text(format!("error: {}\n", e))
+                    .with_status_code(sc)
+            }
+        };
+        let dur = start.elapsed();
+        info!("{} {} \"{}\" - {} [{}.{:03}s]", req.remote_addr(), req.method(), req.raw_url(), ret.status_code, dur.as_secs(), dur.subsec_millis());
+        ret
     }
 }
