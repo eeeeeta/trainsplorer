@@ -1,16 +1,14 @@
 [package]
-authors = ["eeeeeta <eeeeeta@users.noreply.github.com>"]
-edition = "2018"
-name = "tspl-fahrplan"
+name = "tspl-zugfuhrer"
 version = "0.1.0"
+authors = ["eta <hi@theta.eu.org>"]
+edition = "2018"
 
 [dependencies]
 bitflags = "1.0.4"
 chrono = "0.4"
 failure = "0.1"
 failure_derive = "0.1"
-flate2 = "1.0.7"
-is_sorted = "0.1.1"
 log = "0.4"
 reqwest = "0.9.15"
 rouille = "3.0"
