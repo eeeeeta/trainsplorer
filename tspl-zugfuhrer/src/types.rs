@@ -1,7 +1,13 @@
 //! Database types for live train info.
 
 use tspl_sqlite::traits::*;
+use tspl_sqlite::migrations::Migration;
+use tspl_sqlite::migration;
 use chrono::*;
+
+pub static MIGRATIONS: [Migration; 1] = [
+    migration!(0, "initial")
+];
 
 /// A live train object, representing a live or historic running of a train.
 ///
@@ -10,6 +16,17 @@ use chrono::*;
 /// Like schedules, trains have their own "trainsplorer ID", which is used
 /// as an opaque identifier for other services to report updates to the train's
 /// running.
+///
+/// ## Uniqueness and deduplication
+///
+/// Very few uniqueness constraints are placed on trains, to account for the
+/// fact that anything can really happen in the real world. However,
+/// having more than one `(date, trust_id)` tuple, `tspl_id`, or `darwin_rid`
+/// (which contain a timestamp and are unique) is definitely a bug.
+///
+/// The parent schedule information (`parent_` fields, q.v.) is used to
+/// suppress the display of schedules that this train was created from, when
+/// combining schedule and train data.
 ///
 /// ## Relationship to schedules
 ///
@@ -61,17 +78,17 @@ impl DbType for Train {
     }
     fn from_row(row: &Row) -> RowResult<Self> {
         Ok(Self {
-            id: row.get(0),
-            tspl_id: row.get(1),
-            parent_uid: row.get(2),
-            parent_start_date: row.get(3),
-            parent_stp_indicator: row.get(4),
-            date: row.get(5),
-            trust_id: row.get(6),
-            darwin_rid: row.get(7),
-            headcode: row.get(8),
-            crosses_midnight: row.get(9),
-            parent_source: row.get(10)
+            id: row.get(0)?,
+            tspl_id: row.get(1)?,
+            parent_uid: row.get(2)?,
+            parent_start_date: row.get(3)?,
+            parent_stp_indicator: row.get(4)?,
+            date: row.get(5)?,
+            trust_id: row.get(6)?,
+            darwin_rid: row.get(7)?,
+            headcode: row.get(8)?,
+            crosses_midnight: row.get(9)?,
+            parent_source: row.get(10)?
         })
     }
 }
@@ -105,9 +122,7 @@ impl InsertableDbType for Train {
 /// ## Sorting
 ///
 /// Train movements, in much the same way as schedule movements,
-/// should ideally be sorted by (day_offset, time, action, source),
-/// for comparison to other lists of movements.
-/// (indeed, this is how `Ord` is implemented)
+/// should ideally be sorted by (day_offset, time, action, source).
 ///
 /// ## Timing
 ///
@@ -173,18 +188,19 @@ impl DbType for TrainMvt {
     }
     fn from_row(row: &Row) -> RowResult<Self> {
         Ok(Self {
-            id: row.get(0),
-            parent_train: row.get(1),
-            updates: row.get(2),
-            tiploc: row.get(3),
-            actual: row.get(4),
-            time: row.get(5),
-            public_time: row.get(6),
-            day_offset: row.get(7),
-            source: row.get(8),
-            platform: row.get(9),
-            pfm_suppr: row.get(10),
-            unknown_delay: row.get(11)
+            id: row.get(0)?,
+            parent_train: row.get(1)?,
+            updates: row.get(2)?,
+            tiploc: row.get(3)?,
+            action: row.get(4)?,
+            actual: row.get(5)?,
+            time: row.get(6)?,
+            public_time: row.get(7)?,
+            day_offset: row.get(8)?,
+            source: row.get(9)?,
+            platform: row.get(10)?,
+            pfm_suppr: row.get(11)?,
+            unknown_delay: row.get(12)?
         })
     }
 }
@@ -192,15 +208,15 @@ impl InsertableDbType for TrainMvt {
     type Id = i64;
     fn insert_self(&self, conn: &Connection) -> RowResult<i64> {
         let mut stmt = conn.prepare("INSERT INTO train_movements
-                                     (parent_train, updates, tiploc,
+                                     (parent_train, updates, tiploc, action,
                                       actual, time, public_time,
                                       day_offset, source, platform,
                                       pfm_suppr, unknown_delay)
-                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         let rid = stmt.insert(params![self.parent_train, self.updates,
-                              self.tiploc, self.actual, self.time,
+                              self.tiploc, self.action, self.actual, self.time,
                               self.public_time, self.day_offset,
-                              self.course, self.platform,
+                              self.source, self.platform,
                               self.pfm_suppr, self.unknown_delay])?;
         Ok(rid)
     }
