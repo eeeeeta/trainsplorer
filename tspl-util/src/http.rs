@@ -6,6 +6,30 @@ use std::time::Instant;
 use std::sync::Arc;
 use log::*;
 
+#[macro_export]
+macro_rules! extract_headers {
+    ($from:ident, $err:expr, 
+     $(let $var:ident: $ty:ty => $header_name:literal),*
+     $(,opt $ovar:ident: $oty:ty => $oheader_name:literal)*
+    ) => {
+        $(
+            let $var: $ty = $from.header(concat!("X-tspl-", $header_name))
+                .ok_or($err)?
+                .parse()
+                .map_err(|_| $err)?;
+        )*
+        $(
+            let $ovar: Option<$oty> = match $from.header(concat!("X-tspl-", $oheader_name)) {
+                Some(h) => {
+                    Some(h
+                         .parse()
+                         .map_err(|_| $err)?)
+                },
+                None => None
+            };
+        )*
+    }
+}
 /// Trait for errors that have an associated status code.
 pub trait StatusCode {
     /// Returns the status code associated with this error.
@@ -53,5 +77,5 @@ pub fn start_server<H: HttpServer>(listen_url: &str, srv: H) -> ! {
     info!("Starting HTTP server on {}", listen_url);
     rouille::start_server(listen_url, move |req| {
         srv.process_request(req)
-    });
+    })
 }

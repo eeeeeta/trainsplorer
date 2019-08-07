@@ -3,6 +3,7 @@
 pub use failure::Error;
 use failure_derive::Fail;
 use tspl_util::impl_from_for_error;
+use tspl_util::http::StatusCode;
 use tspl_sqlite::errors::{SqlError, PoolError};
 use tspl_sqlite::rusqlite::Error as RsqlError;
 use reqwest::Error as ReqwestError;
@@ -17,6 +18,9 @@ pub enum ZugError {
     /// More than one movement matched the information provided.
     #[fail(display = "movements ambiguous")]
     MovementsAmbiguous,
+    /// Headers missing or failed to parse.
+    #[fail(display = "bad request")]
+    HeadersMissing,
     /// RPC error.
     #[fail(display = "RPC: {}", _0)]
     Rpc(RpcError),
@@ -34,13 +38,14 @@ pub enum ZugError {
     Reqwest(ReqwestError)
 }
 
-impl ZugError {
-    pub fn status_code(&self) -> u16 {
+impl StatusCode for ZugError {
+    fn status_code(&self) -> u16 {
         use self::ZugError::*;
 
         match *self {
             NotFound => 404,
             MovementsAmbiguous => 409,
+            HeadersMissing => 400,
             Rpc(ref r) => r.status_code(),
             Pool(_) => 503,
             _ => 500

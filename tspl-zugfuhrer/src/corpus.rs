@@ -1,49 +1,28 @@
 //! Downloading and importing CORPUS data.
-//!
-//! FIXME: A lot of this is cribbed from `src/download.rs` from fahrplan.
 
-use reqwest::Client;
 use tspl_sqlite::traits::*;
 use tspl_sqlite::TsplPool;
-use std::io::BufReader;
 use log::*;
 use ntrod_types::reference::CorpusData;
-use failure::bail;
+use tspl_util::nrod::NrodDownloader;
 
 use crate::types::WrappedCorpusEntry;
 use crate::errors::*;
 use crate::config::Config;
 
 pub struct CorpusDownloader {
-    username: String,
-    password: String,
-    base_url: String,
-    cli: Client,
+    inner: NrodDownloader,
     pool: TsplPool
 }
 impl CorpusDownloader {
     pub fn new(pool: TsplPool, cfg: &Config) -> Self {
-        let cli = reqwest::Client::new();
-        Self {
-            username: cfg.username.clone(),
-            password: cfg.password.clone(),
-            base_url: cfg.base_url.clone()
-                .unwrap_or_else(|| "https://datafeeds.networkrail.co.uk".into()),
-            cli, pool
-        }
+        let inner = NrodDownloader::new(cfg.username.clone(), cfg.password.clone(), cfg.base_url.clone());
+        Self { inner, pool }
     }
     pub fn import(&mut self) -> Result<()> {
         let mut db = self.pool.get()?;
         info!("Requesting CORPUS reference data");
-        let url = format!("{}/ntrod/SupportingFileAuthenticate?type=CORPUS", self.base_url);
-        let resp = self.cli.get(&url)
-            .basic_auth(&self.username, Some(&self.password))
-            .send()?;
-        let st = resp.status();
-        if !st.is_success() {
-            bail!("Response code {}: {}", st.as_u16(), st.canonical_reason().unwrap_or("unknown"));
-        }
-        let resp = BufReader::new(resp);
+        let resp = self.inner.download("/ntrod/SupportingFileAuthenticate?type=CORPUS")?;
         info!("Importing CORPUS reference data");
         let data: CorpusData = ::serde_json::from_reader(resp)?;
         let mut inserted = 0;
@@ -62,7 +41,7 @@ impl CorpusDownloader {
     pub fn should_import(&mut self) -> Result<bool> {
         let db = self.pool.get()?;
         let rows: i64 = db.query_row("SELECT COUNT(*) FROM corpus_entries", params![], |row| row.get(0))?;
-        Ok(rows > 0)
+        Ok(rows == 0)
     }
 }
 

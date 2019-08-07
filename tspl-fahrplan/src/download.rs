@@ -1,23 +1,17 @@
 //! Utilities for downloading schedule files from NROD.
 
-use reqwest::{Response, Client};
-use failure::bail;
 use chrono::*;
 use crate::errors::*;
 use log::*;
-use flate2::bufread::GzDecoder;
-use std::io::BufReader;
 use tspl_sqlite::traits::*;
 use crate::import;
 use crate::config::Config;
 use serde_derive::{Serialize, Deserialize};
 use std::str::FromStr;
+use tspl_util::nrod::NrodDownloader;
 
 pub struct Downloader {
-    username: String,
-    password: String,
-    base_url: String,
-    cli: Client,
+    inner: NrodDownloader
 }
 #[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub enum JobType {
@@ -38,43 +32,13 @@ impl FromStr for JobType {
         }
     }
 }
-// FIXME(perf): Yes, two layers of buffering.
-//
-// - The first layer of buffering is to avoid copious syscalls
-//   when reading from the network. Not sure whether it's really needed.
-// - The second layer of buffering is required by `apply_schedule_records`,
-//   which needs to call read_line().
-//
-// I really don't know how performant this is. My guess is "not very"???
-type ResponseReader = BufReader<GzDecoder<BufReader<Response>>>;
-
 impl Downloader {
     pub fn new(cfg: &Config) -> Self {
-        let cli = reqwest::Client::new();
-        Self {
-            username: cfg.username.clone(),
-            password: cfg.password.clone(),
-            base_url: cfg.base_url.clone()
-                .unwrap_or_else(|| "https://datafeeds.networkrail.co.uk".into()),
-            cli
-        }
-    }
-    fn download(&mut self, url: &str) -> Result<ResponseReader> {
-        debug!("Requesting: {}", url);
-        let resp = self.cli.get(url)
-            .basic_auth(&self.username, Some(&self.password))
-            .send()?;
-        let st = resp.status();
-        if !st.is_success() {
-            bail!("Response code {}: {}", st.as_u16(), st.canonical_reason().unwrap_or("unknown"));
-        }
-        let resp = BufReader::new(GzDecoder::new(BufReader::new(resp)));
-        Ok(resp)
+        let inner = NrodDownloader::new(cfg.username.clone(), cfg.password.clone(), cfg.base_url.clone());
+        Self { inner }
     }
     fn do_full(&mut self, conn: &mut Connection) -> Result<()> {
-        let data = self.download(
-            &format!("{}/ntrod/CifFileAuthenticate?type=CIF_ALL_FULL_DAILY&day=toc-full",
-                     self.base_url))?;
+        let data = self.inner.download("/ntrod/CifFileAuthenticate?type=CIF_ALL_FULL_DAILY&day=toc-full")?;
         import::apply_schedule_records(conn, data)?;
         Ok(())
     }
@@ -109,9 +73,9 @@ impl Downloader {
             Weekday::Sun => "toc-update-sun",
         };
         info!("Fetching update file {}...", file);
-        let data = self.download(
-            &format!("{}/ntrod/CifFileAuthenticate?type=CIF_ALL_UPDATE_DAILY&day={}",
-                     self.base_url, file))?;
+        let data = self.inner.download(
+            &format!("/ntrod/CifFileAuthenticate?type=CIF_ALL_UPDATE_DAILY&day={}",
+                     file))?;
         import::apply_schedule_records(conn, data)?;
         Ok(())
     }

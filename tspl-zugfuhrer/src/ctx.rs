@@ -2,14 +2,13 @@
 
 use tspl_sqlite::TsplPool;
 use rouille::{Request, Response, router};
-use reqwest::{Client, Method};
-use serde::de::DeserializeOwned;
-use std::fmt::Display;
+use reqwest::Method;
 use chrono::prelude::*;
 use chrono::offset::Local;
 use log::*;
 use tspl_util::rpc::MicroserviceRpc;
-use tspl_util::user_agent;
+use tspl_util::{user_agent, extract_headers};
+use tspl_util::http::{HttpServer};
 use tspl_fahrplan::types as fpt;
 use tspl_sqlite::uuid::Uuid;
 use tspl_sqlite::traits::*;
@@ -21,11 +20,61 @@ use crate::types::*;
 pub struct App {
     rpc: MicroserviceRpc,
     pool: TsplPool,
-    reqw: Client,
-    cfg: Config
+}
+impl HttpServer for App {
+    type Error = ZugError;
+
+    fn on_request(&self, req: &Request) -> ZugResult<Response> {
+        router!(req,
+            (GET) (/) => {
+                Ok(Response::text(user_agent!()))
+            },
+            (GET) (/trains/by-trust-id/{trust_id}) => {
+                self.get_train_for_trust_id(trust_id)
+                    .map(|x| Response::json(&x))
+            },
+            (POST) (/trains/{tid: Uuid}/trust-id/{trust_id}) => {
+                self.associate_trust_id(tid, trust_id)
+                    .map(|x| Response::json(&x))
+            },
+            (POST) (/trains/activate) => {
+                extract_headers!(req, ZugError::HeadersMissing,
+                                 let uid: String => "schedule-uid",
+                                 let start_date: NaiveDate => "schedule-start-date",
+                                 let stp_indicator: String => "schedule-stp-indicator",
+                                 let source: i32 => "schedule-source",
+                                 let date: NaiveDate => "activation-date");
+                self.activate_train(uid, start_date, stp_indicator, source, date)
+                    .map(|x| Response::json(&x))
+            },
+            (POST) (/trains/{tid: Uuid}/trust-movement) => {
+                extract_headers!(req, ZugError::HeadersMissing,
+                                 let stanox: String => "mvt-stanox",
+                                 let planned_time: NaiveTime => "mvt-planned-time",
+                                 let planned_day_offset: u8 => "mvt-planned-day-offset",
+                                 let planned_action: u8 => "mvt-planned-action",
+                                 let actual_time: NaiveTime => "mvt-actual-time",
+                                 opt actual_public_time: NaiveTime => "mvt-actual-public-time",
+                                 opt platform: String => "mvt-platform");
+                self.process_trust_mvt_update(tid, TrustMvtUpdate {
+                    stanox, planned_time, planned_day_offset,
+                    planned_action, actual_time, actual_public_time,
+                    platform
+                })
+                    .map(|x| Response::json(&x))
+            },
+            _ => {
+                Err(ZugError::NotFound)
+            }
+        )
+    }
 }
 impl App {
-    fn process_trust_mvt_update(&mut self, tid: Uuid, upd: TrustMvtUpdate) -> ZugResult<TrainMvt> {
+    pub fn new(pool: TsplPool, cfg: &Config) -> Self  {
+        let rpc = MicroserviceRpc::new(user_agent!(), "fahrplan", cfg.service_fahrplan.clone());
+        Self { rpc, pool }
+    }
+    fn process_trust_mvt_update(&self, tid: Uuid, upd: TrustMvtUpdate) -> ZugResult<TrainMvt> {
         let mut db = self.pool.get()?;
         let trans = db.transaction()?;
 
@@ -72,7 +121,7 @@ impl App {
         trans.commit()?;
         Ok(tmvt)
     }
-    fn get_train_for_trust_id(&mut self, trust_id: &str) -> ZugResult<Train> {
+    fn get_train_for_trust_id(&self, trust_id: String) -> ZugResult<Train> {
         let db = self.pool.get()?;
         let date = Local::now().naive_local().date();
         let train = Train::from_select(&db, "WHERE trust_id = ? AND date = ?",
@@ -80,7 +129,7 @@ impl App {
             .into_iter().nth(0).ok_or(ZugError::NotFound)?;
         Ok(train)
     }
-    fn associate_trust_id(&mut self, tid: Uuid, trust_id: String) -> ZugResult<()> {
+    fn associate_trust_id(&self, tid: Uuid, trust_id: String) -> ZugResult<()> {
         let db = self.pool.get()?;
         info!("Associating {} with TRUST ID {}", tid, trust_id);
         let rows = db.execute("UPDATE trains SET trust_id = ? WHERE tspl_id = ?",
@@ -90,7 +139,7 @@ impl App {
         }
         Ok(())
     }
-    fn activate_train(&mut self, uid: String, start_date: NaiveDate, stp_indicator: String, source: i32, date: NaiveDate) -> ZugResult<Train> {
+    fn activate_train(&self, uid: String, start_date: NaiveDate, stp_indicator: String, source: i32, date: NaiveDate) -> ZugResult<Train> {
         let mut db = self.pool.get()?;
         let trans = db.transaction()?;
         info!("Activating a train; (uid, start, stp, source, date) = ({}, {}, {}, {}, {})", uid, start_date, stp_indicator, source, date);

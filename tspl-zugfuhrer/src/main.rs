@@ -11,6 +11,7 @@ use tspl_util::ConfigExt;
 use tspl_sqlite::r2d2;
 use self::config::Config;
 use crate::corpus::CorpusDownloader;
+use crate::ctx::App;
 use std::thread;
 use errors::Result;
 
@@ -31,5 +32,6 @@ fn main() -> Result<()> {
             }
         });
     }
-    Ok(())
+    let app = App::new(pool, &cfg);
+    tspl_util::http::start_server(&cfg.listen, app);
 }

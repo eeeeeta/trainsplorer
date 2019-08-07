@@ -6,6 +6,8 @@ use tspl_util::{ConfigExt, crate_name};
 /// `tspl-zugfuhrer` configuration.
 #[derive(Deserialize, Debug)]
 pub struct Config {
+    /// Address to listen on.
+    pub listen: String,
     /// Path to SQLite database.
     pub database_path: String,
     /// URL of a running tspl-fahrplan instance.

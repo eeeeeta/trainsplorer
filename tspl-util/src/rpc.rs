@@ -48,25 +48,26 @@ impl RpcError {
     }
 }
 
+#[derive(Clone)]
 pub struct MicroserviceRpc {
     pub base_url: String,
-    pub user_agent: &'static str,
+    pub user_agent: String,
     pub name: &'static str,
     pub cli: Client
 }
 impl MicroserviceRpc {
-    pub fn new(ua: &'static str, name: &'static str, base_url: String) -> Self {
+    pub fn new(ua: String, name: &'static str, base_url: String) -> Self {
         let cli = Client::new();
         Self {
             user_agent: ua,
             name, base_url, cli
         }
     }
-    pub fn req<T, U>(&mut self, meth: Method, url: T) -> Result<U, RpcError> where T: Display, U: DeserializeOwned {
+    pub fn req<T, U>(&self, meth: Method, url: T) -> Result<U, RpcError> where T: Display, U: DeserializeOwned {
         let url = format!("{}/{}", self.base_url, url);
         debug!("RPC ({}): {} {}", self.name, meth, url);
         let mut resp = self.cli.request(meth, &url)
-            .header(reqwest::header::USER_AGENT, self.user_agent)
+            .header(reqwest::header::USER_AGENT, &self.user_agent as &str)
             .send()?;
         let status = resp.status();
         debug!("RPC ({}): response code {}", self.name, status.as_u16());

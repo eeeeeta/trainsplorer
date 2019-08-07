@@ -7,6 +7,7 @@
 //! - config
 //! - RPC calls to other microservices (`rpc` module)
 //! - HTTP server utility tools (`http` module)
+//! - downloading from NROD (`nrod` module)
 
 use config as cfg;
 use serde::de::DeserializeOwned;
@@ -14,10 +15,11 @@ use log::*;
 
 pub mod rpc;
 pub mod http;
+pub mod nrod;
 
 #[macro_export]
 macro_rules! user_agent {
-    () => { concat!(crate_name!(), "/", env!("CARGO_PKG_VERSION")) }
+    () => { format!("{}/{}", $crate::crate_name!(), env!("CARGO_PKG_VERSION")) }
 }
 
 #[macro_export]
