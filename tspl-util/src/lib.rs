@@ -5,12 +5,15 @@
 //! - random macros
 //! - logging
 //! - config
+//! - RPC calls to other microservices (`rpc` module)
+//! - HTTP server utility tools (`http` module)
 
 use config as cfg;
 use serde::de::DeserializeOwned;
 use log::*;
 
 pub mod rpc;
+pub mod http;
 
 #[macro_export]
 macro_rules! user_agent {

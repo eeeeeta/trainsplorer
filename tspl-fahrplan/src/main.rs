@@ -28,8 +28,5 @@ fn main() -> errors::Result<()> {
     let dls_tx = dls.take_sender();
     dls.run().unwrap();
     let app = Arc::new(App { pool, dls_tx: Mutex::new(dls_tx) });
-    info!("starting HTTP server on {}", cfg.listen_url);
-    rouille::start_server(&cfg.listen_url, move |req| {
-        app.process_request(req)
-    });
+    tspl_util::http::start_server(&cfg.listen_url, app);
 }

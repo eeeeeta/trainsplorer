@@ -7,10 +7,10 @@ use crate::dl_scheduler::DlSender;
 use crate::types::{Schedule, ScheduleMvt, ScheduleDetails};
 use crate::errors::{FahrplanResult, FahrplanError};
 use tspl_sqlite::rusqlite::Connection;
+use tspl_util::http::HttpServer;
 use log::*;
 use chrono::*;
 use rouille::{Request, Response, router};
-use std::time::Instant;
 use std::sync::Mutex;
 
 fn get_auth_schedule(conn: &Connection, uid: String, on_date: NaiveDate, source: u8) -> FahrplanResult<Option<Schedule>> {
@@ -80,9 +80,11 @@ impl App {
             mvts
         })
     }
-    pub fn process_request(&self, req: &Request) -> Response {
-        let start = Instant::now();
-        let ret = router!(req,
+}
+impl HttpServer for App {
+    type Error = FahrplanError;
+    fn on_request(&self, req: &Request) -> FahrplanResult<Response> {
+        router!(req,
             (GET) (/) => {
                 Ok(Response::text(concat!("tspl-fahrplan ", env!("CARGO_PKG_VERSION"), "\n")))
             },
@@ -112,18 +114,6 @@ impl App {
             _ => {
                 Err(FahrplanError::NotFound)
             }
-        );
-        let ret = match ret {
-            Ok(r) => r,
-            Err(e) => {
-                let sc = e.status_code();
-                warn!("Processing request failed ({}): {}", sc, e);
-                Response::text(format!("error: {}\n", e))
-                    .with_status_code(sc)
-            }
-        };
-        let dur = start.elapsed();
-        info!("{} {} \"{}\" - {} [{}.{:03}s]", req.remote_addr(), req.method(), req.raw_url(), ret.status_code, dur.as_secs(), dur.subsec_millis());
-        ret
+        )
     }
 }

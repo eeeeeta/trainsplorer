@@ -3,6 +3,7 @@
 use failure_derive::Fail;
 use tspl_util::impl_from_for_error;
 use tspl_sqlite::errors::{SqlError, PoolError};
+use tspl_util::http::StatusCode;
 
 /// Error that could occur when processing a request.
 #[derive(Fail, Debug)]
@@ -23,8 +24,8 @@ pub enum FahrplanError {
     JobQueueError
 }
 
-impl FahrplanError {
-    pub fn status_code(&self) -> u16 {
+impl StatusCode for FahrplanError {
+    fn status_code(&self) -> u16 {
         use self::FahrplanError::*;
 
         match *self {
