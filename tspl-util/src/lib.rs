@@ -10,6 +10,13 @@ use config as cfg;
 use serde::de::DeserializeOwned;
 use log::*;
 
+pub mod rpc;
+
+#[macro_export]
+macro_rules! user_agent {
+    () => { concat!(crate_name!(), "/", env!("CARGO_PKG_VERSION")) }
+}
+
 #[macro_export]
 macro_rules! crate_name {
     () => {module_path!().split("::").next().unwrap()}

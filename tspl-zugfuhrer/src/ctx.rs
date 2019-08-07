@@ -8,6 +8,8 @@ use std::fmt::Display;
 use chrono::prelude::*;
 use chrono::offset::Local;
 use log::*;
+use tspl_util::rpc::MicroserviceRpc;
+use tspl_util::user_agent;
 use tspl_fahrplan::types as fpt;
 use tspl_sqlite::uuid::Uuid;
 use tspl_sqlite::traits::*;
@@ -16,34 +18,13 @@ use crate::config::Config;
 use crate::errors::*;
 use crate::types::*;
 
-pub static USER_AGENT: &str = concat!("tspl-zugfuhrer/", env!("CARGO_PKG_VERSION"));
 pub struct App {
+    rpc: MicroserviceRpc,
     pool: TsplPool,
     reqw: Client,
     cfg: Config
 }
 impl App {
-    fn req_fahrplan<T, U>(&mut self, meth: Method, url: T) -> ZugResult<U> where T: Display, U: DeserializeOwned {
-        let url = format!("{}/{}", self.cfg.service_fahrplan, url);
-        debug!("req_fahrplan: {} {}", meth, url);
-        let mut resp = self.reqw.request(meth, &url)
-            .header(reqwest::header::USER_AGENT, USER_AGENT)
-            .send()?;
-        let status = resp.status();
-        debug!("req_fahrplan: response code {}", status.as_u16());
-        match status.as_u16() {
-            404 => Err(ZugError::RemoteNotFound)?,
-            503 => Err(ZugError::RemoteServiceUnavailable)?,
-            _ => {}
-        }
-        if !status.is_success() {
-            let text = resp.text()?;
-            warn!("tspl-fahrplan request failed ({}): {}", status.as_u16(), text);
-            Err(ZugError::Fahrplan(status.as_u16(), text))?
-        }
-        let ret: U = resp.json()?;
-        Ok(ret)
-    }
     fn process_trust_mvt_update(&mut self, tid: Uuid, upd: TrustMvtUpdate) -> ZugResult<TrainMvt> {
         let mut db = self.pool.get()?;
         let trans = db.transaction()?;
@@ -115,7 +96,7 @@ impl App {
         info!("Activating a train; (uid, start, stp, source, date) = ({}, {}, {}, {}, {})", uid, start_date, stp_indicator, source, date);
         // Ask tspl-fahrplan for a schedule.
         let uri = format!("/schedules/for-activation/{}/{}/{}/{}", uid, start_date, stp_indicator, source);
-        let sched: Option<fpt::Schedule> = self.req_fahrplan(Method::GET, uri).optional()?;
+        let sched: Option<fpt::Schedule> = self.rpc.req(Method::GET, uri).optional()?;
         let mut train = Train {
             id: -1,
             tspl_id: Uuid::new_v4(),
@@ -138,7 +119,7 @@ impl App {
             train.id = train.insert_self(&trans)?;
             // Get the actual schedule details.
             let uri = format!("/schedules/{}", sched.tspl_id);
-            let details: fpt::ScheduleDetails = self.req_fahrplan(Method::GET, uri)?;
+            let details: fpt::ScheduleDetails = self.rpc.req(Method::GET, uri)?;
             // Convert each movement into a TrainMvt.
             let tmvts = details.mvts
                 .into_iter()
