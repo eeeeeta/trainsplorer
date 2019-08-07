@@ -12,6 +12,9 @@ CREATE TABLE trains (
 	headcode TEXT,
 	crosses_midnight BOOL NOT NULL,
 	parent_source INT NOT NULL,
+	terminated BOOL NOT NULL,
+	cancelled BOOL NOT NULL,
+	activated BOOL NOT NULL,
 	UNIQUE(date, trust_id)
 );
 
@@ -38,3 +41,15 @@ CREATE INDEX train_movements_parent_train ON train_movements (parent_train);
 -- ...likewise
 CREATE INDEX train_movements_updates ON train_movements (updates);
 
+CREATE TABLE corpus_entries (
+	stanox VARCHAR,
+	uic VARCHAR,
+	crs VARCHAR,
+	tiploc VARCHAR,
+	nlc VARCHAR,
+	nlcdesc VARCHAR,
+	nlcdesc16 VARCHAR
+);
+
+CREATE INDEX corpus_entries_stanox ON corpus_entries (stanox);
+CREATE INDEX corpus_entries_tiploc ON corpus_entries (tiploc);

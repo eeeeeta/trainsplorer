@@ -22,5 +22,8 @@ path = "../ntrod-types"
 [dependencies.tspl-sqlite]
 path = "../tspl-sqlite"
 
+[dependencies.tspl-fahrplan]
+path = "../tspl-fahrplan"
+
 [dependencies.tspl-util]
 path = "../tspl-util"

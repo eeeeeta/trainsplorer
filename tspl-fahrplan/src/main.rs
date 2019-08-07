@@ -6,7 +6,6 @@ pub mod import;
 pub mod download;
 pub mod dl_scheduler;
 pub mod config;
-pub mod proto;
 pub mod ctx;
 
 use tspl_sqlite::r2d2;

@@ -3,7 +3,11 @@
 use tspl_sqlite::traits::*;
 use tspl_sqlite::migrations::Migration;
 use tspl_sqlite::migration;
+use tspl_fahrplan::types as fpt;
+use serde_derive::{Serialize, Deserialize};
 use chrono::*;
+
+pub use ntrod_types::reference::CorpusEntry;
 
 pub static MIGRATIONS: [Migration; 1] = [
     migration!(0, "initial")
@@ -44,6 +48,7 @@ pub static MIGRATIONS: [Migration; 1] = [
 /// Keeping information about the originating schedule also allows the display
 /// of the schedule to be suppressed later, when something attempts to combine
 /// train running information with schedule data.
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Train {
     /// Internal primary key.
     pub id: i64,
@@ -69,7 +74,13 @@ pub struct Train {
     ///
     /// This is required to deal with fun edge cases, like VSTP schedules
     /// conflicting with ITPS schedules and ruining everything.
-    pub parent_source: i32
+    pub parent_source: i32,
+    /// Whether or not this train has terminated (arrived at its final destination).
+    pub terminated: bool,
+    /// Whether or not this train has been cancelled.
+    pub cancelled: bool,
+    /// Was this train properly activated, or is it just a stub?
+    pub activated: bool
 }
 
 impl DbType for Train {
@@ -88,7 +99,10 @@ impl DbType for Train {
             darwin_rid: row.get(7)?,
             headcode: row.get(8)?,
             crosses_midnight: row.get(9)?,
-            parent_source: row.get(10)?
+            parent_source: row.get(10)?,
+            terminated: row.get(11)?,
+            cancelled: row.get(12)?,
+            activated: row.get(13)?
         })
     }
 }
@@ -99,12 +113,13 @@ impl InsertableDbType for Train {
                                      (tspl_id, parent_uid, parent_start_date,
                                       parent_stp_indicator, date, trust_id,
                                       darwin_rid, headcode, crosses_midnight,
-                                      parent_source)
-                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+                                      parent_source, terminated, cancelled, activated)
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         let rid = stmt.insert(params![self.tspl_id, self.parent_uid,
                               self.parent_start_date, self.parent_stp_indicator,
                               self.date, self.trust_id, self.darwin_rid,
-                              self.headcode, self.crosses_midnight, self.parent_source])?;
+                              self.headcode, self.crosses_midnight, self.parent_source,
+                              self.terminated, self.cancelled, self.activated])?;
         Ok(rid)
     }
 }
@@ -128,6 +143,7 @@ impl InsertableDbType for Train {
 ///
 /// **NB**: Please update the `crosses_midnight` field on the parent train
 /// if adding/removing movements that cause the train to cross over past midnight.
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TrainMvt {
     /// Internal primary key.
     pub id: i64,
@@ -182,6 +198,32 @@ pub struct TrainMvt {
     /// accurately predicted).
     pub unknown_delay: bool
 }
+impl TrainMvt {
+    pub const SOURCE_SCHED_ITPS: i32 = 0;
+    pub const SOURCE_SCHED_DARWIN: i32 = 1;
+    pub const SOURCE_SCHED_VSTP: i32 = 2;
+    pub const SOURCE_TRUST: i32 = 3;
+    pub const SOURCE_DARWIN: i32 = 4;
+    pub const SOURCE_TRUST_NAIVE: i32 = 5;
+    /// Generate a `TrainMvt` from an ITPS `ScheduleMvt`.
+    pub fn from_itps(parent: i64, sched: fpt::ScheduleMvt) -> Self {
+        Self {
+            id: -1,
+            parent_train: parent,
+            updates: None,
+            tiploc: sched.tiploc,
+            action: sched.action,
+            actual: false,
+            time: sched.time,
+            day_offset: sched.day_offset,
+            source: Self::SOURCE_SCHED_ITPS,
+            platform: sched.platform,
+            public_time: sched.public_time,
+            pfm_suppr: false,
+            unknown_delay: false
+        }
+    }
+}
 impl DbType for TrainMvt {
     fn table_name() -> &'static str {
         "train_movements"
@@ -219,5 +261,41 @@ impl InsertableDbType for TrainMvt {
                               self.source, self.platform,
                               self.pfm_suppr, self.unknown_delay])?;
         Ok(rid)
+    }
+}
+
+/// A live train movement update from TRUST.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TrustMvtUpdate {
+    /// STANOX where the movement was scheduled to occur.
+    pub stanox: String,
+    /// Scheduled time.
+    pub planned_time: NaiveTime,
+    /// Scheduled day offset.
+    pub planned_day_offset: u8,
+    /// Scheduled action.
+    pub planned_action: u8,
+    /// Actual time of movement.
+    pub actual_time: NaiveTime,
+    /// Actual public (GBTT) time of movement.
+    pub actual_public_time: Option<NaiveTime>,
+    /// Actual platform.
+    pub platform: Option<String>
+}
+
+/// Wrapper for the CorpusEntry type, in order to not violate
+/// the orphan rules.
+pub struct WrappedCorpusEntry(pub CorpusEntry);
+
+impl InsertableDbType for WrappedCorpusEntry {
+    type Id = ();
+    fn insert_self(&self, conn: &Connection) -> RowResult<()> {
+        let mut stmt = conn.prepare("INSERT INTO corpus_entries
+                        (stanox, uic, crs, tiploc, nlc, nlcdesc, nlcdesc16)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT DO NOTHING")?;
+        stmt.insert(params![self.0.stanox, self.0.uic, self.0.crs, self.0.tiploc, self.0.nlc,
+                            self.0.nlcdesc, self.0.nlcdesc16])?;
+        Ok(())
     }
 }

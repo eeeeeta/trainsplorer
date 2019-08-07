@@ -3,6 +3,8 @@
 pub mod errors;
 pub mod config;
 pub mod types;
+pub mod ctx;
+pub mod corpus;
 
 use log::*;
 use tspl_util::ConfigExt;

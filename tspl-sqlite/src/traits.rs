@@ -17,7 +17,7 @@ pub trait DbType: Sized {
     fn from_row(row: &Row) -> RowResult<Self>;
     /// Convenience function for running a SELECT for this type, based on a given predicate
     /// `where_clause` and its `args`.
-    fn from_select(conn: &Connection, where_clause: &str, args: &[&ToSql]) -> Result<Vec<Self>> {
+    fn from_select(conn: &Connection, where_clause: &str, args: &[&dyn ToSql]) -> Result<Vec<Self>> {
         let query = format!("SELECT * FROM {} {}", Self::table_name(), where_clause);
         let mut stmt = conn.prepare(&query)?;
         let rows = stmt.query_map(args, |row| Self::from_row(row))?;
@@ -29,7 +29,7 @@ pub trait DbType: Sized {
     }
 }
 /// A `DbType` that can be inserted as well as queried.
-pub trait InsertableDbType: DbType {
+pub trait InsertableDbType {
     /// The primary key type.
     type Id;
     /// Insert this type into the database, returning its new primary key (if any).

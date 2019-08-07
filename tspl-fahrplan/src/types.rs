@@ -280,3 +280,12 @@ impl InsertableDbType for ScheduleFile {
     }
 }
 
+/// The complete details about a schedule stored in the database.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ScheduleDetails {
+    /// Actual schedule object.
+    pub sched: Schedule,
+    /// Schedule movements, in the proper order.
+    pub mvts: Vec<ScheduleMvt>
+}
+
