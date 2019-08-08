@@ -43,7 +43,7 @@ spec:
         - name: TSPL_DATABASE_PATH
           value: "/data/fahrplan.sqlite"
         - name: TSPL_LISTEN_URL
-          value: "tcp://0.0.0.0:7000"
+          value: "0.0.0.0:7000"
         - name: TSPL_USERNAME
           valueFrom:
             secretKeyRef:

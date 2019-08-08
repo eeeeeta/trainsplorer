@@ -1,5 +1,8 @@
 Dockerfile
 **/*.sqlite
+**/*.sqlite-*
+**/*.sqlite3
+**/*.sqlite3-*
 *.yml
 *.sh
 .git*
