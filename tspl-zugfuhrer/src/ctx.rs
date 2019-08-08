@@ -88,14 +88,10 @@ impl App {
         let train = Train::from_select(&trans, "WHERE tspl_id = ?", params![tid])?
             .into_iter().nth(0).ok_or(ZugError::NotFound)?;
         info!("Processing {} movement at STANOX {} for train {}", upd.actual_time, upd.stanox, tid);
-        // TRUST records passing through as an 'arrival', so we have to match
-        // on movements that are passes as well in order not to find nothing.
-        let acceptable_actions = vec![2, upd.planned_action];
-        
         // Get movements that match up with the provided information.
         let tmvts = TrainMvt::from_select(&trans, "WHERE parent_train = ?
                         AND time = ?
-                        AND action = ANY(?)
+                        AND (action = 2 OR action = ?)
                         AND day_offset = ?
                         AND updates IS NULL
                         AND source = ?
@@ -104,7 +100,7 @@ impl App {
                             WHERE corpus_entries.tiploc = train_movements.tiploc
                             AND corpus_entries.stanox = $1
                         )",
-                        params![train.id, upd.planned_time, acceptable_actions,
+                        params![train.id, upd.planned_time, upd.planned_action,
                         upd.planned_day_offset, TrainMvt::SOURCE_SCHED_ITPS, upd.stanox])?;
         if tmvts.len() > 1 {
             error!("Movement is ambiguous!");
