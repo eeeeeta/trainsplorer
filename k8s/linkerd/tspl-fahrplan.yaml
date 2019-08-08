@@ -1,0 +1,35 @@
+apiVersion: linkerd.io/v1alpha1
+kind: ServiceProfile
+metadata:
+  namespace: tspl
+  name: tspl-fahrplan.tspl.svc.cluster.local 
+spec:
+  routes:
+  - condition:
+      method: GET
+      pathRegex: /
+    name: version check
+  - condition:
+      method: GET
+      pathRegex: /schedules/by-uid/[^/]*
+    name: find schedules with UID
+    isRetryable: true
+  - condition:
+      method: GET
+      pathRegex: /schedules/by-uid-on-date/[^/]*/[^/]*/[^/]*
+    name: find schedules by UID on date with source
+    isRetryable: true
+  - condition:
+      method: GET
+      pathRegex: /schedules/for-activation/[^/]*/[^/]*/[^/]*/[^/]*
+    name: find schedule for activation
+    isRetryable: true
+  - condition:
+      method: GET
+      pathRegex: /schedule/[^/]*
+    name: get schedule details
+    isRetryable: true
+  - condition:
+      method: POST
+      pathRegex: /schedule/[^/]*
+    name: run update job

@@ -1,0 +1,39 @@
+apiVersion: linkerd.io/v1alpha1
+kind: ServiceProfile
+metadata:
+  namespace: tspl
+  name: tspl-zugfuhrer.tspl.svc.cluster.local 
+spec:
+  routes:
+  - condition:
+      method: GET
+      pathRegex: /
+    name: version check
+  - condition:
+      method: GET
+      pathRegex: /trains/by-trust-id/[^/]*/[^/]*
+    name: find a train by TRUST ID and date
+    isRetryable: true
+  - condition:
+      method: POST
+      pathRegex: /trains/[^/]*/trust-id/[^/]*
+    name: associate a train with a TRUST ID
+    isRetryable: true
+  - condition:
+      method: POST
+      pathRegex: /trains/activate
+    name: activate a train
+  - condition:
+      method: POST
+      pathRegex: /trains/[^/]*/terminate
+    name: mark a train as terminated
+    isRetryable: true
+  - condition:
+      method: POST
+      pathRegex: /trains/[^/]*/cancel
+    name: mark a train as cancelled
+    isRetryable: true
+  - condition:
+      method: POST
+      pathRegex: /trains/[^/]*/trust-movement
+    name: register a TRUST movement for a train

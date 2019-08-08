@@ -2,16 +2,16 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: tspl-fahrplan-init
+  namespace: tspl
 spec:
   template:
+    metadata:
+      namespace: tspl
     spec:
       containers:
-      - name: tspl-cli
-        image: gcr.io/trainsplorer/tspl-cli:latest
-        command: ["/tspl/tspl-cli", "--address", "tcp://tspl-fahrplan:7000", "fahrplan", "init"]
-        env:
-        - name: RUST_BACKTRACE
-          value: "full"
+      - name: tspl-fahrplan-init
+        image: byrnedo/alpine-curl:latest
+        args: ["-X", "POST", "http://tspl-fahrplan/update/init"]
       restartPolicy: Never
   backoffLimit: 4
 

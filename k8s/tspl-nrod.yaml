@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tspl-nrod
+  namespace: tspl
+  labels:
+    app: tspl-nrod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tspl-nrod
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      namespace: tspl
+      annotations:
+        linkerd.io/inject: enabled
+      labels:
+        app: tspl-nrod
+    spec:
+      containers:
+      - name: tspl-nrod
+        image: gcr.io/trainsplorer/tspl-nrod:latest
+        env:
+        - name: RUST_BACKTRACE
+          value: "full"
+        - name: TSPL_SERVICE_ZUGFUHRER
+          value: "http://tspl-zugfuhrer"
+        - name: TSPL_N_THREADS
+          value: "16"
+        - name: TSPL_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: tspl-secrets
+              key: nrod_username
+        - name: TSPL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: tspl-secrets
+              key: nrod_password
+
