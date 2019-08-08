@@ -1,6 +1,0 @@
-FROM debian:stable-slim AS tspl-cli
-WORKDIR /tspl
-RUN apt-get update && apt-get install -y libssl1.1 ca-certificates sqlite3
-COPY --from=tspl-compiled /tspl/target/release/tspl-cli /tspl
-ENTRYPOINT ["/tspl/tspl-cli"]
-

@@ -3,7 +3,7 @@ FROM tspl-builder
 COPY . /tspl
 # Delete all the dummy build artefacts that we made earlier when building dependencies.
 # NB: this list should be updated as new crates are made.
-RUN ~/.cargo/bin/cargo clean --release -p osms-db -p osms-darwin -p darwin-types -p osms-nrod -p ntrod-types -p osms-db-setup -p osms-web -p atoc-msn -p tspl-sqlite -p tspl-fahrplan -p tspl-util -p tspl-proto -p tspl-cli
+RUN ~/.cargo/bin/cargo clean --release -p osms-db -p osms-darwin -p darwin-types -p osms-nrod -p ntrod-types -p osms-db-setup -p osms-web -p atoc-msn -p tspl-sqlite -p tspl-fahrplan -p tspl-util -p tspl-proto -p tspl-zugfuhrer
 
 # Actually build the damn code already :P
 RUN ~/.cargo/bin/cargo build --all-targets --release
