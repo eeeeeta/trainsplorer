@@ -27,12 +27,20 @@ steps:
   - 'CLOUDSDK_COMPUTE_ZONE=europe-west1-d'
   - 'CLOUDSDK_CONTAINER_CLUSTER=tspl-cluster-ii'
 
-    #- name: 'gcr.io/cloud-builders/kubectl'
-    #  entrypoint: 'bash'
-    #  args:
-    #  - '-c'
-    #  - |
-    #    pkgs=("osms-nrod" "osms-web"); for thing in ${pkgs[@]}; do kubectl set image deployment "$thing-deployment" "$thing=gcr.io/trainsplorer/$thing:$COMMIT_SHA"; done
+- name: 'gcr.io/cloud-builders/kubectl'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    pkgs=("tspl-fahrplan" "tspl-zugfuhrer"); for thing in ${pkgs[@]}; do kubectl set image statefulset "$thing" "$thing=gcr.io/trainsplorer/$thing:$COMMIT_SHA"; done
+
+- name: 'gcr.io/cloud-builders/kubectl'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    pkgs=("tspl-nrod"); for thing in ${pkgs[@]}; do kubectl set image deployment "$thing" "$thing=gcr.io/trainsplorer/$thing:$COMMIT_SHA"; done
+
 
 images:
 - 'gcr.io/trainsplorer/tspl-builder:latest'
