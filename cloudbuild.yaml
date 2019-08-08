@@ -32,14 +32,14 @@ steps:
   args:
   - '-c'
   - |
-    pkgs=("tspl-fahrplan" "tspl-zugfuhrer"); for thing in ${pkgs[@]}; do kubectl set image statefulset "$thing" "$thing=gcr.io/trainsplorer/$thing:$COMMIT_SHA"; done
+    pkgs=("tspl-fahrplan" "tspl-zugfuhrer"); for thing in ${pkgs[@]}; do kubectl -n tspl set image statefulset "$thing" "$thing=gcr.io/trainsplorer/$thing:$COMMIT_SHA"; done
 
 - name: 'gcr.io/cloud-builders/kubectl'
   entrypoint: 'bash'
   args:
   - '-c'
   - |
-    pkgs=("tspl-nrod"); for thing in ${pkgs[@]}; do kubectl set image deployment "$thing" "$thing=gcr.io/trainsplorer/$thing:$COMMIT_SHA"; done
+    pkgs=("tspl-nrod"); for thing in ${pkgs[@]}; do kubectl -n tspl set image deployment "$thing" "$thing=gcr.io/trainsplorer/$thing:$COMMIT_SHA"; done
 
 
 images:
