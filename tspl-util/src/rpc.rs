@@ -2,6 +2,7 @@
 
 use reqwest::Client;
 use reqwest::Error as ReqwestError;
+use reqwest::header::HeaderMap;
 pub use reqwest::Method;
 use failure_derive::Fail;
 use std::fmt::Display;
@@ -63,11 +64,12 @@ impl MicroserviceRpc {
             name, base_url, cli
         }
     }
-    pub fn req<T, U>(&self, meth: Method, url: T) -> Result<U, RpcError> where T: Display, U: DeserializeOwned {
-        let url = format!("{}/{}", self.base_url, url);
+    pub fn req_with_headers<T, U>(&self, meth: Method, url: T, hdrs: HeaderMap) -> Result<U, RpcError> where T: Display, U: DeserializeOwned {
+        let url = format!("{}{}", self.base_url, url);
         debug!("RPC ({}): {} {}", self.name, meth, url);
         let mut resp = self.cli.request(meth, &url)
             .header(reqwest::header::USER_AGENT, &self.user_agent as &str)
+            .headers(hdrs)
             .send()?;
         let status = resp.status();
         debug!("RPC ({}): response code {}", self.name, status.as_u16());
@@ -87,5 +89,9 @@ impl MicroserviceRpc {
         }
         let ret: U = resp.json()?;
         Ok(ret)
+    }
+    pub fn req<T, U>(&self, meth: Method, url: T) -> Result<U, RpcError> where T: Display, U: DeserializeOwned {
+        let hdrs = HeaderMap::new();
+        self.req_with_headers(meth, url, hdrs)
     }
 }

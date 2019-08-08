@@ -1,8 +1,5 @@
 [workspace]
-members = ["./osms-db", "./osms-nrod", "./ntrod-types", "./osms-db-setup", "./atoc-msn", "./osms-darwin", "./darwin-types", "./osms-web", "./tspl-sqlite", "./tspl-fahrplan", "./tspl-util", "./tspl-proto", "./tspl-zugfuhrer"]
-
-[replace]
-"openssl:0.9.24" = { git = "https://github.com/ishitatsuyuki/rust-openssl", branch = "0.9.x" }
+members = ["./ntrod-types", "./atoc-msn", "./darwin-types", "./tspl-sqlite", "./tspl-fahrplan", "./tspl-util", "./tspl-proto", "./tspl-zugfuhrer", "./tspl-nrod"]
 
 [profile.dev]
 panic = "abort"

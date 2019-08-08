@@ -11,6 +11,9 @@ pub enum FahrplanError {
     /// The given entity was not found.
     #[fail(display = "not found")]
     NotFound,
+    /// The API path doesn't exist.
+    #[fail(display = "invalid path")]
+    InvalidPath,
     #[fail(display = "STP indicators equal")]
     StpIndicatorsEqual,
     /// SQL error from tspl-sqlite.
@@ -30,6 +33,7 @@ impl StatusCode for FahrplanError {
 
         match *self {
             NotFound => 404,
+            InvalidPath => 400,
             _ => 500
         }
     }

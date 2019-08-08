@@ -1,19 +1,24 @@
 [package]
-name = "tspl-zugfuhrer"
+name = "tspl-nrod"
 version = "0.1.0"
 authors = ["eta <hi@theta.eu.org>"]
 edition = "2018"
 
 [dependencies]
 chrono = "0.4"
+chashmap = "2.2"
+crossbeam-channel = "0.2"
 failure = "0.1"
 failure_derive = "0.1"
+flate2 = "1.0"
+futures = "0.1"
 log = "0.4"
 reqwest = "0.9"
 rouille = "3.0"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
+tokio-core = "0.1"
 
 [dependencies.ntrod-types]
 path = "../ntrod-types"
@@ -24,5 +29,11 @@ path = "../tspl-sqlite"
 [dependencies.tspl-fahrplan]
 path = "../tspl-fahrplan"
 
+[dependencies.tspl-zugfuhrer]
+path = "../tspl-zugfuhrer"
+
 [dependencies.tspl-util]
 path = "../tspl-util"
+
+[dependencies.stomp]
+git = "https://git.theta.eu.org/stomp-rs.git"

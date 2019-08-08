@@ -114,7 +114,7 @@ impl InsertableDbType for Train {
                                       parent_stp_indicator, date, trust_id,
                                       darwin_rid, headcode, crosses_midnight,
                                       parent_source, terminated, cancelled, activated)
-                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         let rid = stmt.insert(params![self.tspl_id, self.parent_uid,
                               self.parent_start_date, self.parent_stp_indicator,
                               self.date, self.trust_id, self.darwin_rid,
@@ -254,7 +254,7 @@ impl InsertableDbType for TrainMvt {
                                       actual, time, public_time,
                                       day_offset, source, platform,
                                       pfm_suppr, unknown_delay)
-                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         let rid = stmt.insert(params![self.parent_train, self.updates,
                               self.tiploc, self.action, self.actual, self.time,
                               self.public_time, self.day_offset,

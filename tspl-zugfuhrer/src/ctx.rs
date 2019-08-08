@@ -4,7 +4,6 @@ use tspl_sqlite::TsplPool;
 use rouille::{Request, Response, router};
 use reqwest::Method;
 use chrono::prelude::*;
-use chrono::offset::Local;
 use log::*;
 use tspl_util::rpc::MicroserviceRpc;
 use tspl_util::{user_agent, extract_headers};
@@ -29,8 +28,8 @@ impl HttpServer for App {
             (GET) (/) => {
                 Ok(Response::text(user_agent!()))
             },
-            (GET) (/trains/by-trust-id/{trust_id}) => {
-                self.get_train_for_trust_id(trust_id)
+            (GET) (/trains/by-trust-id/{trust_id}/{date: NaiveDate}) => {
+                self.get_train_for_trust_id(trust_id, date)
                     .map(|x| Response::json(&x))
             },
             (POST) (/trains/{tid: Uuid}/trust-id/{trust_id}) => {
@@ -45,6 +44,14 @@ impl HttpServer for App {
                                  let source: i32 => "schedule-source",
                                  let date: NaiveDate => "activation-date");
                 self.activate_train(uid, start_date, stp_indicator, source, date)
+                    .map(|x| Response::json(&x))
+            },
+            (POST) (/trains/{tid: Uuid}/terminate) => {
+                self.terminate_train(tid)
+                    .map(|x| Response::json(&x))
+            },
+            (POST) (/trains/{tid: Uuid}/cancel) => {
+                self.cancel_train(tid)
                     .map(|x| Response::json(&x))
             },
             (POST) (/trains/{tid: Uuid}/trust-movement) => {
@@ -64,7 +71,7 @@ impl HttpServer for App {
                     .map(|x| Response::json(&x))
             },
             _ => {
-                Err(ZugError::NotFound)
+                Err(ZugError::InvalidPath)
             }
         )
     }
@@ -81,11 +88,14 @@ impl App {
         let train = Train::from_select(&trans, "WHERE tspl_id = ?", params![tid])?
             .into_iter().nth(0).ok_or(ZugError::NotFound)?;
         info!("Processing {} movement at STANOX {} for train {}", upd.actual_time, upd.stanox, tid);
+        // TRUST records passing through as an 'arrival', so we have to match
+        // on movements that are passes as well in order not to find nothing.
+        let acceptable_actions = vec![2, upd.planned_action];
         
         // Get movements that match up with the provided information.
         let tmvts = TrainMvt::from_select(&trans, "WHERE parent_train = ?
                         AND time = ?
-                        AND action = ?
+                        AND action = ANY(?)
                         AND day_offset = ?
                         AND updates IS NULL
                         AND source = ?
@@ -94,7 +104,7 @@ impl App {
                             WHERE corpus_entries.tiploc = train_movements.tiploc
                             AND corpus_entries.stanox = $1
                         )",
-                        params![train.id, upd.planned_time, upd.planned_action,
+                        params![train.id, upd.planned_time, acceptable_actions,
                         upd.planned_day_offset, TrainMvt::SOURCE_SCHED_ITPS, upd.stanox])?;
         if tmvts.len() > 1 {
             error!("Movement is ambiguous!");
@@ -121,13 +131,33 @@ impl App {
         trans.commit()?;
         Ok(tmvt)
     }
-    fn get_train_for_trust_id(&self, trust_id: String) -> ZugResult<Train> {
+    fn get_train_for_trust_id(&self, trust_id: String, date: NaiveDate) -> ZugResult<Train> {
         let db = self.pool.get()?;
-        let date = Local::now().naive_local().date();
-        let train = Train::from_select(&db, "WHERE trust_id = ? AND date = ?",
-                                       params![trust_id, date])?
+        let previous_date = date.pred();
+        let train = Train::from_select(&db, "WHERE trust_id = ? AND (date = ? OR (crosses_midnight = true AND date = ?))",
+                                       params![trust_id, date, previous_date])?
             .into_iter().nth(0).ok_or(ZugError::NotFound)?;
         Ok(train)
+    }
+    fn terminate_train(&self, tid: Uuid) -> ZugResult<()> {
+        let db = self.pool.get()?;
+        info!("Terminating train {}", tid);
+        let rows = db.execute("UPDATE trains SET terminated = true WHERE tspl_id = ?",
+                              params![tid])?;
+        if rows == 0 {
+            Err(ZugError::NotFound)?
+        }
+        Ok(())
+    }
+    fn cancel_train(&self, tid: Uuid) -> ZugResult<()> {
+        let db = self.pool.get()?;
+        info!("Cancelling train {}", tid);
+        let rows = db.execute("UPDATE trains SET cancelled = true WHERE tspl_id = ?",
+                              params![tid])?;
+        if rows == 0 {
+            Err(ZugError::NotFound)?
+        }
+        Ok(())
     }
     fn associate_trust_id(&self, tid: Uuid, trust_id: String) -> ZugResult<()> {
         let db = self.pool.get()?;
@@ -167,7 +197,7 @@ impl App {
             train.crosses_midnight = sched.crosses_midnight;
             train.id = train.insert_self(&trans)?;
             // Get the actual schedule details.
-            let uri = format!("/schedules/{}", sched.tspl_id);
+            let uri = format!("/schedule/{}", sched.tspl_id);
             let details: fpt::ScheduleDetails = self.rpc.req(Method::GET, uri)?;
             // Convert each movement into a TrainMvt.
             let tmvts = details.mvts

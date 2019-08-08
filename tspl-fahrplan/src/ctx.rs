@@ -59,7 +59,7 @@ impl App {
     }
     pub fn find_schedule_for_activation(&self, uid: String, stp_indicator: String, start_date: NaiveDate, source: u8) -> FahrplanResult<Schedule> {
         let db = self.pool.get()?;
-        let scheds = Schedule::from_select(&db, "WHERE uid = ?, stp_indicator = ?, start_date = ?, source = ?", 
+        let scheds = Schedule::from_select(&db, "WHERE uid = ? AND stp_indicator = ? AND start_date = ? AND source = ?", 
                                            &[&uid, &stp_indicator, &start_date, &source])?;
         Ok(scheds.into_iter().nth(0).ok_or(FahrplanError::NotFound)?)
     }

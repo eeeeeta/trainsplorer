@@ -23,4 +23,6 @@ osms-web/static/assets/*
 k8s/tspl-secrets.yaml
 *.sqlite
 *.sqlite-*
+*.sqlite3
+*.sqlite3-*
 tspl-*/tspl_*.toml
