@@ -1,4 +1,4 @@
-use pport::parse_pport_document;
+use crate::pport::parse_pport_document;
 macro_rules! mktest {
     ($($name:ident, $path:expr),*) => {
         $(

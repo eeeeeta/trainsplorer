@@ -1,9 +1,9 @@
 //! Schedule data - http://www.thalesgroup.com/rtti/PushPort/Schedules/v1
 use chrono::{NaiveTime, NaiveDate};
-use common::DisruptionReason;
+use crate::common::DisruptionReason;
 use std::io::Read;
-use deser::*;
-use errors::*;
+use crate::deser::*;
+use crate::errors::*;
 use xml::reader::EventReader;
 
 /// Group of attributes common to all schedule locations.

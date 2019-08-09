@@ -3,7 +3,7 @@ use xml::name::OwnedName;
 use xml::attribute::OwnedAttribute;
 use xml::namespace::Namespace;
 use xml::reader::{EventReader, XmlEvent};
-use errors::Result;
+use crate::errors::Result;
 use std::io::Read;
 
 pub struct XmlStartElement {

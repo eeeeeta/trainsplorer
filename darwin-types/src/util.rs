@@ -1,7 +1,7 @@
 use chrono::NaiveTime;
-use errors::{DarwinError, Result};
+use crate::errors::{DarwinError, Result};
 use std::str::FromStr;
-use deser::*;
+use crate::deser::*;
 use std::io::Read;
 use xml::reader::{XmlEvent, EventReader};
 

@@ -1,10 +1,10 @@
 //! Push Port data - http://www.thalesgroup.com/rtti/PushPort/v12
-use forecasts::Ts;
-use schedule::{Schedule, DeactivatedSchedule};
+use crate::forecasts::Ts;
+use crate::schedule::{Schedule, DeactivatedSchedule};
 use chrono::{DateTime, FixedOffset};
 use std::io::Read;
-use errors::*;
-use deser::*;
+use crate::errors::*;
+use crate::deser::*;
 use xml::reader::{XmlEvent, EventReader};
 
 /// An Update or Snapshot Response element ('uR' or 'sR').

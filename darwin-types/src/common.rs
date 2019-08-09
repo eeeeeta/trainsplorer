@@ -1,6 +1,6 @@
 //! Common types - http://www.thalesgroup.com/rtti/PushPort/CommonTypes/v1
-use errors::*;
-use deser::*;
+use crate::errors::*;
+use crate::deser::*;
 use std::io::Read;
 use xml::reader::{XmlEvent, EventReader};
 use chrono::NaiveTime;

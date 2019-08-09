@@ -1,11 +1,11 @@
 //! Forecast data - http://www.thalesgroup.com/rtti/PushPort/Forecasts/v2
 use chrono::{NaiveTime, NaiveDate};
-use common::{CircularTimes, CircularTimesBuilder, DisruptionReason};
+use crate::common::{CircularTimes, CircularTimesBuilder, DisruptionReason};
 use std::default::Default;
 use std::str::FromStr;
-use errors::*;
-use deser::*;
-use util;
+use crate::errors::*;
+use crate::deser::*;
+use crate::util;
 use std::io::Read;
 use xml::reader::{XmlEvent, EventReader};
 
