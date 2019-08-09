@@ -1,5 +1,5 @@
 [workspace]
-members = ["./ntrod-types", "./atoc-msn", "./darwin-types", "./tspl-sqlite", "./tspl-fahrplan", "./tspl-util", "./tspl-proto", "./tspl-zugfuhrer", "./tspl-nrod"]
+members = ["./ntrod-types", "./atoc-msn", "./darwin-types", "./tspl-sqlite", "./tspl-fahrplan", "./tspl-util", "./tspl-zugfuhrer", "./tspl-nrod"]
 
 [profile.dev]
 panic = "abort"
