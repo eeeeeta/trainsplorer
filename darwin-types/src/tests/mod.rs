@@ -13,5 +13,6 @@ macro_rules! mktest {
 mktest! {
     parse_train_status_01, "train_status_01.xml",
     parse_deactivated_schedule_01, "deactivated_schedule_01.xml",
-    parse_schedule_01, "schedule_01.xml"
+    parse_schedule_01, "schedule_01.xml",
+    parse_train_status_02, "train_status_02.xml"
 }

@@ -87,7 +87,9 @@ pub struct TsTimeData {
     /// The source of the forecast or actual time.
     pub src: Option<String>,
     /// The RTTI CIS code of the CIS instance if the src is a CIS.
-    pub src_inst: Option<String>
+    pub src_inst: Option<String>,
+    /// The class of the actual time.
+    pub at_class: Option<String>
 }
 impl XmlDeserialize for TsTimeData {
     fn from_xml_iter<R: Read>(se: XmlStartElement, reader: &mut EventReader<R>) -> Result<Self> {
@@ -97,7 +99,7 @@ impl XmlDeserialize for TsTimeData {
             with et, wet, at, etmin on ret {
                 Some(util::parse_time(&value)?)
             },
-            with src, src_inst from srcInst on ret {
+            with src, src_inst from srcInst, at_class from atClass on ret {
                 Some(value)
             },
         }

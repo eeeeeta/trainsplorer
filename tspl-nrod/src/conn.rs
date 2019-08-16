@@ -52,7 +52,7 @@ impl Darwin {
     fn updates_name(&self) -> &str {
         self.queue_updates
             .as_ref().map(|x| x as &str)
-            .unwrap_or("darwin.pushport-v16")
+            .unwrap_or("/topic/darwin.pushport-v16")
     }
 }
 impl StompType for Darwin {
@@ -120,7 +120,7 @@ impl StompProcessor<Darwin> {
         let stomp_host = conf.stomp_host;
         let sess = SessionBuilder::new(stomp_host, conf.stomp_port.unwrap_or(61613))
             .with(Credentials(conf.username, conf.password))
-            .with(Header::new("client-id", "eta@theta.eu.org"))
+            .with(Header::new("client-id", conf.username))
             .with(HeartBeat(5_000, 2_000))
             .start(hdl.clone())?;
         let inner = Darwin { 
