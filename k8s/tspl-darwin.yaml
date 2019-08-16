@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tspl-darwin
+  namespace: tspl
+  labels:
+    app: tspl-darwin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tspl-darwin
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      namespace: tspl
+      annotations:
+        linkerd.io/inject: enabled
+      labels:
+        app: tspl-darwin
+    spec:
+      containers:
+      - name: tspl-nrod
+        image: gcr.io/trainsplorer/tspl-nrod:latest
+        env:
+        - name: RUST_BACKTRACE
+          value: "full"
+        - name: TSPL_SERVICE_ZUGFUHRER
+          value: "http://tspl-zugfuhrer"
+        - name: TSPL_N_THREADS
+          value: "16"
+        - name: TSPL_USE_DARWIN
+          value: "true"
+        - name: TSPL_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: tspl-secrets
+              key: darwin_username
+        - name: TSPL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: tspl-secrets
+              key: darwin_password
+        - name: TSPL_STOMP_HOST
+          valueFrom:
+            secretKeyRef:
+              name: tspl-secrets
+              key: darwin_host
+
