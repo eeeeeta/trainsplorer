@@ -1,4 +1,4 @@
-//! Worker threads, responsible for dealing with a stream of messages.
+//! Worker threads for connecting to the NROD TRUST Train Movements system.
 
 use chashmap::CHashMap;
 use crossbeam_channel::Receiver;
@@ -19,11 +19,11 @@ use crate::errors::*;
 
 pub type TrustTsplStore = Arc<CHashMap<String, Uuid>>;
 
-pub enum WorkerMessage {
+pub enum NrodMessage {
     Movement(String)
 }
 pub struct NrodWorker {
-    rx: Receiver<WorkerMessage>,
+    rx: Receiver<NrodMessage>,
     /// A map of TRUST IDs to `tspl-zugfuhrer` UUIDs.
     trust_to_tspl: TrustTsplStore,
     /// RPC for `tspl-zugfuhrer`.
@@ -38,7 +38,7 @@ fn trust_id_extract_day_of_month(tid: &str) -> Result<u32> {
     Ok(as_dom)
 }
 impl NrodWorker {
-    pub fn new(rx: Receiver<WorkerMessage>, ts: TrustTsplStore, base_url: String) -> Self {
+    pub fn new(rx: Receiver<NrodMessage>, ts: TrustTsplStore, base_url: String) -> Self {
         let zrpc = MicroserviceRpc::new(user_agent!(), "zugfuhrer", base_url);
         Self { rx, trust_to_tspl: ts, zrpc }
     }
@@ -150,7 +150,7 @@ impl NrodWorker {
         loop {
             let data = self.rx.recv().unwrap();
             match data {
-                WorkerMessage::Movement(d) => self.on_mvt_message(&d)
+                NrodMessage::Movement(d) => self.on_mvt_message(&d)
             }
         }
     }

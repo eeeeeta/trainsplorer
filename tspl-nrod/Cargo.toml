@@ -23,6 +23,9 @@ tokio-core = "0.1"
 [dependencies.ntrod-types]
 path = "../ntrod-types"
 
+[dependencies.darwin-types]
+path = "../darwin-types"
+
 [dependencies.tspl-sqlite]
 path = "../tspl-sqlite"
 

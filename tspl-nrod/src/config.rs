@@ -8,18 +8,24 @@ use tspl_util::{ConfigExt, crate_name};
 pub struct Config {
     /// URL of a running tspl-zugfuhrer instance.
     pub service_zugfuhrer: String,
-    /// NROD username.
+    /// NROD/Darwin username.
     pub username: String,
-    /// NROD password.
+    /// NROD/Darwin password.
     pub password: String,
     /// Number of worker threads to use.
     pub n_threads: u32,
-    /// NROD STOMP hostname.
+    /// NROD/Darwin STOMP hostname.
     #[serde(default)]
     pub stomp_host: Option<String>,
-    /// NROD STOMP port.
+    /// NROD/Darwin STOMP port.
     #[serde(default)]
-    pub stomp_port: Option<u16>
+    pub stomp_port: Option<u16>,
+    /// Connect to Darwin instead of NROD.
+    #[serde(default)]
+    pub use_darwin: bool,
+    /// Darwin queue for updates.
+    #[serde(default)]
+    pub darwin_queue_updates: Option<String>
 }
 
 impl ConfigExt for Config {
