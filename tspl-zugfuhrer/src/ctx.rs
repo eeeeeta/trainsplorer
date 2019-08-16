@@ -2,23 +2,22 @@
 
 use tspl_sqlite::TsplPool;
 use rouille::{Request, Response, router};
-use reqwest::Method;
 use chrono::prelude::*;
 use log::*;
 use tspl_util::rpc::MicroserviceRpc;
 use tspl_util::{user_agent, extract_headers};
 use tspl_util::http::{HttpServer};
-use tspl_fahrplan::types as fpt;
 use tspl_sqlite::uuid::Uuid;
 use tspl_sqlite::traits::*;
 
 use crate::config::Config;
+use crate::activation::Activator;
 use crate::errors::*;
 use crate::types::*;
 
 pub struct App {
-    rpc: MicroserviceRpc,
     pool: TsplPool,
+    activator: Activator
 }
 impl HttpServer for App {
     type Error = ZugError;
@@ -79,7 +78,8 @@ impl HttpServer for App {
 impl App {
     pub fn new(pool: TsplPool, cfg: &Config) -> Self  {
         let rpc = MicroserviceRpc::new(user_agent!(), "fahrplan", cfg.service_fahrplan.clone());
-        Self { rpc, pool }
+        let activator = Activator::new(rpc, pool.clone());
+        Self { pool, activator }
     }
     fn process_trust_mvt_update(&self, tid: Uuid, upd: TrustMvtUpdate) -> ZugResult<TrainMvt> {
         let mut db = self.pool.get()?;
@@ -166,53 +166,7 @@ impl App {
         Ok(())
     }
     fn activate_train(&self, uid: String, start_date: NaiveDate, stp_indicator: String, source: i32, date: NaiveDate) -> ZugResult<Train> {
-        let mut db = self.pool.get()?;
-        let trans = db.transaction()?;
-        info!("Activating a train; (uid, start, stp, source, date) = ({}, {}, {}, {}, {})", uid, start_date, stp_indicator, source, date);
-        // Ask tspl-fahrplan for a schedule.
-        let uri = format!("/schedules/for-activation/{}/{}/{}/{}", uid, start_date, stp_indicator, source);
-        let sched: Option<fpt::Schedule> = self.rpc.req(Method::GET, uri).optional()?;
-        let mut train = Train {
-            id: -1,
-            tspl_id: Uuid::new_v4(),
-            parent_uid: uid,
-            parent_start_date: start_date,
-            parent_stp_indicator: stp_indicator,
-            date,
-            trust_id: None,
-            darwin_rid: None,
-            headcode: None,
-            crosses_midnight: false,
-            parent_source: source,
-            terminated: false,
-            cancelled: false,
-            activated: false
-        };
-        if let Some(sched) = sched {
-            train.activated = true;
-            train.crosses_midnight = sched.crosses_midnight;
-            train.id = train.insert_self(&trans)?;
-            // Get the actual schedule details.
-            let uri = format!("/schedule/{}", sched.tspl_id);
-            let details: fpt::ScheduleDetails = self.rpc.req(Method::GET, uri)?;
-            // Convert each movement into a TrainMvt.
-            let tmvts = details.mvts
-                .into_iter()
-                .map(|x| TrainMvt::from_itps(train.id, x));
-            for mvt in tmvts {
-                mvt.insert_self(&trans)?;
-            }
-            trans.commit()?;
-            info!("Activated train {}", train.tspl_id);
-            Ok(train)
-        }
-        else {
-            // We didn't get a schedule, but, to avoid simply losing information,
-            // make a train object anyway.
-            train.id = train.insert_self(&trans)?;
-            trans.commit()?;
-            warn!("No schedule found for activation of train {}", train.tspl_id);
-            Ok(train)
-        }
+        let ret = self.activator.activate_train_nrod(uid, start_date, stp_indicator, source, date)?;
+        Ok(ret)
     }
 }

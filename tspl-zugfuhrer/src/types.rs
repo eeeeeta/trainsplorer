@@ -206,10 +206,10 @@ impl TrainMvt {
     pub const SOURCE_DARWIN: i32 = 4;
     pub const SOURCE_TRUST_NAIVE: i32 = 5;
     /// Generate a `TrainMvt` from an ITPS `ScheduleMvt`.
-    pub fn from_itps(parent: i64, sched: fpt::ScheduleMvt) -> Self {
+    pub fn from_itps(sched: fpt::ScheduleMvt) -> Self {
         Self {
             id: -1,
-            parent_train: parent,
+            parent_train: -1,
             updates: None,
             tiploc: sched.tiploc,
             action: sched.action,

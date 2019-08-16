@@ -5,6 +5,7 @@ pub mod config;
 pub mod types;
 pub mod ctx;
 pub mod corpus;
+pub mod activation;
 
 use log::*;
 use tspl_util::ConfigExt;

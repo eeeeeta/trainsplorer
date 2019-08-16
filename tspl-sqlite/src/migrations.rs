@@ -80,7 +80,7 @@ pub fn run_pending_migrations(conn: &mut Connection, migrations: &[Migration]) -
         .unwrap_or(::std::i32::MIN);
     debug!("last migration ID = {}", last_migration);
     if last_migration > migrations.last().unwrap().id {
-        error!("Database too new! Please upgrade osm-signal.");
+        error!("Database too new! Please upgrade trainsplorer.");
         return Err(SqlError::DatabaseTooNew);
     }
     for mig in migrations.iter() {
