@@ -31,6 +31,10 @@ impl HttpServer for App {
                 self.get_train_for_trust_id(trust_id, date)
                     .map(|x| Response::json(&x))
             },
+            (GET) (/trains/by-darwin-rid/{rid}) => {
+                self.get_train_for_darwin_rid(rid)
+                    .map(|x| Response::json(&x))
+            },
             (POST) (/trains/{tid: Uuid}/trust-id/{trust_id}) => {
                 self.associate_trust_id(tid, trust_id)
                     .map(|x| Response::json(&x))
@@ -45,12 +49,40 @@ impl HttpServer for App {
                 self.activate_train(uid, start_date, stp_indicator, source, date)
                     .map(|x| Response::json(&x))
             },
+            (POST) (/trains/activate-fuzzy) => {
+                extract_headers!(req, ZugError::HeadersMissing,
+                                 let uid: String => "schedule-uid",
+                                 let rid: String => "darwin-rid",
+                                 let date: NaiveDate => "activation-date");
+                self.activate_train_darwin(uid, date, rid)
+                    .map(|x| Response::json(&x))
+
+            },
             (POST) (/trains/{tid: Uuid}/terminate) => {
                 self.terminate_train(tid)
                     .map(|x| Response::json(&x))
             },
             (POST) (/trains/{tid: Uuid}/cancel) => {
                 self.cancel_train(tid)
+                    .map(|x| Response::json(&x))
+            },
+            (POST) (/trains/{tid: Uuid}/darwin/update) => {
+                extract_headers!(req, ZugError::HeadersMissing,
+                                 let tiploc: String => "mvt-tiploc",
+                                 let planned_time: NaiveTime => "mvt-planned-time",
+                                 let planned_day_offset: u8 => "mvt-planned-day-offset",
+                                 let planned_action: u8 => "mvt-planned-action",
+                                 let updated_time: NaiveTime => "mvt-updated-time",
+                                 let time_actual: bool => "mvt-time-actual",
+                                 let delay_unknown: bool => "mvt-delay-unknown",
+                                 opt platsup: bool => "mvt-platsup",
+                                 opt platform: String => "mvt-platform");
+                self.process_darwin_mvt_update(tid, DarwinMvtUpdate {
+                    tiploc, planned_time, planned_day_offset,
+                    planned_action, updated_time, time_actual,
+                    delay_unknown, platform,
+                    platsup: platsup.unwrap_or(false)
+                })
                     .map(|x| Response::json(&x))
             },
             (POST) (/trains/{tid: Uuid}/trust-movement) => {
@@ -81,6 +113,55 @@ impl App {
         let activator = Activator::new(rpc, pool.clone());
         Self { pool, activator }
     }
+    fn process_darwin_mvt_update(&self, tid: Uuid, upd: DarwinMvtUpdate) -> ZugResult<TrainMvt> {
+        let mut db = self.pool.get()?;
+        let trans = db.transaction()?;
+
+        let train = Train::from_select(&trans, "WHERE tspl_id = ?", params![tid])?
+            .into_iter().nth(0).ok_or(ZugError::NotFound)?;
+        info!("Processing {} Darwin movement (actual = {}) at {} for train {}",
+               upd.updated_time, upd.time_actual, upd.tiploc, tid);
+
+        // Get movements that match up with the provided information.
+        let tmvts = TrainMvt::from_select(&trans, "WHERE parent_train = ?
+                        AND time = ?
+                        AND action = ?
+                        AND day_offset = ?
+                        AND updates IS NULL
+                        AND source = ?
+                        AND tiploc = ?",
+                        params![train.id, upd.planned_time, upd.planned_action,
+                        upd.planned_day_offset, TrainMvt::SOURCE_SCHED_ITPS, upd.tiploc])?;
+        if tmvts.len() > 1 {
+            error!("Movement is ambiguous!");
+            Err(ZugError::MovementsAmbiguous)?
+        }
+        let updates = tmvts.into_iter().nth(0)
+            .ok_or(ZugError::MovementsNotFound)?;
+        // Delete any pre-existing Darwin movements, as we're about to insert one.
+        trans.execute("DELETE FROM train_movements WHERE updates = ? AND source = ?",
+                      params![updates.id, TrainMvt::SOURCE_DARWIN])?;
+        // Insert our updated movement.
+        let mut tmvt = TrainMvt {
+            id: -1,
+            parent_train: train.id,
+            updates: Some(updates.id),
+            tiploc: upd.tiploc,
+            action: upd.planned_action,
+            actual: upd.time_actual,
+            time: upd.updated_time,
+            public_time: None,
+            day_offset: upd.planned_day_offset,
+            source: TrainMvt::SOURCE_DARWIN,
+            platform: upd.platform,
+            pfm_suppr: upd.platsup,
+            unknown_delay: upd.delay_unknown
+        };
+        tmvt.id = tmvt.insert_self(&trans)?;
+        info!("Inserted new movement #{}", tmvt.id);
+        trans.commit()?;
+        Ok(tmvt)
+    }
     fn process_trust_mvt_update(&self, tid: Uuid, upd: TrustMvtUpdate) -> ZugResult<TrainMvt> {
         let mut db = self.pool.get()?;
         let trans = db.transaction()?;
@@ -106,7 +187,8 @@ impl App {
             error!("Movement is ambiguous!");
             Err(ZugError::MovementsAmbiguous)?
         }
-        let updates = tmvts.into_iter().nth(0).ok_or(ZugError::NotFound)?;
+        let updates = tmvts.into_iter().nth(0)
+            .ok_or(ZugError::MovementsNotFound)?;
         let mut tmvt = TrainMvt {
             id: -1,
             parent_train: train.id,
@@ -126,6 +208,13 @@ impl App {
         info!("Inserted new movement #{}", tmvt.id);
         trans.commit()?;
         Ok(tmvt)
+    }
+    fn get_train_for_darwin_rid(&self, rid: String) -> ZugResult<Train> {
+        let db = self.pool.get()?;
+        let train = Train::from_select(&db, "WHERE darwin_rid = ?",
+                                       params![rid])?
+            .into_iter().nth(0).ok_or(ZugError::NotFound)?;
+        Ok(train) 
     }
     fn get_train_for_trust_id(&self, trust_id: String, date: NaiveDate) -> ZugResult<Train> {
         let db = self.pool.get()?;
@@ -164,6 +253,14 @@ impl App {
             Err(ZugError::NotFound)?
         }
         Ok(())
+    }
+    fn activate_train_darwin(&self, uid: String, date: NaiveDate, rid: String) -> ZugResult<Train> {
+        let db = self.pool.get()?;
+        let mut ret = self.activator.activate_train_darwin(uid, date)?;
+        db.execute("UPDATE trains SET darwin_rid = ? WHERE id = ?",
+                   params![rid, ret.id])?;
+        ret.darwin_rid = Some(rid);
+        Ok(ret)
     }
     fn activate_train(&self, uid: String, start_date: NaiveDate, stp_indicator: String, source: i32, date: NaiveDate) -> ZugResult<Train> {
         let ret = self.activator.activate_train_nrod(uid, start_date, stp_indicator, source, date)?;

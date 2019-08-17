@@ -264,6 +264,29 @@ impl InsertableDbType for TrainMvt {
     }
 }
 
+/// A live train movement update from Darwin.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DarwinMvtUpdate {
+    /// TIPLOC where the movement was scheduled to occur.
+    pub tiploc: String,
+    /// Scheduled time.
+    pub planned_time: NaiveTime,
+    /// Scheduled day offset.
+    pub planned_day_offset: u8,
+    /// Scheduled action.
+    pub planned_action: u8,
+    /// Updated time of movement.
+    pub updated_time: NaiveTime,
+    /// Whether the time is an actual time, or just
+    /// an estimation.
+    pub time_actual: bool,
+    /// Whether the delay is unknown or not.
+    pub delay_unknown: bool,
+    /// Actual platform.
+    pub platform: Option<String>,
+    /// Whether the platform should be suppressed.
+    pub platsup: bool
+}
 /// A live train movement update from TRUST.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TrustMvtUpdate {

@@ -92,21 +92,41 @@ impl Activator {
         info!("Activated train {} (flag = {}).", train.tspl_id, train.activated);
         Ok(train)
     }
+    pub fn get_tmvts_for_schedule(&self, sched: &fpt::Schedule) -> ZugResult<Vec<TrainMvt>> {
+        // Get the actual schedule details.
+        let uri = format!("/schedule/{}", sched.tspl_id);
+        let details: fpt::ScheduleDetails = self.rpc.req(Method::GET, uri)?;
+        // Convert each movement into a TrainMvt.
+        let tmvts = details.mvts
+            .into_iter()
+            .map(|x| TrainMvt::from_itps(x))
+            .collect();
+        Ok(tmvts)
+    }
+    pub fn activate_train_darwin(&self, uid: String, run_date: NaiveDate) -> ZugResult<Train> {
+        info!("Activating a train from Darwin; (uid, date) = ({}, {})", uid, run_date);
+        // Ask tspl-fahrplan for the authoritative schedule on that date.
+        let uri = format!("/schedules/by-uid-on-date/{}/{}/{}", uid, run_date, fpt::Schedule::SOURCE_ITPS);
+        // Not optional here - if we don't find a schedule, we can't actually do the activation!
+        let sched: fpt::Schedule = self.rpc.req(Method::GET, uri)?;
+        let tmvts = self.get_tmvts_for_schedule(&sched)?;
+        // Do it!
+        let ret = self.activate_lowlevel(ActivationDetails { 
+            uid,
+            start_date: sched.start_date,
+            stp_indicator: sched.stp_indicator,
+            source: sched.source as _,
+            run_date 
+        }, tmvts)?;
+        Ok(ret)
+    }
     pub fn activate_train_nrod(&self, uid: String, start_date: NaiveDate, stp_indicator: String, source: i32, date: NaiveDate) -> ZugResult<Train> {
         info!("Activating a train from NROD; (uid, start, stp, source, date) = ({}, {}, {}, {}, {})", uid, start_date, stp_indicator, source, date);
         // Ask tspl-fahrplan for a schedule.
         let uri = format!("/schedules/for-activation/{}/{}/{}/{}", uid, start_date, stp_indicator, source);
         let sched: Option<fpt::Schedule> = self.rpc.req(Method::GET, uri).optional()?;
         let mvts = if let Some(sched) = sched {
-            // Get the actual schedule details.
-            let uri = format!("/schedule/{}", sched.tspl_id);
-            let details: fpt::ScheduleDetails = self.rpc.req(Method::GET, uri)?;
-            // Convert each movement into a TrainMvt.
-            let tmvts = details.mvts
-                .into_iter()
-                .map(|x| TrainMvt::from_itps(x))
-                .collect();
-            tmvts
+            self.get_tmvts_for_schedule(&sched)?
         }
         else {
             warn!("No ITPS schedule found; (uid, start, stp, source, date) = ({}, {}, {}, {}, {})", uid, start_date, stp_indicator, source, date);

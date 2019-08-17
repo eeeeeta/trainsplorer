@@ -15,6 +15,9 @@ pub enum ZugError {
     /// The given entity was not found.
     #[fail(display = "not found")]
     NotFound,
+    /// Failed to find movements matching that description.
+    #[fail(display = "movements not found")]
+    MovementsNotFound,
     /// The API path doesn't exist.
     #[fail(display = "invalid path")]
     InvalidPath,
@@ -47,6 +50,7 @@ impl StatusCode for ZugError {
 
         match *self {
             NotFound => 404,
+            MovementsNotFound => 404,
             MovementsAmbiguous => 409,
             HeadersMissing => 400,
             InvalidPath => 400,

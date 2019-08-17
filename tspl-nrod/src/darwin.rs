@@ -174,13 +174,6 @@ impl DarwinWorker {
             hdrs.insert("X-tspl-mvt-planned-time", upd.time_sched.to_string().parse()?);
             hdrs.insert("X-tspl-mvt-planned-day-offset", upd.day_offset.to_string().parse()?);
             hdrs.insert("X-tspl-mvt-planned-action", upd.action.to_string().parse()?);
-            if upd.tstd.at_removed {
-                // The previous actual time has just been removed!
-                let hdrs = hdrs.clone();
-                if let Err(e) = self.zrpc.req_with_headers::<_, ()>(Method::POST, format!("/trains/{}/darwin/at-removed", tspl_id), hdrs) {
-                    warn!("Failed to remove actual time at {} for {} ({}): {}", upd.tiploc, ts.rid, tspl_id, e);
-                }
-            }
             let actual = upd.tstd.at.is_some();
             let unknown_delay = upd.tstd.delayed;
             if let Some(pd) = upd.platform {
