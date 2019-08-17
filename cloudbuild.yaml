@@ -46,7 +46,7 @@ steps:
   args:
   - '-c'
   - |
-    kubectl -n tspl set image deployment "tspl-darwin" "$thing=gcr.io/trainsplorer/tspl-nrod:$COMMIT_SHA"
+    kubectl -n tspl set image deployment "tspl-darwin" "tspl-nrod=gcr.io/trainsplorer/tspl-nrod:$COMMIT_SHA"
 
 
 

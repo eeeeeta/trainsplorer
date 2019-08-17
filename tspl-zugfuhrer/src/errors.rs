@@ -34,8 +34,8 @@ pub enum ZugError {
     #[fail(display = "tspl-sqlite: {}", _0)]
     Sql(SqlError),
     /// SQL error from rusqlite.
-    #[fail(display = "rusqlite: {}", _0)]
-    Rsql(RsqlError),
+    #[fail(display = "rusqlite: {} ({})", _1, _0)]
+    Rsql(String, RsqlError),
     /// r2d2 database error.
     #[fail(display = "r2d2: {}", _0)]
     Pool(PoolError),
@@ -75,9 +75,13 @@ impl<T, E> OptionalExt<T> for Result<T, E> where E: Into<ZugError> {
     }
 }
 
+impl From<RsqlError> for ZugError {
+    fn from(r: RsqlError) -> ZugError {
+        ZugError::Rsql(format!("{:?}", r), r)
+    }
+}
 impl_from_for_error!(ZugError,
                      ReqwestError => Reqwest,
-                     RsqlError => Rsql,
                      SqlError => Sql,
                      PoolError => Pool,
                      RpcError => Rpc);
