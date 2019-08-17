@@ -1,6 +1,5 @@
 FROM archlinux/base:latest AS tspl-nrod
 WORKDIR /tspl
-RUN pacman -Syu --needed --noconfirm openssl
 COPY --from=tspl-compiled /tspl/target/release/tspl-nrod /tspl
 ENTRYPOINT ["/tspl/tspl-nrod"]
 

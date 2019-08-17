@@ -1,6 +1,5 @@
 FROM archlinux/base:latest AS tspl-zugfuhrer
 WORKDIR /tspl
-RUN pacman -Syu --needed --noconfirm openssl
 COPY --from=tspl-compiled /tspl/target/release/tspl-zugfuhrer /tspl
 ENTRYPOINT ["/tspl/tspl-zugfuhrer"]
 

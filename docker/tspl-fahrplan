@@ -1,6 +1,5 @@
 FROM archlinux/base:latest AS tspl-fahrplan
 WORKDIR /tspl
-RUN pacman -Syu --needed --noconfirm openssl
 COPY --from=tspl-compiled /tspl/target/release/tspl-fahrplan /tspl
 ENTRYPOINT ["/tspl/tspl-fahrplan"]
 
