@@ -13,6 +13,7 @@ use rusqlite::Connection;
 use self::migrations::Migration;
 use std::path::{PathBuf, Path};
 use std::time::Duration;
+use log::*;
 
 /// Maximum amount of time a SQL statement /should/ take, in milliseconds.
 ///
@@ -21,7 +22,7 @@ use std::time::Duration;
 pub static MAXIMUM_STATEMENT_TIME_MILLIS: u128 = 200;
 
 fn profile_cb(stmt: &str, dur: Duration) {
-    let time = dur.as_mills();
+    let time = dur.as_millis();
     if time > MAXIMUM_STATEMENT_TIME_MILLIS {
         warn!("SQL statement took {}ms: {}", time, stmt);
     }
@@ -31,7 +32,7 @@ fn initialize_connection_without_migrating(conn: &mut Connection) -> ::std::resu
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
     conn.execute_batch("PRAGMA journal_mode = WAL;")?;
     conn.busy_timeout(std::time::Duration::new(5, 0))?;
-    conn.profile(Some(profile_cb))?;
+    conn.profile(Some(profile_cb));
     Ok(())
 }
 pub fn initialize_connection(conn: &mut Connection, migrations: &[Migration]) -> Result<()> {

@@ -12,7 +12,7 @@ log = "0.4"
 r2d2 = "0.8.4"
 
 [dependencies.rusqlite]
-features = ["blob", "chrono", "uuid"]
+features = ["blob", "chrono", "uuid", "trace", "bundled"]
 git = "https://github.com/jgallagher/rusqlite"
 
 [dependencies.tspl-util]
