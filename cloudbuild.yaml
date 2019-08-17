@@ -41,6 +41,14 @@ steps:
   - |
     pkgs=("tspl-nrod"); for thing in ${pkgs[@]}; do kubectl -n tspl set image deployment "$thing" "$thing=gcr.io/trainsplorer/$thing:$COMMIT_SHA"; done
 
+- name: 'gcr.io/cloud-builders/kubectl'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    kubectl -n tspl set image deployment "tspl-darwin" "$thing=gcr.io/trainsplorer/tspl-nrod:$COMMIT_SHA"
+
+
 
 images:
 - 'gcr.io/trainsplorer/tspl-builder:latest'
