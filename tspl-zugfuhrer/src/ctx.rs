@@ -1,6 +1,7 @@
 //! Main app context.
 
 use tspl_sqlite::TsplPool;
+use tspl_sqlite::rusqlite::TransactionBehavior;
 use rouille::{Request, Response, router};
 use chrono::prelude::*;
 use log::*;
@@ -115,7 +116,7 @@ impl App {
     }
     fn process_darwin_mvt_update(&self, tid: Uuid, upd: DarwinMvtUpdate) -> ZugResult<TrainMvt> {
         let mut db = self.pool.get()?;
-        let trans = db.transaction()?;
+        let trans = db.transaction_with_behavior(TransactionBehavior::Exclusive)?;
 
         let train = Train::from_select(&trans, "WHERE tspl_id = ?", params![tid])?
             .into_iter().nth(0).ok_or(ZugError::NotFound)?;
@@ -164,7 +165,7 @@ impl App {
     }
     fn process_trust_mvt_update(&self, tid: Uuid, upd: TrustMvtUpdate) -> ZugResult<TrainMvt> {
         let mut db = self.pool.get()?;
-        let trans = db.transaction()?;
+        let trans = db.transaction_with_behavior(TransactionBehavior::Exclusive)?;
 
         let train = Train::from_select(&trans, "WHERE tspl_id = ?", params![tid])?
             .into_iter().nth(0).ok_or(ZugError::NotFound)?;
