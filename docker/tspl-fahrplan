@@ -1,6 +1,6 @@
-FROM debian:stable-slim AS tspl-fahrplan
+FROM archlinux/base:latest AS tspl-fahrplan
 WORKDIR /tspl
-RUN apt-get update && apt-get install -y libssl1.1 ca-certificates sqlite3
+RUN pacman -Syu --needed --noconfirm openssl
 COPY --from=tspl-compiled /tspl/target/release/tspl-fahrplan /tspl
 ENTRYPOINT ["/tspl/tspl-fahrplan"]
 
