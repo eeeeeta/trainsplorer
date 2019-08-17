@@ -15,6 +15,11 @@ spec:
     name: find a train by TRUST ID and date
     isRetryable: true
   - condition:
+      method: GET
+      pathRegex: /trains/by-darwin-rid/[^/]*
+    name: find a train by Darwin RID
+    isRetryable: true
+  - condition:
       method: POST
       pathRegex: /trains/[^/]*/trust-id/[^/]*
     name: associate a train with a TRUST ID
@@ -23,6 +28,12 @@ spec:
       method: POST
       pathRegex: /trains/activate
     name: activate a train
+    isRetryable: true
+  - condition:
+      method: POST
+      pathRegex: /trains/activate-fuzzy
+    name: activate a train (Darwin)
+    isRetryable: true
   - condition:
       method: POST
       pathRegex: /trains/[^/]*/terminate
@@ -37,3 +48,7 @@ spec:
       method: POST
       pathRegex: /trains/[^/]*/trust-movement
     name: register a TRUST movement for a train
+  - condition:
+      method: POST
+      pathRegex: /trains/[^/]*/darwin/update
+    name: register a Darwin movement for a train

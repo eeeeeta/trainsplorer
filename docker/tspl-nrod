@@ -1,4 +1,4 @@
-FROM archlinux/base:latest AS tspl-nrod
+FROM tspl-base
 WORKDIR /tspl
 COPY --from=tspl-compiled /tspl/target/release/tspl-nrod /tspl
 ENTRYPOINT ["/tspl/tspl-nrod"]

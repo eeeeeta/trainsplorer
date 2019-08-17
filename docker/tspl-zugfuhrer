@@ -1,4 +1,4 @@
-FROM archlinux/base:latest AS tspl-zugfuhrer
+FROM tspl-base
 WORKDIR /tspl
 COPY --from=tspl-compiled /tspl/target/release/tspl-zugfuhrer /tspl
 ENTRYPOINT ["/tspl/tspl-zugfuhrer"]

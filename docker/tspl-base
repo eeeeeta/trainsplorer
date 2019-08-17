@@ -1,0 +1,3 @@
+FROM archlinux/base:latest AS tspl-base
+RUN pacman -Syu --needed --noconfirm sqlite3
+RUN pacman -Scc --noconfirm
