@@ -65,6 +65,7 @@ spec:
       name: zugfuhrer-data
     spec:
       accessModes: [ "ReadWriteOnce" ]
+      storageClassName: faster
       resources:
         requests:
           storage: 100Gi

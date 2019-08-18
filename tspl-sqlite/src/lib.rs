@@ -31,7 +31,7 @@ fn profile_cb(stmt: &str, dur: Duration) {
 fn initialize_connection_without_migrating(conn: &mut Connection) -> ::std::result::Result<(), rusqlite::Error> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
     conn.execute_batch("PRAGMA journal_mode = WAL;")?;
-    conn.busy_timeout(std::time::Duration::new(5, 0))?;
+    conn.busy_timeout(std::time::Duration::new(15, 0))?;
     conn.profile(Some(profile_cb));
     Ok(())
 }
