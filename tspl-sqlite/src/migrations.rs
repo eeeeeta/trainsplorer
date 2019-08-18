@@ -36,7 +36,7 @@ pub struct Migration {
 impl Migration {
     pub fn up(&self, conn: &mut Connection) -> Result<()> {
         let trans = conn.transaction()?;
-        debug!("executing up stage for migration {}: {}", self.id, self.name);
+        info!("executing up stage for migration {}: {}", self.id, self.name);
         if MigrationEntry::from_select(&trans, "WHERE id >= $1", &[&self.id])?.len() > 0 {
             error!("Attempted to apply migration out of order!");
             return Err(SqlError::MigrationOutOfOrder(self.id));
