@@ -35,6 +35,7 @@ pub struct Migration {
 }
 impl Migration {
     pub fn up(&self, conn: &mut Connection) -> Result<()> {
+        conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
         let trans = conn.transaction()?;
         info!("executing up stage for migration {}: {}", self.id, self.name);
         if MigrationEntry::from_select(&trans, "WHERE id >= $1", &[&self.id])?.len() > 0 {
@@ -48,6 +49,7 @@ impl Migration {
         };
         ent.insert_self(&trans)?;
         trans.commit()?;
+        conn.execute_batch("PRAGMA foreign_keys = ON;")?;
         Ok(())
     }
 }
