@@ -1,0 +1,5 @@
+FROM tspl-base
+WORKDIR /tspl
+COPY --from=tspl-compiled /tspl/target/release/tspl-fahrplan-updater /tspl
+ENTRYPOINT ["/tspl/tspl-fahrplan-updater"]
+

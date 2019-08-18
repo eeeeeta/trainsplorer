@@ -1,0 +1,17 @@
+[package]
+name = "tspl-gcs"
+version = "0.1.0"
+authors = ["eta <hi@theta.eu.org>"]
+edition = "2018"
+
+[dependencies]
+log = "0.4"
+failure = "0.1"
+failure_derive = "0.1"
+google-storage1 = "1.0"
+hyper = "^0.10"
+hyper-rustls = "^0.6"
+yup-oauth2 = "^1.0"
+
+[dependencies.tspl-util]
+path = "../tspl-util"

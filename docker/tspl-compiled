@@ -4,7 +4,7 @@ COPY . /tspl
 
 # Delete all the dummy build artefacts that we made earlier when building dependencies.
 # NB: this list should be updated as new crates are made.
-RUN /bin/bash -c 'pkgs=("darwin-types" "ntrod-types" "atoc-msn" "tspl-sqlite" "tspl-fahrplan" "tspl-util" "tspl-zugfuhrer" "tspl-nrod"); for thing in ${pkgs[@]}; do rm -rfv /tspl/target/release/.fingerprint/${thing}*; done'
+RUN /bin/bash -c 'pkgs=("darwin-types" "ntrod-types" "atoc-msn" "tspl-sqlite" "tspl-fahrplan" "tspl-util" "tspl-zugfuhrer" "tspl-nrod" "tspl-fahrplan-updater" "tspl-gcs"); for thing in ${pkgs[@]}; do rm -rfv /tspl/target/release/.fingerprint/${thing}*; done'
 # The above is used instead of the below, because the below is buggy and breaks.
 #RUN ~/.cargo/bin/cargo clean -v --release -p darwin-types -p ntrod-types -p atoc-msn -p tspl-sqlite -p tspl-fahrplan -p tspl-util -p tspl-proto -p tspl-zugfuhrer -p tspl-nrod
 

@@ -11,7 +11,7 @@ steps:
   args:
   - '-c'
   - |
-    pkgs=("tspl-builder" "tspl-compiled" "tspl-base" "tspl-fahrplan" "tspl-zugfuhrer" "tspl-nrod"); for thing in ${pkgs[@]}; do docker build -f "docker/$thing" -t "$thing" --cache-from gcr.io/trainsplorer/tspl-builder:latest .; done
+    pkgs=("tspl-builder" "tspl-compiled" "tspl-base" "tspl-fahrplan" "tspl-zugfuhrer" "tspl-nrod" "tspl-fahrplan-updater"); for thing in ${pkgs[@]}; do docker build -f "docker/$thing" -t "$thing" --cache-from gcr.io/trainsplorer/tspl-builder:latest .; done
   timeout: 4000s
 
 - name: 'gcr.io/cloud-builders/docker'
@@ -19,7 +19,7 @@ steps:
   args:
   - '-c'
   - |
-    pkgs=("tspl-builder" "tspl-fahrplan" "tspl-zugfuhrer" "tspl-nrod"); for thing in ${pkgs[@]}; do docker tag "$thing" "gcr.io/trainsplorer/$thing:latest"; docker tag "$thing" "gcr.io/trainsplorer/$thing:$COMMIT_SHA"; docker push "gcr.io/trainsplorer/$thing"; done
+    pkgs=("tspl-builder" "tspl-fahrplan" "tspl-zugfuhrer" "tspl-nrod" "tspl-fahrplan-updater"); for thing in ${pkgs[@]}; do docker tag "$thing" "gcr.io/trainsplorer/$thing:latest"; docker tag "$thing" "gcr.io/trainsplorer/$thing:$COMMIT_SHA"; docker push "gcr.io/trainsplorer/$thing"; done
 
 - name: 'gcr.io/cloud-builders/gcloud'
   args: ['container', 'clusters', 'get-credentials', 'tspl-cluster-ii']
