@@ -1,0 +1,47 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: tspl-fahrplan-updater
+  namespace: tspl
+jobTemplate:
+spec:
+  schedule: "* 5 * * *" 
+  startingDeadlineSeconds: 3600
+  concurrencyPolicy: Replace
+  jobTemplate:
+    spec:
+      backoffLimit: 4
+      template:
+        metadata:
+          namespace: tspl
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: tspl-fahrplan-updater
+              image: gcr.io/trainsplorer/tspl-fahrplan-updater:latest
+              volumeMounts:
+                - name: service-account
+                  mountPath: /tspl/updater_service_account.json
+                  subPath: updater_service_account.json
+              env:
+                - name: RUST_BACKTRACE
+                  value: "full"
+                - name: TSPL_BUCKET_NAME
+                  value: "trainsplorer-fahrplan"
+                - name: TSPL_SERVICE_ACCOUNT_KEY_PATH
+                  value: "/tspl/updater_service_account.json"
+                - name: TSPL_USERNAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: tspl-secrets
+                      key: nrod_username
+                - name: TSPL_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: tspl-secrets
+                      key: nrod_password
+          volumes:
+            - name: service-account
+              secret: 
+                secretName: tspl-secrets
+
