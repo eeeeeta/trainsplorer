@@ -4,16 +4,18 @@ use tspl_sqlite::traits::*;
 use tspl_sqlite::migrations::Migration;
 use tspl_sqlite::migration;
 use tspl_fahrplan::types as fpt;
+use std::collections::HashMap;
 use serde_derive::{Serialize, Deserialize};
 use chrono::*;
 
 pub use ntrod_types::reference::CorpusEntry;
 
-pub static MIGRATIONS: [Migration; 4] = [
+pub static MIGRATIONS: [Migration; 5] = [
     migration!(0, "initial"),
     migration!(1, "indexes"),
     migration!(2, "tmvt_unique_fix"),
-    migration!(3, "delete_idx")
+    migration!(3, "delete_idx"),
+    migration!(4, "mvt_query_idx")
 ];
 
 /// A live train object, representing a live or historic running of a train.
@@ -90,22 +92,22 @@ impl DbType for Train {
     fn table_name() -> &'static str {
         "trains"
     }
-    fn from_row(row: &Row) -> RowResult<Self> {
+    fn from_row(row: &Row, s: usize) -> RowResult<Self> {
         Ok(Self {
-            id: row.get(0)?,
-            tspl_id: row.get(1)?,
-            parent_uid: row.get(2)?,
-            parent_start_date: row.get(3)?,
-            parent_stp_indicator: row.get(4)?,
-            date: row.get(5)?,
-            trust_id: row.get(6)?,
-            darwin_rid: row.get(7)?,
-            headcode: row.get(8)?,
-            crosses_midnight: row.get(9)?,
-            parent_source: row.get(10)?,
-            terminated: row.get(11)?,
-            cancelled: row.get(12)?,
-            activated: row.get(13)?
+            id: row.get(s + 0)?,
+            tspl_id: row.get(s + 1)?,
+            parent_uid: row.get(s + 2)?,
+            parent_start_date: row.get(s + 3)?,
+            parent_stp_indicator: row.get(s + 4)?,
+            date: row.get(s + 5)?,
+            trust_id: row.get(s + 6)?,
+            darwin_rid: row.get(s + 7)?,
+            headcode: row.get(s + 8)?,
+            crosses_midnight: row.get(s + 9)?,
+            parent_source: row.get(s + 10)?,
+            terminated: row.get(s + 11)?,
+            cancelled: row.get(s + 12)?,
+            activated: row.get(s + 13)?
         })
     }
 }
@@ -199,7 +201,8 @@ pub struct TrainMvt {
     /// Whether or not the delay should be marked as 'unknown' (i.e. the time
     /// estimated in this movement is just a best guess, and the delay cannot be
     /// accurately predicted).
-    pub unknown_delay: bool
+    pub unknown_delay: bool,
+    // NOTE: update `FIELDS` constant below when adding new fields.
 }
 impl TrainMvt {
     pub const SOURCE_SCHED_ITPS: i32 = 0;
@@ -208,6 +211,7 @@ impl TrainMvt {
     pub const SOURCE_TRUST: i32 = 3;
     pub const SOURCE_DARWIN: i32 = 4;
     pub const SOURCE_TRUST_NAIVE: i32 = 5;
+    pub const FIELDS: usize = 13;
     /// Generate a `TrainMvt` from an ITPS `ScheduleMvt`.
     pub fn from_itps(sched: fpt::ScheduleMvt) -> Self {
         Self {
@@ -231,21 +235,21 @@ impl DbType for TrainMvt {
     fn table_name() -> &'static str {
         "train_movements"
     }
-    fn from_row(row: &Row) -> RowResult<Self> {
+    fn from_row(row: &Row, s: usize) -> RowResult<Self> {
         Ok(Self {
-            id: row.get(0)?,
-            parent_train: row.get(1)?,
-            updates: row.get(2)?,
-            tiploc: row.get(3)?,
-            action: row.get(4)?,
-            actual: row.get(5)?,
-            time: row.get(6)?,
-            public_time: row.get(7)?,
-            day_offset: row.get(8)?,
-            source: row.get(9)?,
-            platform: row.get(10)?,
-            pfm_suppr: row.get(11)?,
-            unknown_delay: row.get(12)?
+            id: row.get(s + 0)?,
+            parent_train: row.get(s + 1)?,
+            updates: row.get(s + 2)?,
+            tiploc: row.get(s + 3)?,
+            action: row.get(s + 4)?,
+            actual: row.get(s + 5)?,
+            time: row.get(s + 6)?,
+            public_time: row.get(s + 7)?,
+            day_offset: row.get(s + 8)?,
+            source: row.get(s + 9)?,
+            platform: row.get(s + 10)?,
+            pfm_suppr: row.get(s + 11)?,
+            unknown_delay: row.get(s + 12)?
         })
     }
 }
@@ -324,4 +328,14 @@ impl InsertableDbType for WrappedCorpusEntry {
                             self.0.nlcdesc, self.0.nlcdesc16])?;
         Ok(())
     }
+}
+
+/// The response to the get_mvts_passing_through() call.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct MvtQueryResponse {
+    /// Relevant train movements.
+    pub mvts: Vec<TrainMvt>,
+    /// The trains these movements come from, indexed by
+    /// their internal ID (for easy lookup).
+    pub trains: HashMap<i64, Train>,
 }

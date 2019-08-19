@@ -97,21 +97,21 @@ impl DbType for Schedule {
     fn table_name() -> &'static str {
         "schedules"
     }
-    fn from_row(row: &Row) -> RowResult<Self> {
-        let days: u8 = row.get(5)?;
+    fn from_row(row: &Row, s: usize) -> RowResult<Self> {
+        let days: u8 = row.get(s + 5)?;
         Ok(Self {
-            id: row.get(0)?,
-            tspl_id: row.get(1)?,
-            uid: row.get(2)?,
-            start_date: row.get(3)?,
-            end_date: row.get(4)?,
+            id: row.get(s + 0)?,
+            tspl_id: row.get(s + 1)?,
+            uid: row.get(s + 2)?,
+            start_date: row.get(s + 3)?,
+            end_date: row.get(s + 4)?,
             days: ScheduleDays::from_bits_truncate(days),
-            stp_indicator: row.get(6)?,
-            signalling_id: row.get(7)?,
-            source: row.get(8)?,
-            file_metaseq: row.get(9)?,
-            darwin_id: row.get(10)?,
-            crosses_midnight: row.get(11)?,
+            stp_indicator: row.get(s + 6)?,
+            signalling_id: row.get(s + 7)?,
+            source: row.get(s + 8)?,
+            file_metaseq: row.get(s + 9)?,
+            darwin_id: row.get(s + 10)?,
+            crosses_midnight: row.get(s + 11)?,
         })
     }
 }
@@ -222,16 +222,16 @@ impl DbType for ScheduleMvt {
     fn table_name() -> &'static str {
         "schedule_movements"
     }
-    fn from_row(row: &Row) -> RowResult<Self> {
+    fn from_row(row: &Row, s: usize) -> RowResult<Self> {
         Ok(Self {
-            id: row.get(0)?,
-            parent_sched: row.get(1)?,
-            tiploc: row.get(2)?,
-            action: row.get(3)?,
-            time: row.get(4)?,
-            day_offset: row.get(5)?,
-            platform: row.get(6)?,
-            public_time: row.get(7)?,
+            id: row.get(s + 0)?,
+            parent_sched: row.get(s + 1)?,
+            tiploc: row.get(s + 2)?,
+            action: row.get(s + 3)?,
+            time: row.get(s + 4)?,
+            day_offset: row.get(s + 5)?,
+            platform: row.get(s + 6)?,
+            public_time: row.get(s + 7)?,
         })
     }
 }
@@ -263,10 +263,10 @@ impl DbType for ScheduleFile {
     fn table_name() -> &'static str {
         "schedule_files"
     }
-    fn from_row(row: &Row) -> RowResult<Self> {
+    fn from_row(row: &Row, s: usize) -> RowResult<Self> {
         Ok(Self {
-            sequence: row.get(0)?,
-            timestamp: row.get(1)?
+            sequence: row.get(s + 0)?,
+            timestamp: row.get(s + 1)?
         })
     }
 }

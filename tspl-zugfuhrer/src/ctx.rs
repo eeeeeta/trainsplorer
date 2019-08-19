@@ -2,6 +2,7 @@
 
 use tspl_sqlite::TsplPool;
 use tspl_sqlite::rusqlite::TransactionBehavior;
+use std::collections::HashMap;
 use rouille::{Request, Response, router};
 use chrono::prelude::*;
 use log::*;
@@ -10,6 +11,7 @@ use tspl_util::{user_agent, extract_headers};
 use tspl_util::http::{HttpServer};
 use tspl_sqlite::uuid::Uuid;
 use tspl_sqlite::traits::*;
+use chrono::Duration;
 
 use crate::config::Config;
 use crate::activation::Activator;
@@ -27,6 +29,10 @@ impl HttpServer for App {
         router!(req,
             (GET) (/) => {
                 Ok(Response::text(user_agent!()))
+            },
+            (GET) (/train-movements/through/{tiploc}/at/{ts: NaiveDateTime}/within-secs/{dur: u32}) => {
+                self.get_mvts_passing_through(tiploc, ts, Duration::seconds(dur as _))
+                    .map(|x| Response::json(&x))
             },
             (GET) (/trains/by-trust-id/{trust_id}/{date: NaiveDate}) => {
                 self.get_train_for_trust_id(trust_id, date)
@@ -113,6 +119,52 @@ impl App {
         let rpc = MicroserviceRpc::new(user_agent!(), "fahrplan", cfg.service_fahrplan.clone());
         let activator = Activator::new(rpc, pool.clone());
         Self { pool, activator }
+    }
+    // FIXME: This function doesn't yet handle trains crossing over midnight.
+    // There's no reason why it couldn't in the future though; I just want to
+    // move fast and break things (at the time of writing).
+    fn get_mvts_passing_through(&self, tpl: String, ts: NaiveDateTime, within_dur: Duration) -> ZugResult<MvtQueryResponse> {
+        let start_ts = ts - within_dur;
+        let start_time = if start_ts.date() != ts.date() {
+            // Wraparound occurred, just return the start of the day (i.e. saturate)
+            NaiveTime::from_hms(0, 0, 0)
+        }
+        else {
+            start_ts.time()
+        };
+        let end_ts = ts + within_dur;
+        let end_time = if end_ts.date() != ts.date() {
+            NaiveTime::from_hms(23, 59, 59)
+        }
+        else {
+            end_ts.time()
+        };
+        let db = self.pool.get()?;
+        let mut stmt = db.prepare("SELECT * FROM train_movements AS tmvts
+                                      INNER JOIN trains AS t 
+                                              ON t.id = tmvts.parent_train
+                                           WHERE tmvts.tiploc = ?
+                                             AND tmvts.time BETWEEN ? AND ?
+                                             AND tmvts.day_offset = 0
+                                             AND t.date = ?")?;
+        let args = params![tpl, start_time, end_time, ts.date()];
+        let rows = stmt.query_map(args, |row| {
+            Ok((
+                TrainMvt::from_row(row, 0)?,
+                Train::from_row(row, TrainMvt::FIELDS)?
+            ))
+        })?;
+        let mut tmvts = vec![];
+        let mut trains = HashMap::new();
+        for row in rows {
+            let (tmvt, train) = row?;
+            trains.insert(train.id, train);
+            tmvts.push(tmvt);
+        }
+        Ok(MvtQueryResponse {
+            mvts: tmvts,
+            trains
+        })
     }
     fn process_darwin_mvt_update(&self, tid: Uuid, upd: DarwinMvtUpdate) -> ZugResult<TrainMvt> {
         let mut db = self.pool.get()?;

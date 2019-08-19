@@ -12,10 +12,10 @@ impl DbType for MigrationEntry {
     fn table_name() -> &'static str {
         "migration_entries"
     }
-    fn from_row(row: &Row) -> RowResult<Self> {
+    fn from_row(row: &Row, s: usize) -> RowResult<Self> {
         Ok(Self {
-            id: row.get(0)?,
-            timestamp: row.get(1)?
+            id: row.get(s + 0)?,
+            timestamp: row.get(s + 1)?
         })
     }
 }

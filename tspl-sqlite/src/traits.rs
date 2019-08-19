@@ -14,13 +14,16 @@ pub trait DbType: Sized {
     /// The name of the table represented by this type.
     fn table_name() -> &'static str;
     /// Converts an untyped SQLite Row into this type.
-    fn from_row(row: &Row) -> RowResult<Self>;
+    ///
+    /// `start_idx`: the column index to start converting from
+    /// (useful for JOINs)
+    fn from_row(row: &Row, start_idx: usize) -> RowResult<Self>;
     /// Convenience function for running a SELECT for this type, based on a given predicate
     /// `where_clause` and its `args`.
     fn from_select(conn: &Connection, where_clause: &str, args: &[&dyn ToSql]) -> Result<Vec<Self>> {
-        let query = format!("SELECT * FROM {} {}", Self::table_name(), where_clause);
+        let query = format!("SELECT * FROM {0} {1}", Self::table_name(), where_clause);
         let mut stmt = conn.prepare(&query)?;
-        let rows = stmt.query_map(args, |row| Self::from_row(row))?;
+        let rows = stmt.query_map(args, |row| Self::from_row(row, 0))?;
         let mut ret = vec![];
         for row in rows {
             ret.push(row?);
