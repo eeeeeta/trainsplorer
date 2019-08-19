@@ -2,16 +2,14 @@
 
 use tspl_sqlite::TsplPool;
 use tspl_sqlite::traits::*;
-use crate::download::JobType;
-use crate::dl_scheduler::DlSender;
 use crate::types::{Schedule, ScheduleMvt, ScheduleDetails};
 use crate::errors::{FahrplanResult, FahrplanError};
 use tspl_sqlite::rusqlite::Connection;
 use tspl_util::http::HttpServer;
 use log::*;
 use chrono::*;
+use std::sync::{RwLock, Arc};
 use rouille::{Request, Response, router};
-use std::sync::Mutex;
 
 fn get_auth_schedule(conn: &Connection, uid: String, on_date: NaiveDate, source: u8) -> FahrplanResult<Option<Schedule>> {
     debug!("Finding authoritative schedule for (uid, on_date, source) = ({}, {}, {})", uid, on_date, source);
@@ -47,30 +45,29 @@ fn get_auth_schedule(conn: &Connection, uid: String, on_date: NaiveDate, source:
 }
 
 pub struct App {
-    pub(crate) pool: TsplPool,
-    pub(crate) dls_tx: Mutex<DlSender>
+    pub(crate) pool: Arc<RwLock<TsplPool>>,
 }
 
 impl App {
     pub fn find_schedules_with_uid(&self, uid: String) -> FahrplanResult<Vec<Schedule>> {
-        let db = self.pool.get()?;
+        let db = self.pool.read().unwrap().get()?;
         let scheds = Schedule::from_select(&db, "WHERE uid = ?", &[&uid])?;
         Ok(scheds)
     }
     pub fn find_schedule_for_activation(&self, uid: String, stp_indicator: String, start_date: NaiveDate, source: u8) -> FahrplanResult<Schedule> {
-        let db = self.pool.get()?;
+        let db = self.pool.read().unwrap().get()?;
         let scheds = Schedule::from_select(&db, "WHERE uid = ? AND stp_indicator = ? AND start_date = ? AND source = ?", 
                                            &[&uid, &stp_indicator, &start_date, &source])?;
         Ok(scheds.into_iter().nth(0).ok_or(FahrplanError::NotFound)?)
     }
     pub fn find_schedule_on_date(&self, uid: String, on_date: NaiveDate, source: u8) -> FahrplanResult<Schedule> {
-        let db = self.pool.get()?;
+        let db = self.pool.read().unwrap().get()?;
         let auth_sched = get_auth_schedule(&db, uid, on_date, source)?
             .ok_or(FahrplanError::NotFound)?;
         Ok(auth_sched)
     }
     pub fn request_schedule_details(&self, uu: Uuid) -> FahrplanResult<ScheduleDetails> {
-        let db = self.pool.get()?;
+        let db = self.pool.read().unwrap().get()?;
         let scheds = Schedule::from_select(&db, "WHERE tspl_id = ?", &[&uu])?;
         let sched = scheds.into_iter().nth(0)
             .ok_or(FahrplanError::NotFound)?;
@@ -103,13 +100,6 @@ impl HttpServer for App {
             (GET) (/schedule/{uuid}) => {
                 self.request_schedule_details(uuid)
                     .map(|x| Response::json(&x))
-            },
-            (POST) (/update/{jt: JobType}) => {
-                self.dls_tx
-                    .lock().unwrap()
-                    .send(jt)
-                    .map(|_| Response::json(&()))
-                    .map_err(|_| FahrplanError::JobQueueError)
             },
             _ => {
                 Err(FahrplanError::NotFound)

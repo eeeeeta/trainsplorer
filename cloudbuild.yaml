@@ -32,28 +32,28 @@ steps:
   args:
   - '-c'
   - |
-    pkgs=("tspl-fahrplan" "tspl-zugfuhrer"); for thing in ${pkgs[@]}; do kubectl -n tspl set image statefulset "$thing" "$thing=gcr.io/trainsplorer/$thing:$COMMIT_SHA"; done
+    [[ "$BRANCH_NAME" == "master" ]] && pkgs=("tspl-fahrplan" "tspl-zugfuhrer"); for thing in ${pkgs[@]}; do kubectl -n tspl set image statefulset "$thing" "$thing=gcr.io/trainsplorer/$thing:$COMMIT_SHA"; done || echo "skipping"
 
 - name: 'gcr.io/cloud-builders/kubectl'
   entrypoint: 'bash'
   args:
   - '-c'
   - |
-    pkgs=("tspl-nrod"); for thing in ${pkgs[@]}; do kubectl -n tspl set image deployment "$thing" "$thing=gcr.io/trainsplorer/$thing:$COMMIT_SHA"; done
+    [[ "$BRANCH_NAME" == "master" ]] && pkgs=("tspl-nrod"); for thing in ${pkgs[@]}; do kubectl -n tspl set image deployment "$thing" "$thing=gcr.io/trainsplorer/$thing:$COMMIT_SHA"; done || echo "skipping"
 
 - name: 'gcr.io/cloud-builders/kubectl'
   entrypoint: 'bash'
   args:
   - '-c'
   - |
-    kubectl -n tspl set image deployment "tspl-darwin" "tspl-nrod=gcr.io/trainsplorer/tspl-nrod:$COMMIT_SHA"
+    [[ "$BRANCH_NAME" == "master" ]] && kubectl -n tspl set image deployment "tspl-darwin" "tspl-nrod=gcr.io/trainsplorer/tspl-nrod:$COMMIT_SHA" || echo "skipping"
 
 - name: 'gcr.io/cloud-builders/kubectl'
   entrypoint: 'bash'
   args:
   - '-c'
   - |
-    kubectl -n tspl set image cronjob "tspl-fahrplan-updater" "tspl-fahrplan-updater=gcr.io/trainsplorer/tspl-fahrplan-updater:$COMMIT_SHA"
+    [[ "$BRANCH_NAME" == "master" ]] && kubectl -n tspl set image cronjob "tspl-fahrplan-updater" "tspl-fahrplan-updater=gcr.io/trainsplorer/tspl-fahrplan-updater:$COMMIT_SHA" || echo "skipping"
 
 
 

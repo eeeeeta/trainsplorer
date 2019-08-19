@@ -5,18 +5,15 @@ use tspl_util::{ConfigExt, crate_name};
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
-    pub database_path: String,
+    pub bucket_name: String,
+    pub service_account_key_path: String,
+    #[serde(default)]
+    pub object_name: Option<String>,
     pub username: String,
     pub password: String,
     pub listen_url: String,
     #[serde(default)]
-    pub base_url: Option<String>,
-    #[serde(default)]
-    pub update_hour: Option<u32>,
-    #[serde(default)]
-    pub update_timeout_ms: Option<u32>,
-    #[serde(default)]
-    pub update_retries: Option<u32>
+    pub gcs_check_secs: Option<u32>,
 }
 
 impl ConfigExt for Config {
