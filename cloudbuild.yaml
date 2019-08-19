@@ -48,6 +48,14 @@ steps:
   - |
     kubectl -n tspl set image deployment "tspl-darwin" "tspl-nrod=gcr.io/trainsplorer/tspl-nrod:$COMMIT_SHA"
 
+- name: 'gcr.io/cloud-builders/kubectl'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    kubectl -n tspl set image cronjob "tspl-fahrplan-updater" "tspl-fahrplan-updater=gcr.io/trainsplorer/tspl-fahrplan-updater:$COMMIT_SHA"
+
+
 
 
 images:

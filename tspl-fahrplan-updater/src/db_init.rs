@@ -25,9 +25,11 @@ fn sqlite_initialize_db(path: &str) -> Result<Connection> {
 /// - there are no schedule files in the database
 /// - there's a gap in the sequence numbers of the schedule files
 /// - the last schedule file's timestamp isn't yesterday's date
+///   (and there's more than one schedule file)
 fn check_schedule_files(conn: &mut Connection) -> Result<bool> {
     let files = fpt::ScheduleFile::from_select(&conn, "", NO_PARAMS)?;
-    if files.len() == 0 {
+    let n_files = files.len();
+    if n_files == 0 {
         warn!("Rejecting database: no imported schedule files");
         return Ok(false);
     }
@@ -51,7 +53,7 @@ fn check_schedule_files(conn: &mut Connection) -> Result<bool> {
     }
     let now = Utc::now().naive_utc();
     let yest = now.date().pred();
-    if ts.date() != yest {
+    if ts.date() != yest && n_files > 1 {
         warn!("Rejecting database: yesterday was {}, but last timestamp was {}", yest, ts);
         return Ok(false);
     }
