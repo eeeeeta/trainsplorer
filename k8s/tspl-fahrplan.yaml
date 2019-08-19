@@ -13,16 +13,17 @@ spec:
     app: tspl-fahrplan
 ---
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
   name: tspl-fahrplan
   namespace: tspl
+  labels:
+    app: tspl-fahrplan
 spec:
   selector:
     matchLabels:
       app: tspl-fahrplan
-  replicas: 1
-  serviceName: tspl-fahrplan
+  replicas: 2
   template:
     metadata:
       namespace: tspl
@@ -39,13 +40,22 @@ spec:
         - containerPort: 80
           name: rpc
         volumeMounts:
-        - name: fahrplan-data
-          mountPath: /data/
+          - name: service-account
+            mountPath: /tspl/updater_service_account.json
+            subPath: updater_service_account.json
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 3
         env:
         - name: RUST_BACKTRACE
           value: "full"
-        - name: TSPL_DATABASE_PATH
-          value: "/data/fahrplan.sqlite"
+        - name: TSPL_BUCKET_NAME
+          value: "trainsplorer-fahrplan"
+        - name: TSPL_SERVICE_ACCOUNT_KEY_PATH
+          value: "/tspl/updater_service_account.json"
         - name: TSPL_LISTEN_URL
           value: "0.0.0.0:80"
         - name: TSPL_USERNAME
@@ -58,11 +68,7 @@ spec:
             secretKeyRef:
               name: tspl-secrets
               key: nrod_password
-  volumeClaimTemplates:
-  - metadata:
-      name: fahrplan-data
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      resources:
-        requests:
-          storage: 10Gi
+      volumes:
+        - name: service-account
+          secret:
+            secretName: tspl-secrets
