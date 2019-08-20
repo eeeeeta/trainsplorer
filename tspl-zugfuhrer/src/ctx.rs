@@ -150,21 +150,43 @@ impl App {
     // move fast and break things (at the time of writing).
     fn get_mvts_passing_through(&self, tpl: String, ts: NaiveDateTime, within_dur: Duration) -> ZugResult<MvtQueryResponse> {
         let (start_time, end_time) = Self::calculate_non_midnight_aware_times(ts, within_dur);
+        info!("Finding mvts passing through {} on {} between {} and {}", tpl, ts.date(), start_time, end_time);
         let db = self.pool.get()?;
         // Warning: not that heavy SQL ahead.
         let mut stmt = db.prepare("SELECT DISTINCT * 
                                               FROM train_movements AS tmvts
+
+                                                -- Get the related trains... 
                                         INNER JOIN trains AS t 
                                                 ON t.id = tmvts.parent_train
-                                   LEFT OUTER JOIN train_movements AS tmvts2
-                                                ON tmvts2.updates = tmvts.id
-                                             WHERE tmvts.tiploc = ?
-                                               AND tmvts.time BETWEEN ? AND ?
-                                               AND tmvts.day_offset = 0
+                                                -- ..and any train movements that update this one.
+                                   LEFT OUTER JOIN train_movements AS updating
+                                                ON updating.updates = tmvts.id
+
+                                                -- Filter the train movements to those passing
+                                                -- through the station in the given time period.
+                                             WHERE (tmvts.tiploc = :tpl
+                                               AND tmvts.time BETWEEN :start_time AND :end_time
+                                               AND tmvts.day_offset = 0)
+
+                                                -- Alternatively, though, the updating train movement
+                                                -- could be within the time period as well, while the
+                                                -- 'original' movement it updates isn't.
+                                                OR (updating.tiploc = :tpl)
+                                               AND updating.time BETWEEN :start_time AND :end_time
+                                               AND updating.day_offset = 0)
+
+                                                -- Make sure the train movement is original (i.e.
+                                                -- it doesn't update anything).
                                                AND tmvts.updates = NULL
-                                               AND t.date = ?")?;
-        let args = params![tpl, start_time, end_time, ts.date()];
-        let rows = stmt.query_map(args, |row| {
+                                               AND t.date = :date")?;
+        let args = named_params! {
+            ":tpl": tpl,
+            ":start_time": start_time,
+            ":end_time": end_time,
+            ":date": ts.date()
+        };
+        let rows = stmt.query_map_named(args, |row| {
             Ok((
                 // The original train movement, passing through `tpl`.
                 TrainMvt::from_row(row, 0)?,
@@ -176,8 +198,10 @@ impl App {
         })?;
         let mut tmvts: HashMap<i64, Vec<TrainMvt>> = HashMap::new();
         let mut trains = HashMap::new();
+        let mut proc = 0;
         for row in rows {
             let (tmvt, train, updating_tmvt) = row?;
+            proc += 1;
             trains.insert(train.id, train);
             if let Some(tmvts) = tmvts.get_mut(&tmvt.id) {
                 // Entry already exists, so the original tmvt is in there.
@@ -193,6 +217,7 @@ impl App {
                 tmvts.insert(id, ins);
             }
         }
+        info!("Processed {} rows for a total of {} unique tmvts and {} trains.", proc, tmvts.len(), trains.len());
         Ok(MvtQueryResponse {
             mvts: tmvts,
             trains
@@ -201,25 +226,49 @@ impl App {
     // FIXME: As above, this function doesn't handle midnight well.
     fn get_connecting_mvts(&self, tpl: String, ts: NaiveDateTime, within_dur: Duration, connection: String) -> ZugResult<ConnectingMvtQueryResponse> {
         let (start_time, end_time) = Self::calculate_non_midnight_aware_times(ts, within_dur);
+        info!("Finding mvts passing through {} and {} on {} between {} and {}", tpl, connection, ts.date(), start_time, end_time);
         let db = self.pool.get()?;
         // Warning: reasonably heavy SQL ahead.
         let mut stmt = db.prepare("SELECT DISTINCT * 
                                               FROM train_movements AS tmvts
+
+                                                -- Get the related trains... 
                                         INNER JOIN trains AS t
                                                 ON t.id = tmvts.parent_train
-                                        INNER JOIN train_movements AS tmvts2
-                                                ON tmvts2.parent_train = tmvts.parent_train
-                                   LEFT OUTER JOIN train_movements AS tmvts3
-                                                ON tmvts3.updates = tmvts.id
-                                   LEFT OUTER JOIN train_movements AS tmvts4
-                                                ON tmvts4.updates = tmvts2.id
-                                             WHERE tmvts.tiploc = ?
-                                               AND tmvts.time BETWEEN ? AND ?
+                                                -- and train movements that share the same
+                                                -- train that might pass through the
+                                                -- connecting station.
+                                        INNER JOIN train_movements AS connecting
+                                                ON connecting.parent_train = tmvts.parent_train
+
+                                                -- Find updates for both sets of movements.
+                                                -- (see non-connecting query)
+                                   LEFT OUTER JOIN train_movements AS updating
+                                                ON updating.updates = tmvts.id
+                                   LEFT OUTER JOIN train_movements AS updating_connecting
+                                                ON updating_connecting.updates = connecting.id
+
+                                                -- Filter the train movements, like in
+                                                -- the other query.
+                                             WHERE (tmvts.tiploc = :tpl
+                                               AND tmvts.time BETWEEN :start_time AND :end_time
+                                               AND tmvts.day_offset = 0)
+
+                                                OR (updating.tiploc = :tpl)
+                                               AND updating.time BETWEEN :start_time AND :end_time
+                                               AND updating.day_offset = 0)
+
                                                AND tmvts.updates = NULL
-                                               AND t.date = ?
-                                               AND tmvts2.tiploc = ?")?;
-        let args = params![tpl, start_time, end_time, ts.date(), connection];
-        let rows = stmt.query_map(args, |row| {
+                                               AND t.date = :date
+                                               AND connecting.tiploc = :tpl_conn")?;
+        let args = named_params! {
+            ":tpl": tpl,
+            ":start_time": start_time,
+            ":end_time": end_time,
+            ":date": ts.date(),
+            ":tpl_conn": connection
+        };
+        let rows = stmt.query_map_named(args, |row| {
             // Golly gee, Mr. SQLite, that's a lot of columns...
             Ok((
                 // The original train movement, passing through `tpl`.
@@ -239,8 +288,10 @@ impl App {
         let mut tmvts: HashMap<i64, Vec<TrainMvt>> = HashMap::new();
         let mut connecting_tmvts: HashMap<i64, Vec<TrainMvt>> = HashMap::new();
         let mut trains = HashMap::new();
+        let mut proc = 0;
         for row in rows {
             let (tmvt, train, conn_tmvt, updating_tmvt, conn_updating_tmvt) = row?;
+            proc += 1;
             trains.insert(train.id, train);
             let tmvt_id = tmvt.id;
             // The logic here is very similar to that used in non-connecting
@@ -266,6 +317,8 @@ impl App {
                 connecting_tmvts.insert(tmvt_id, ins);
             }
         }
+        info!("Processed {} rows for a total of {} unique tmvts, {} connecting, and {} trains.",
+              proc, tmvts.len(), connecting_tmvts.len(), trains.len());
         Ok(ConnectingMvtQueryResponse {
             mvts: tmvts, 
             connecting_mvts: connecting_tmvts,
