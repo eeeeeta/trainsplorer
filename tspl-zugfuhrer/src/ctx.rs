@@ -165,7 +165,7 @@ impl App {
 
                                                 -- Filter the train movements to those passing
                                                 -- through the station in the given time period.
-                                             WHERE (tmvts.tiploc = :tpl
+                                             WHERE ((tmvts.tiploc = :tpl
                                                AND tmvts.time BETWEEN :start_time AND :end_time
                                                AND tmvts.day_offset = 0)
 
@@ -174,11 +174,11 @@ impl App {
                                                 -- 'original' movement it updates isn't.
                                                 OR (updating.tiploc = :tpl
                                                AND updating.time BETWEEN :start_time AND :end_time
-                                               AND updating.day_offset = 0)
+                                               AND updating.day_offset = 0))
 
                                                 -- Make sure the train movement is original (i.e.
                                                 -- it doesn't update anything).
-                                               AND tmvts.updates = NULL
+                                               AND tmvts.updates IS NULL
                                                AND t.date = :date")?;
         let args = named_params! {
             ":tpl": tpl,
@@ -250,15 +250,15 @@ impl App {
 
                                                 -- Filter the train movements, like in
                                                 -- the other query.
-                                             WHERE (tmvts.tiploc = :tpl
+                                             WHERE ((tmvts.tiploc = :tpl
                                                AND tmvts.time BETWEEN :start_time AND :end_time
                                                AND tmvts.day_offset = 0)
 
                                                 OR (updating.tiploc = :tpl
                                                AND updating.time BETWEEN :start_time AND :end_time
-                                               AND updating.day_offset = 0)
+                                               AND updating.day_offset = 0))
 
-                                               AND tmvts.updates = NULL
+                                               AND tmvts.updates IS NULL
                                                AND t.date = :date
                                                AND connecting.tiploc = :tpl_conn")?;
         let args = named_params! {
