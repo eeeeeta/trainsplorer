@@ -32,6 +32,8 @@ fn initialize_connection_without_migrating(conn: &mut Connection) -> ::std::resu
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
     conn.execute_batch("PRAGMA journal_mode = WAL;")?;
     conn.execute_batch("PRAGMA synchronous = NORMAL;")?;
+    conn.execute_batch("PRAGMA wal_autocheckpoint = 5000;")?;
+    conn.execute_batch("PRAGMA cache_size = -102400;")?; // 100 MiB
     conn.busy_timeout(std::time::Duration::new(15, 0))?;
     conn.profile(Some(profile_cb));
     Ok(())
