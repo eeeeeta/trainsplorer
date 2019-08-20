@@ -153,6 +153,14 @@ impl App {
         info!("Finding mvts passing through {} on {} between {} and {}", tpl, ts.date(), start_time, end_time);
         let db = self.pool.get()?;
         // Warning: not that heavy SQL ahead.
+        //
+        // FIXME: This doesn't handle the case where the original train movement is
+        // outside the time range, but the updated train movement is inside the time range
+        // (e.g. pathologically delayed trains). An attempt was made to fix this, but
+        // it ended up with 90 minutes of fighting the sqlite query planner, which
+        // doesn't seem to understand how any of this works.
+        // Therefore, we're just leaving it for now. In future, we should just do a separate
+        // query for this.
         let mut stmt = db.prepare("SELECT DISTINCT * 
                                               FROM train_movements AS tmvts
 
@@ -165,20 +173,12 @@ impl App {
 
                                                 -- Filter the train movements to those passing
                                                 -- through the station in the given time period.
-                                             WHERE ((tmvts.tiploc = :tpl
+                                             WHERE tmvts.tiploc = :tpl
                                                AND tmvts.time BETWEEN :start_time AND :end_time
-                                               AND tmvts.day_offset = 0)
-
-                                                -- Alternatively, though, the updating train movement
-                                                -- could be within the time period as well, while the
-                                                -- 'original' movement it updates isn't.
-                                                OR (updating.tiploc = :tpl
-                                               AND updating.time BETWEEN :start_time AND :end_time
-                                               AND updating.day_offset = 0))
-
+                                               AND tmvts.day_offset = 0
                                                 -- Make sure the train movement is original (i.e.
                                                 -- it doesn't update anything).
-                                               AND tmvts.updates IS NULL
+                                               AND +tmvts.updates IS NULL
                                                AND t.date = :date")?;
         let args = named_params! {
             ":tpl": tpl,
@@ -229,6 +229,9 @@ impl App {
         info!("Finding mvts passing through {} and {} on {} between {} and {}", tpl, connection, ts.date(), start_time, end_time);
         let db = self.pool.get()?;
         // Warning: reasonably heavy SQL ahead.
+        //
+        // FIXME: this query also has the same issue as the above with respect to
+        // updated movements.
         let mut stmt = db.prepare("SELECT DISTINCT * 
                                               FROM train_movements AS tmvts
 
@@ -250,15 +253,12 @@ impl App {
 
                                                 -- Filter the train movements, like in
                                                 -- the other query.
-                                             WHERE ((tmvts.tiploc = :tpl
+                                             WHERE tmvts.tiploc = :tpl
                                                AND tmvts.time BETWEEN :start_time AND :end_time
-                                               AND tmvts.day_offset = 0)
+                                               AND tmvts.day_offset = 0
 
-                                                OR (updating.tiploc = :tpl
-                                               AND updating.time BETWEEN :start_time AND :end_time
-                                               AND updating.day_offset = 0))
-
-                                               AND tmvts.updates IS NULL
+                                               AND +tmvts.updates IS NULL
+                                               AND +connecting.updates IS NULL
                                                AND t.date = :date
                                                AND connecting.tiploc = :tpl_conn")?;
         let args = named_params! {
