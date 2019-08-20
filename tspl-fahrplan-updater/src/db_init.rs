@@ -53,10 +53,13 @@ fn check_schedule_files(conn: &mut Connection) -> Result<bool> {
     }
     let now = Utc::now().naive_utc();
     let yest = now.date().pred();
+    /*
+     * Patch out this check for now; NROD don't always set their timestamps in a sane way...
     if ts.date() != yest && n_files > 1 {
         warn!("Rejecting database: yesterday was {}, but last timestamp was {}", yest, ts);
         return Ok(false);
     }
+    */
     info!("Successfully validated previous database file!");
     Ok(true)
 }
