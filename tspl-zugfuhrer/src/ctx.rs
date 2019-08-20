@@ -254,7 +254,7 @@ impl App {
                                                AND tmvts.time BETWEEN :start_time AND :end_time
                                                AND tmvts.day_offset = 0)
 
-                                                OR (updating.tiploc = :tpl)
+                                                OR (updating.tiploc = :tpl
                                                AND updating.time BETWEEN :start_time AND :end_time
                                                AND updating.day_offset = 0)
 
