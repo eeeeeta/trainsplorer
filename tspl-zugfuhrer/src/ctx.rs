@@ -172,7 +172,7 @@ impl App {
                                                 -- Alternatively, though, the updating train movement
                                                 -- could be within the time period as well, while the
                                                 -- 'original' movement it updates isn't.
-                                                OR (updating.tiploc = :tpl)
+                                                OR (updating.tiploc = :tpl
                                                AND updating.time BETWEEN :start_time AND :end_time
                                                AND updating.day_offset = 0)
 
