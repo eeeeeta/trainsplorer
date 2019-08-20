@@ -11,6 +11,14 @@ spec:
     name: version check
   - condition:
       method: GET
+      pathRegex: /train-movements/through/[^/]*/at/[^/]*/within-secs/[^/]*
+    name: get train movements through a given point
+  - condition:
+      method: GET
+      pathRegex: /train-movements/through/[^/]*/and/[^/]*/at/[^/]*/within-secs/[^/]*
+    name: get connecting train movements through two given points
+  - condition:
+      method: GET
       pathRegex: /trains/by-trust-id/[^/]*/[^/]*
     name: find a train by TRUST ID and date
     isRetryable: true

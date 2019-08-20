@@ -86,6 +86,11 @@ pub struct Train {
     pub cancelled: bool,
     /// Was this train properly activated, or is it just a stub?
     pub activated: bool
+    // NOTE: update `FIELDS` constant below when adding new fields.
+}
+
+impl Train {
+    pub const FIELDS: usize = 14; 
 }
 
 impl DbType for Train {
@@ -333,8 +338,41 @@ impl InsertableDbType for WrappedCorpusEntry {
 /// The response to the get_mvts_passing_through() call.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MvtQueryResponse {
-    /// Relevant train movements.
-    pub mvts: Vec<TrainMvt>,
+    /// Relevant train movements, and their updates
+    /// (all other train movements that `update` train movements
+    /// returned by this query are included as well)
+    ///
+    /// These are indexed by their internal train movement ID,
+    /// and the value in this map is a vector of all movements
+    /// that either have that ID or update that ID.
+    pub mvts: HashMap<i64, Vec<TrainMvt>>,
+    /// The trains these movements come from, indexed by
+    /// their internal ID (for easy lookup).
+    pub trains: HashMap<i64, Train>,
+}
+/// The response to the get_connecting_mvts_passing_through() call.
+///
+/// **Note:** This `struct` is organized in a confusing manner,
+/// and intentionally so - doing things this way makes it easy
+/// for API consumers to easily summarize the state of a movement,
+/// its live updates, and its connecting movements, by grouping
+/// things appropriately.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ConnectingMvtQueryResponse {
+    /// Relevant train movements, passing through the first
+    /// station.
+    ///
+    /// These are indexed by their internal train movement ID,
+    /// and the value in this map is a vector of all movements
+    /// that either have that ID or update that ID.
+    pub mvts: HashMap<i64, Vec<TrainMvt>>,
+    /// Relevant train movements, passing through the second
+    /// station.
+    ///
+    /// This works similarly to the other map, except this time
+    /// the index is the ID of _the corresponding movement in
+    /// `mvts`_, in order to enable easy correlation.
+    pub connecting_mvts: HashMap<i64, Vec<TrainMvt>>,
     /// The trains these movements come from, indexed by
     /// their internal ID (for easy lookup).
     pub trains: HashMap<i64, Train>,

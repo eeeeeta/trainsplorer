@@ -34,6 +34,11 @@ impl HttpServer for App {
                 self.get_mvts_passing_through(tiploc, ts, Duration::seconds(dur as _))
                     .map(|x| Response::json(&x))
             },
+            // This request URL is perhaps a bit stupid...
+            (GET) (/train-movements/through/{tiploc}/and/{conn}/at/{ts: NaiveDateTime}/within-secs/{dur: u32}) => {
+                self.get_connecting_mvts(tiploc, ts, Duration::seconds(dur as _), conn)
+                    .map(|x| Response::json(&x))
+            },
             (GET) (/trains/by-trust-id/{trust_id}/{date: NaiveDate}) => {
                 self.get_train_for_trust_id(trust_id, date)
                     .map(|x| Response::json(&x))
@@ -120,10 +125,8 @@ impl App {
         let activator = Activator::new(rpc, pool.clone());
         Self { pool, activator }
     }
-    // FIXME: This function doesn't yet handle trains crossing over midnight.
-    // There's no reason why it couldn't in the future though; I just want to
-    // move fast and break things (at the time of writing).
-    fn get_mvts_passing_through(&self, tpl: String, ts: NaiveDateTime, within_dur: Duration) -> ZugResult<MvtQueryResponse> {
+    // Hey, it does what it says on the tin, right?
+    fn calculate_non_midnight_aware_times(ts: NaiveDateTime, within_dur: Duration) -> (NaiveTime, NaiveTime) {
         let start_ts = ts - within_dur;
         let start_time = if start_ts.date() != ts.date() {
             // Wraparound occurred, just return the start of the day (i.e. saturate)
@@ -134,35 +137,138 @@ impl App {
         };
         let end_ts = ts + within_dur;
         let end_time = if end_ts.date() != ts.date() {
+            // Same as above, but the other way this time.
             NaiveTime::from_hms(23, 59, 59)
         }
         else {
             end_ts.time()
         };
+        (start_time, end_time)
+    }
+    // FIXME: This function doesn't yet handle trains crossing over midnight.
+    // There's no reason why it couldn't in the future though; I just want to
+    // move fast and break things (at the time of writing).
+    fn get_mvts_passing_through(&self, tpl: String, ts: NaiveDateTime, within_dur: Duration) -> ZugResult<MvtQueryResponse> {
+        let (start_time, end_time) = Self::calculate_non_midnight_aware_times(ts, within_dur);
         let db = self.pool.get()?;
-        let mut stmt = db.prepare("SELECT * FROM train_movements AS tmvts
-                                      INNER JOIN trains AS t 
-                                              ON t.id = tmvts.parent_train
-                                           WHERE tmvts.tiploc = ?
-                                             AND tmvts.time BETWEEN ? AND ?
-                                             AND tmvts.day_offset = 0
-                                             AND t.date = ?")?;
+        // Warning: not that heavy SQL ahead.
+        let mut stmt = db.prepare("SELECT DISTINCT * 
+                                              FROM train_movements AS tmvts
+                                        INNER JOIN trains AS t 
+                                                ON t.id = tmvts.parent_train
+                                   LEFT OUTER JOIN train_movements AS tmvts2
+                                                ON tmvts2.updates = tmvts.id
+                                             WHERE tmvts.tiploc = ?
+                                               AND tmvts.time BETWEEN ? AND ?
+                                               AND tmvts.day_offset = 0
+                                               AND tmvts.updates = NULL
+                                               AND t.date = ?")?;
         let args = params![tpl, start_time, end_time, ts.date()];
         let rows = stmt.query_map(args, |row| {
             Ok((
+                // The original train movement, passing through `tpl`.
                 TrainMvt::from_row(row, 0)?,
-                Train::from_row(row, TrainMvt::FIELDS)?
+                // Its parent train.
+                Train::from_row(row, TrainMvt::FIELDS)?,
+                // An update to the original train movement, if there is one.
+                TrainMvt::from_row(row, TrainMvt::FIELDS + Train::FIELDS).ok()
             ))
         })?;
-        let mut tmvts = vec![];
+        let mut tmvts: HashMap<i64, Vec<TrainMvt>> = HashMap::new();
         let mut trains = HashMap::new();
         for row in rows {
-            let (tmvt, train) = row?;
+            let (tmvt, train, updating_tmvt) = row?;
             trains.insert(train.id, train);
-            tmvts.push(tmvt);
+            if let Some(tmvts) = tmvts.get_mut(&tmvt.id) {
+                // Entry already exists, so the original tmvt is in there.
+                // We only need to add the updating one, if it exists.
+                tmvts.extend(updating_tmvt);
+            }
+            else {
+                // Entry doesn't exist; create it, and add the updating tmvt
+                // as well if it exists.
+                let id = tmvt.id;
+                let mut ins = vec![tmvt];
+                ins.extend(updating_tmvt);
+                tmvts.insert(id, ins);
+            }
         }
         Ok(MvtQueryResponse {
             mvts: tmvts,
+            trains
+        })
+    }
+    // FIXME: As above, this function doesn't handle midnight well.
+    fn get_connecting_mvts(&self, tpl: String, ts: NaiveDateTime, within_dur: Duration, connection: String) -> ZugResult<ConnectingMvtQueryResponse> {
+        let (start_time, end_time) = Self::calculate_non_midnight_aware_times(ts, within_dur);
+        let db = self.pool.get()?;
+        // Warning: reasonably heavy SQL ahead.
+        let mut stmt = db.prepare("SELECT DISTINCT * 
+                                              FROM train_movements AS tmvts
+                                        INNER JOIN trains AS t
+                                                ON t.id = tmvts.parent_train
+                                        INNER JOIN train_movements AS tmvts2
+                                                ON tmvts2.parent_train = tmvts.parent_train
+                                   LEFT OUTER JOIN train_movements AS tmvts3
+                                                ON tmvts3.updates = tmvts.id
+                                   LEFT OUTER JOIN train_movements AS tmvts4
+                                                ON tmvts4.updates = tmvts2.id
+                                             WHERE tmvts.tiploc = ?
+                                               AND tmvts.time BETWEEN ? AND ?
+                                               AND tmvts.updates = NULL
+                                               AND t.date = ?
+                                               AND tmvts2.tiploc = ?")?;
+        let args = params![tpl, start_time, end_time, ts.date(), connection];
+        let rows = stmt.query_map(args, |row| {
+            // Golly gee, Mr. SQLite, that's a lot of columns...
+            Ok((
+                // The original train movement, passing through `tpl`.
+                TrainMvt::from_row(row, 0)?,
+                // Its parent train.
+                Train::from_row(row, TrainMvt::FIELDS)?,
+                // Its corresponding connecting train movement.
+                TrainMvt::from_row(row, TrainMvt::FIELDS + Train::FIELDS)?,
+                // An update for the original train movement, if there is one.
+                TrainMvt::from_row(row, 2 * TrainMvt::FIELDS + Train::FIELDS).ok(),
+                // An update for the connecting train movement, if there is one.
+                TrainMvt::from_row(row, 3 * TrainMvt::FIELDS + Train::FIELDS).ok()
+            ))
+        })?;
+        // NB: Look at the docs for `ConnectingMvtQueryResponse` to understand how
+        // these structures work...
+        let mut tmvts: HashMap<i64, Vec<TrainMvt>> = HashMap::new();
+        let mut connecting_tmvts: HashMap<i64, Vec<TrainMvt>> = HashMap::new();
+        let mut trains = HashMap::new();
+        for row in rows {
+            let (tmvt, train, conn_tmvt, updating_tmvt, conn_updating_tmvt) = row?;
+            trains.insert(train.id, train);
+            let tmvt_id = tmvt.id;
+            // The logic here is very similar to that used in non-connecting
+            // movement queries. As such, the comments are not repeated.
+            // See the other function if you're lost.
+            if let Some(tmvts) = tmvts.get_mut(&tmvt_id) {
+                tmvts.extend(updating_tmvt);
+            }
+            else {
+                let mut ins = vec![tmvt];
+                ins.extend(updating_tmvt);
+                tmvts.insert(tmvt_id, ins);
+            }
+            // Same as above, but for the connecting ones.
+            // This time, they key is the **corresponding (original) tmvt**'s key,
+            // not the key of the connecting tmvt.
+            if let Some(conn_tmvts) = connecting_tmvts.get_mut(&tmvt_id) {
+                conn_tmvts.extend(conn_updating_tmvt);
+            }
+            else {
+                let mut ins = vec![conn_tmvt];
+                ins.extend(conn_updating_tmvt);
+                connecting_tmvts.insert(tmvt_id, ins);
+            }
+        }
+        Ok(ConnectingMvtQueryResponse {
+            mvts: tmvts, 
+            connecting_mvts: connecting_tmvts,
             trains
         })
     }
