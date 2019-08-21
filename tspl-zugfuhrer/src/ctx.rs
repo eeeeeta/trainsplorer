@@ -125,31 +125,11 @@ impl App {
         let activator = Activator::new(rpc, pool.clone());
         Self { pool, activator }
     }
-    // Hey, it does what it says on the tin, right?
-    fn calculate_non_midnight_aware_times(ts: NaiveDateTime, within_dur: Duration) -> (NaiveTime, NaiveTime) {
-        let start_ts = ts - within_dur;
-        let start_time = if start_ts.date() != ts.date() {
-            // Wraparound occurred, just return the start of the day (i.e. saturate)
-            NaiveTime::from_hms(0, 0, 0)
-        }
-        else {
-            start_ts.time()
-        };
-        let end_ts = ts + within_dur;
-        let end_time = if end_ts.date() != ts.date() {
-            // Same as above, but the other way this time.
-            NaiveTime::from_hms(23, 59, 59)
-        }
-        else {
-            end_ts.time()
-        };
-        (start_time, end_time)
-    }
     // FIXME: This function doesn't yet handle trains crossing over midnight.
     // There's no reason why it couldn't in the future though; I just want to
     // move fast and break things (at the time of writing).
     fn get_mvts_passing_through(&self, tpl: String, ts: NaiveDateTime, within_dur: Duration) -> ZugResult<MvtQueryResponse> {
-        let (start_time, end_time) = Self::calculate_non_midnight_aware_times(ts, within_dur);
+        let (start_time, end_time) = tspl_util::time::calculate_non_midnight_aware_times(ts, within_dur);
         info!("Finding mvts passing through {} on {} between {} and {}", tpl, ts.date(), start_time, end_time);
         let db = self.pool.get()?;
         // Warning: not that heavy SQL ahead.
@@ -225,7 +205,7 @@ impl App {
     }
     // FIXME: As above, this function doesn't handle midnight well.
     fn get_connecting_mvts(&self, tpl: String, ts: NaiveDateTime, within_dur: Duration, connection: String) -> ZugResult<ConnectingMvtQueryResponse> {
-        let (start_time, end_time) = Self::calculate_non_midnight_aware_times(ts, within_dur);
+        let (start_time, end_time) = tspl_util::time::calculate_non_midnight_aware_times(ts, within_dur);
         info!("Finding mvts passing through {} and {} on {} between {} and {}", tpl, connection, ts.date(), start_time, end_time);
         let db = self.pool.get()?;
         // Warning: reasonably heavy SQL ahead.
@@ -386,12 +366,11 @@ impl App {
                         AND time = ?
                         AND (action = 2 OR action = ?)
                         AND day_offset = ?
-                        AND updates IS NULL
+                        AND +updates IS NULL
                         AND source = ?
-                        AND EXISTS(
-                            SELECT * FROM corpus_entries
-                            WHERE corpus_entries.tiploc = train_movements.tiploc
-                            AND corpus_entries.stanox = $1
+                        AND tiploc IN (
+                            SELECT tiploc FROM corpus_entries
+                             WHERE corpus_entries.stanox = ?
                         )",
                         params![train.id, upd.planned_time, upd.planned_action,
                         upd.planned_day_offset, TrainMvt::SOURCE_SCHED_ITPS, upd.stanox])?;

@@ -10,12 +10,13 @@ use chrono::*;
 
 pub use ntrod_types::reference::CorpusEntry;
 
-pub static MIGRATIONS: [Migration; 5] = [
+pub static MIGRATIONS: [Migration; 6] = [
     migration!(0, "initial"),
     migration!(1, "indexes"),
     migration!(2, "tmvt_unique_fix"),
     migration!(3, "delete_idx"),
-    migration!(4, "mvt_query_idx")
+    migration!(4, "mvt_query_idx"),
+    migration!(5, "trust_mvt_idx")
 ];
 
 /// A live train object, representing a live or historic running of a train.
