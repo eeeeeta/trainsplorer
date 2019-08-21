@@ -36,6 +36,11 @@ spec:
       containers:
       - name: tspl-fahrplan
         image: gcr.io/trainsplorer/tspl-fahrplan:latest
+        resources:
+          limits:
+            cpu: "0.15"
+          requests:
+            cpu: "0.01"
         ports:
         - containerPort: 80
           name: rpc

@@ -23,6 +23,11 @@ spec:
       containers:
       - name: tspl-nrod
         image: gcr.io/trainsplorer/tspl-nrod:latest
+        resources:
+          limits:
+            cpu: "0.15"
+          requests:
+            cpu: "0.05"
         env:
         - name: RUST_BACKTRACE
           value: "full"
