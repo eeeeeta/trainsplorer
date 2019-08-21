@@ -8,6 +8,7 @@
 //! - RPC calls to other microservices (`rpc` module)
 //! - HTTP server utility tools (`http` module)
 //! - downloading from NROD (`nrod` module)
+//! - common time calculations
 
 use config as cfg;
 use serde::de::DeserializeOwned;
@@ -16,6 +17,7 @@ use log::*;
 pub mod rpc;
 pub mod http;
 pub mod nrod;
+pub mod time;
 
 #[macro_export]
 macro_rules! user_agent {
