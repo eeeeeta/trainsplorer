@@ -2,7 +2,7 @@
 
 use tspl_sqlite::TsplPool;
 use tspl_sqlite::traits::*;
-use crate::types::{Schedule, ScheduleMvt, ScheduleDetails, ScheduleDays, MvtQueryResponse};
+use crate::types::{Schedule, ScheduleMvt, ScheduleDetails, ScheduleDays, MvtQueryResponse, ConnectingMvtQueryResponse};
 use crate::errors::{FahrplanResult, FahrplanError};
 use std::collections::HashMap;
 use tspl_sqlite::rusqlite::Connection;
@@ -11,6 +11,27 @@ use log::*;
 use chrono::*;
 use std::sync::{RwLock, Arc};
 use rouille::{Request, Response, router};
+
+fn process_schedule_join(scheds: &mut HashMap<String, Schedule>, sched: Schedule, updating_sched: Option<Schedule>) {
+    let uid = sched.uid.clone();
+    if !scheds.contains_key(&uid) {
+        scheds.insert(uid.clone(), sched);
+    }
+    if let Some(updating_sched) = updating_sched {
+        let sched = scheds.get_mut(&uid).unwrap();
+        if updating_sched.stp_indicator < sched.stp_indicator {
+            // The updating schedule supersedes the schedule.
+            *sched = updating_sched;
+        }
+    }
+}
+fn uid_scheds_to_id_scheds(inp: HashMap<String, Schedule>) -> HashMap<i64, Schedule> {
+    let mut id_schedules: HashMap<i64, Schedule> = HashMap::new();
+    for (_, schedule) in inp {
+        id_schedules.insert(schedule.id, schedule);
+    }
+    id_schedules
+}
 
 fn get_auth_schedule(conn: &Connection, uid: String, on_date: NaiveDate, source: u8) -> FahrplanResult<Option<Schedule>> {
     debug!("Finding authoritative schedule for (uid, on_date, source) = ({}, {}, {})", uid, on_date, source);
@@ -50,6 +71,70 @@ pub struct App {
 }
 
 impl App {
+    pub fn get_connecting_mvts(&self, tpl: String, ts: NaiveDateTime, within_dur: Duration, conn: String) -> FahrplanResult<ConnectingMvtQueryResponse> {
+        let (start_time, end_time) = tspl_util::time::calculate_non_midnight_aware_times(ts, within_dur);
+        info!("Finding mvts passing through {} and {} on {} between {} and {}", tpl, conn, ts.date(), start_time, end_time);
+        let db = self.pool.read().unwrap().get()?;
+        let mut stmt = db.prepare("    SELECT * FROM schedule_movements AS smvts 
+                                   INNER JOIN schedule_movements AS connecting
+                                           ON smvts.parent_sched = connecting.parent_sched
+                                   INNER JOIN schedules AS s
+                                           ON s.id = smvts.parent_sched
+                              LEFT OUTER JOIN schedules AS s2
+                                           ON s.uid = s2.uid
+                                        WHERE smvts.tiploc = :tpl
+                                          AND smvts.time BETWEEN :start_time AND :end_time
+                                          AND smvts.day_offset = 0 
+                                          AND :date BETWEEN s.start_date AND s.end_date
+                                          AND :date BETWEEN s2.start_date AND s2.end_date
+                                          AND s.days & :days
+                                          AND s2.days & :days
+                                          AND connecting.tiploc = :tpl_conn
+                                          ")?;
+        let days = ScheduleDays::from_iso_weekday(ts.date().weekday().number_from_monday()).unwrap();
+        let args = named_params! {
+            ":tpl": tpl,
+            ":start_time": start_time,
+            ":end_time": end_time,
+            ":days": days.bits(),
+            ":date": ts.date(),
+            ":tpl_conn": conn
+        };
+        let rows = stmt.query_map_named(args, |row| {
+            Ok((
+                // The original schedule movement, passing through `tpl`.
+                ScheduleMvt::from_row(row, 0)?,
+                // The connecting schedule movement, passing through `conn`.
+                ScheduleMvt::from_row(row, ScheduleMvt::FIELDS)?,
+                // Its parent schedule.
+                Schedule::from_row(row, 2 * ScheduleMvt::FIELDS)?,
+                // Another schedule which might supersede the parent, if it exists.
+                Schedule::from_row(row, 2 * ScheduleMvt::FIELDS + Schedule::FIELDS).ok()
+            ))
+        })?;
+        let mut smvts: HashMap<i64, ScheduleMvt> = HashMap::new();
+        let mut connecting_smvts: HashMap<i64, ScheduleMvt> = HashMap::new();
+        let mut schedules: HashMap<String, Schedule> = HashMap::new();
+        let mut proc = 0;
+        for row in rows {
+            let (smvt, connecting_smvt, sched, updating_sched) = row?;
+            proc += 1;
+            connecting_smvts.insert(smvt.id, connecting_smvt);
+            smvts.insert(smvt.id , smvt);
+            process_schedule_join(&mut schedules, sched, updating_sched);
+        }
+        let id_schedules = uid_scheds_to_id_scheds(schedules);
+        let orig_smvts = smvts.len();
+        smvts.retain(|_, mvt| id_schedules.contains_key(&mvt.parent_sched));
+        connecting_smvts.retain(|id, _| smvts.contains_key(&id));
+        info!("Processed {} rows for a total of {} valid smvts ({} invalid) and {} schedules.",
+              proc, smvts.len(), orig_smvts - smvts.len(), id_schedules.len());
+        Ok(ConnectingMvtQueryResponse {
+            mvts: smvts,
+            connecting_mvts: connecting_smvts,
+            schedules: id_schedules
+        })
+    }
     // FIXME: This function doesn't yet handle trains crossing over midnight, like its friends in
     // the `tspl-zugfuhrer` crate.
     pub fn get_mvts_passing_through(&self, tpl: String, ts: NaiveDateTime, within_dur: Duration) -> FahrplanResult<MvtQueryResponse> {
@@ -87,31 +172,18 @@ impl App {
                 Schedule::from_row(row, ScheduleMvt::FIELDS + Schedule::FIELDS).ok()
             ))
         })?;
-        let mut smvts = vec![];
+        let mut smvts: HashMap<i64, ScheduleMvt> = HashMap::new();
         let mut schedules: HashMap<String, Schedule> = HashMap::new();
         let mut proc = 0;
         for row in rows {
             let (smvt, sched, updating_sched) = row?;
             proc += 1;
-            smvts.push(smvt);
-            let uid = sched.uid.clone();
-            if !schedules.contains_key(&uid) {
-                schedules.insert(uid.clone(), sched);
-            }
-            if let Some(updating_sched) = updating_sched {
-                let sched = schedules.get_mut(&uid).unwrap();
-                if updating_sched.stp_indicator < sched.stp_indicator {
-                    // The updating schedule supersedes the schedule.
-                    *sched = updating_sched;
-                }
-            }
+            smvts.insert(smvt.id, smvt);
+            process_schedule_join(&mut schedules, sched, updating_sched);
         }
-        let mut id_schedules: HashMap<i64, Schedule> = HashMap::new();
-        for (_, schedule) in schedules {
-            id_schedules.insert(schedule.id, schedule);
-        }
+        let id_schedules = uid_scheds_to_id_scheds(schedules);
         let orig_smvts = smvts.len();
-        smvts.retain(|mvt| id_schedules.contains_key(&mvt.parent_sched));
+        smvts.retain(|_, mvt| id_schedules.contains_key(&mvt.parent_sched));
         info!("Processed {} rows for a total of {} valid smvts ({} invalid) and {} schedules.",
               proc, smvts.len(), orig_smvts - smvts.len(), id_schedules.len());
         Ok(MvtQueryResponse {
@@ -173,6 +245,10 @@ impl HttpServer for App {
             },
             (GET) (/schedule-movements/through/{tiploc}/at/{ts: NaiveDateTime}/within-secs/{dur: u32}) => {
                 self.get_mvts_passing_through(tiploc, ts, Duration::seconds(dur as _))
+                    .map(|x| Response::json(&x))
+            },
+            (GET) (/schedule-movements/through/{tiploc}/and/{conn}/at/{ts: NaiveDateTime}/within-secs/{dur: u32}) => {
+                self.get_connecting_mvts(tiploc, ts, Duration::seconds(dur as _), conn)
                     .map(|x| Response::json(&x))
             },
             _ => {

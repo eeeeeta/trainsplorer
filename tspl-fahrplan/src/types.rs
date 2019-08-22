@@ -309,8 +309,26 @@ pub struct ScheduleDetails {
 /// The response to the get_mvts_passing_through() call.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MvtQueryResponse {
-    /// Relevant schedule movements.
-    pub mvts: Vec<ScheduleMvt>,
+    /// Relevant schedule movements, indexed by their
+    /// internal ID.
+    pub mvts: HashMap<i64, ScheduleMvt>,
+    /// The schedules these movements come from, indexed by
+    /// their internal ID (for easy lookup).
+    pub schedules: HashMap<i64, Schedule>,
+}
+
+/// The response to the get_connecting_mvts() call.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ConnectingMvtQueryResponse {
+    /// Relevant schedule movements, passing through the first
+    /// station. Indexed by their internal ID.
+    pub mvts: HashMap<i64, ScheduleMvt>,
+    /// Relevant schedule movements, passing through the second
+    /// station.
+    ///
+    /// These are indexed by the ID _of the corresponding mvt
+    /// in `mvts`_, for easy lookup.
+    pub connecting_mvts: HashMap<i64, ScheduleMvt>,
     /// The schedules these movements come from, indexed by
     /// their internal ID (for easy lookup).
     pub schedules: HashMap<i64, Schedule>,
