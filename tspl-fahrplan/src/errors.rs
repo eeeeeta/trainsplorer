@@ -2,6 +2,7 @@
 
 use failure_derive::Fail;
 use tspl_util::impl_from_for_error;
+use tspl_sqlite::rusqlite::Error as RsqlError;
 use tspl_sqlite::errors::{SqlError, PoolError};
 use tspl_util::http::StatusCode;
 
@@ -19,6 +20,9 @@ pub enum FahrplanError {
     /// SQL error from tspl-sqlite.
     #[fail(display = "tspl-sqlite: {}", _0)]
     Sql(SqlError),
+    /// SQL error from rusqlite.
+    #[fail(display = "rusqlite: {}", _0)]
+    Rsql(RsqlError),
     /// r2d2 database error.
     #[fail(display = "r2d2: {}", _0)]
     Pool(PoolError),
@@ -44,4 +48,5 @@ pub type Result<T> = ::std::result::Result<T, failure::Error>;
 
 impl_from_for_error!(FahrplanError,
                      SqlError => Sql,
+                     RsqlError => Rsql,
                      PoolError => Pool);

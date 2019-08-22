@@ -8,6 +8,7 @@ use ntrod_types::schedule::Days as NtrodDays;
 use chrono::*;
 use std::cmp::Ordering;
 use serde_derive::{Serialize, Deserialize};
+use std::collections::HashMap;
 
 pub static MIGRATIONS: [Migration; 1] = [
     migration!(0, "initial")
@@ -40,16 +41,25 @@ impl From<NtrodDays> for ScheduleDays {
     }
 }
 impl ScheduleDays {
-    pub fn runs_on_iso_weekday(&self, wd: u32) -> bool {
+    pub fn from_iso_weekday(wd: u32) -> Option<Self> {
         match wd {
-            1 => self.contains(ScheduleDays::MONDAY),
-            2 => self.contains(ScheduleDays::TUESDAY),
-            3 => self.contains(ScheduleDays::WEDNESDAY),
-            4 => self.contains(ScheduleDays::THURSDAY),
-            5 => self.contains(ScheduleDays::FRIDAY),
-            6 => self.contains(ScheduleDays::SATURDAY),
-            7 => self.contains(ScheduleDays::SUNDAY),
-            _ => false
+            1 => Some(ScheduleDays::MONDAY),
+            2 => Some(ScheduleDays::TUESDAY),
+            3 => Some(ScheduleDays::WEDNESDAY),
+            4 => Some(ScheduleDays::THURSDAY),
+            5 => Some(ScheduleDays::FRIDAY),
+            6 => Some(ScheduleDays::SATURDAY),
+            7 => Some(ScheduleDays::SUNDAY),
+            _ => None
+        }
+    }
+    pub fn runs_on_iso_weekday(&self, wd: u32) -> bool {
+        if let Some(x) = Self::from_iso_weekday(wd) {
+            self.contains(x)
+        }
+        else {
+            false
+
         }
     }
 }
@@ -92,6 +102,10 @@ pub struct Schedule {
     pub darwin_id: Option<String>,
     /// Whether or not this schedule crosses over into the next day.
     pub crosses_midnight: bool
+    // NOTE: update `FIELDS` constant below when adding new fields.
+}
+impl Schedule {
+    pub const FIELDS: usize = 12;
 }
 impl DbType for Schedule {
     fn table_name() -> &'static str {
@@ -173,6 +187,7 @@ pub struct ScheduleMvt {
     /// Public (GBTT) time for this movement - i.e. the time shown to passengers,
     /// instead of the working time.
     pub public_time: Option<NaiveTime>
+    // NOTE: update `FIELDS` constant below when adding new fields.
 }
 impl ScheduleMvt {
     /// `action` value for an arrival.
@@ -181,6 +196,8 @@ impl ScheduleMvt {
     pub const ACTION_DEPARTURE: u8 = 1;
     /// `action` value for a pass.
     pub const ACTION_PASS: u8 = 2;
+
+    pub const FIELDS: usize = 8;
 
     /// Returns a 'dummy' ScheduleMvt with all fields set to useless/default values
     /// and `id`s set to -1.
@@ -287,5 +304,15 @@ pub struct ScheduleDetails {
     pub sched: Schedule,
     /// Schedule movements, in the proper order.
     pub mvts: Vec<ScheduleMvt>
+}
+
+/// The response to the get_mvts_passing_through() call.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct MvtQueryResponse {
+    /// Relevant schedule movements.
+    pub mvts: Vec<ScheduleMvt>,
+    /// The schedules these movements come from, indexed by
+    /// their internal ID (for easy lookup).
+    pub schedules: HashMap<i64, Schedule>,
 }
 
