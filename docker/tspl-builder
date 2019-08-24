@@ -14,7 +14,7 @@ WORKDIR /tspl
 
 # add all the cargo files, to get deps
 # NB: this list should be updated as new crates are made.
-RUN /bin/bash -c 'pkgs=("darwin-types" "ntrod-types" "atoc-msn" "tspl-sqlite" "tspl-fahrplan" "tspl-util" "tspl-zugfuhrer" "tspl-nrod" "tspl-fahrplan-updater" "tspl-gcs"); for thing in ${pkgs[@]}; do mkdir "/tspl/$thing"; done'
+RUN /bin/bash -c 'pkgs=("darwin-types" "ntrod-types" "atoc-msn" "tspl-sqlite" "tspl-fahrplan" "tspl-util" "tspl-zugfuhrer" "tspl-nrod" "tspl-fahrplan-updater" "tspl-gcs" "tspl-verknupfen"); for thing in ${pkgs[@]}; do mkdir "/tspl/$thing"; done'
 ADD ./atoc-msn/Cargo.toml /tspl/atoc-msn/
 ADD ./ntrod-types/Cargo.toml /tspl/ntrod-types/
 ADD ./darwin-types/Cargo.toml /tspl/darwin-types/
@@ -25,6 +25,7 @@ ADD ./tspl-zugfuhrer/Cargo.toml /tspl/tspl-zugfuhrer/
 ADD ./tspl-nrod/Cargo.toml /tspl/tspl-nrod/
 ADD ./tspl-fahrplan-updater/Cargo.toml /tspl/tspl-fahrplan-updater/
 ADD ./tspl-gcs/Cargo.toml /tspl/tspl-gcs/
+ADD ./tspl-verknupfen/Cargo.toml /tspl/tspl-verknupfen/
 ADD ./Cargo.lock /tspl/
 ADD ./Cargo.toml /tspl/
 # make dummy src/lib.rs files, to satisfy cargo
