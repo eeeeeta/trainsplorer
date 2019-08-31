@@ -252,7 +252,7 @@ impl HttpServer for App {
                     .map(|x| Response::json(&x))
             },
             _ => {
-                Err(FahrplanError::NotFound)
+                Err(FahrplanError::InvalidPath)
             }
         )
     }
