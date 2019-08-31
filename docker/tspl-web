@@ -1,0 +1,12 @@
+FROM tspl-compiled AS tspl-web-compiled
+RUN pacman -Syu --needed --noconfirm npm node-gyp python python2
+WORKDIR /tspl/tspl-web
+RUN npm i
+RUN npx gulp
+
+FROM tspl-base AS tspl-web
+WORKDIR /tspl
+COPY --from=tspl-compiled /tspl/target/release/tspl-web /tspl
+COPY --from=tspl-web-compiled /tspl/tspl-web/static /tspl/static
+ENTRYPOINT ["/tspl/tspl-web"]
+
