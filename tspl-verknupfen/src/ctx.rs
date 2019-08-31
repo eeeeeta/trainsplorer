@@ -76,11 +76,12 @@ impl App {
 
         // Now, process all of the train movements, deduplicating information to create
         // `DeduplicatedMvt` objects.
-        for (tid, tmvts) in zugfuhrer.mvts {
+        for (mid, tmvts) in zugfuhrer.mvts {
             if tmvts.len() == 0 {
-                warn!("Train #{} has no associated movements", tid);
-                continue;
+                warn!("tmvt #{} has empty list!", mid);
+                Err(VerknupfenError::RemoteInvariantsViolated)?
             }
+            let tid = tmvts[0].parent_train;
             let train = zugfuhrer.trains.get(&tid)
                 .ok_or(VerknupfenError::RemoteInvariantsViolated)?;
             let mut time_scheduled = None;

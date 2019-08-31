@@ -30,7 +30,6 @@ impl StatusCode for VerknupfenError {
             InvalidPath => 400,
             Rpc(ref r) => r.status_code(),
             RemoteInvariantsViolated => 502,
-            _ => 500
         }
     }
 }
