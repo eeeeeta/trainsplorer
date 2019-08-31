@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tspl-verknupfen
+  namespace: tspl
+  labels:
+    app: tspl-verknupfen
+spec:
+  ports:
+  - port: 80
+    name: rpc
+  selector:
+    app: tspl-verknupfen
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tspl-verknupfen
+  namespace: tspl
+  labels:
+    app: tspl-verknupfen
+spec:
+  selector:
+    matchLabels:
+      app: tspl-verknupfen
+  replicas: 2
+  template:
+    metadata:
+      namespace: tspl
+      annotations:
+        linkerd.io/inject: enabled
+      labels:
+        app: tspl-verknupfen
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: tspl-verknupfen
+        image: gcr.io/trainsplorer/tspl-verknupfen:latest
+        resources:
+          requests:
+            cpu: "0.01"
+        ports:
+        - containerPort: 80
+          name: rpc
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 3
+        env:
+        - name: RUST_BACKTRACE
+          value: "full"
+        - name: TSPL_SERVICE_FAHRPLAN
+          value: "http://tspl-fahrplan"
+        - name: TSPL_SERVICE_ZUGFUHRER
+          value: "http://tspl-zugfuhrer"
+        - name: TSPL_LISTEN
+          value: "0.0.0.0:80"

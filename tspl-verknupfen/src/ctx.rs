@@ -52,9 +52,9 @@ impl App {
         use tspl_zugfuhrer::types::MvtQueryResponse as ZugfuhrerMQR;
 
         // Request movements from the two microservices.
-        let furl = format!("/schedule-movements/through/{}/at/{}/within-secs/{}", tpl, ts, within_dur.num_seconds()); 
+        let furl = format!("/schedule-movements/through/{}/at/{}/within-secs/{}", tpl, ts.format("%+"), within_dur.num_seconds()); 
         let mut fahrplan: FahrplanMQR = self.frpc.req(Method::GET, furl)?;
-        let zurl = format!("/train-movements/through/{}/at/{}/within-secs/{}", tpl, ts, within_dur.num_seconds()); 
+        let zurl = format!("/train-movements/through/{}/at/{}/within-secs/{}", tpl, ts.format("%+"), within_dur.num_seconds()); 
         let zugfuhrer: ZugfuhrerMQR = self.zrpc.req(Method::GET, zurl)?;
 
         // Look through the tspl-zugfuhrer trains, and remove any schedules
