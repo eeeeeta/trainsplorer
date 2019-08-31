@@ -2425,6 +2425,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "tspl-verknupfen"
+version = "0.1.0"
+dependencies = [
+ "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "derive_builder 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure_derive 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "reqwest 0.9.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rouille 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.39 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tspl-fahrplan 0.1.0",
+ "tspl-sqlite 0.1.0",
+ "tspl-util 0.1.0",
+ "tspl-zugfuhrer 0.1.0",
+]
+
+[[package]]
 name = "tspl-zugfuhrer"
 version = "0.1.0"
 dependencies = [

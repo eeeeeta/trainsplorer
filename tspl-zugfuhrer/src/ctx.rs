@@ -120,7 +120,7 @@ impl HttpServer for App {
     }
 }
 impl App {
-    pub fn new(pool: TsplPool, cfg: &Config) -> Self  {
+    pub fn new(pool: TsplPool, cfg: &Config) -> Self {
         let rpc = MicroserviceRpc::new(user_agent!(), "fahrplan", cfg.service_fahrplan.clone());
         let activator = Activator::new(rpc, pool.clone());
         Self { pool, activator }
