@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+	<head>
+		<meta charset="utf-8" />
+		<title>{{#if title}}{{ title }} | {{/if}}trainsplorer</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta name="theme-color" content="#0b0c0c" />
+
+		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+		<link href="/sass/style.css" rel="stylesheet">
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.6.3/css/all.css" integrity="sha384-UHRtZLI+pbxtHCWp1t77Bi1L4ZtiqrqD80Kn4Z8NTSRyMA2Fd33n5dQ8lWUE00s/" crossorigin="anonymous">
+	</head>
+	<body class="govuk-template__body">
+		<script>
+			document.body.className = ((document.body.className) ? document.body.className + ' js-enabled' : 'js-enabled');
+
+		</script>
+		<a href="#main-content" class="govuk-skip-link">Skip to main content</a>
+		<header class="govuk-header " role="banner" data-module="header">
+			<div class="govuk-header__container govuk-width-container">
+				<div class="govuk-header__content">
+
+					<a href="/" class="govuk-header__link govuk-header__link--service-name">
+						trainsplorer
+					</a>
+
+					<button type="button" role="button" class="govuk-header__menu-button js-header-toggle" aria-controls="navigation" aria-label="Show or hide Top Level Navigation">Menu</button>
+					{{> nav}}
+				</div>
+			</div>
+
+		</header>
+		<div class="govuk-width-container">
+			<div class="govuk-phase-banner">
+				<p class="govuk-phase-banner__content"><strong class="govuk-tag govuk-phase-banner__content__tag ">
+					alpha
+				</strong>
+				<span class="govuk-phase-banner__text">
+					trainsplorer is still under development - <a class="govuk-link" href="https://github.com/eeeeeta/trainsplorer/issues">bug reports</a> can help us to improve it.
+				</span>
+				</p>
+			</div>
+			<main class="govuk-main-wrapper " id="main-content" role="main">
+				{{#if title }}
+				<h1 class="govuk-heading-xl">{{ title }}</h2>
+				{{/if}}

@@ -1,0 +1,43 @@
+{{> header }}
+<table class="sortable fancytable">
+	<thead>
+		<tr>
+			<td>UID</td>
+			<td>Type</td>
+			<td>Description</td>
+			<td>Start date</td>
+			<td>End date</td>
+			<td>Days</td>
+			<td><abbr title="Geography generation">Gen</abbr></td>
+			<td><abbr title="Number of trains">#T</abbr></td>
+			<td>View</td>
+		</tr>
+	</thead>
+	{{#each body.schedules}}
+		<tr>
+			<td>
+				<a href="/schedules?uid={{this.uid}}">
+					{{this.uid}}
+				</a>
+			</td>
+			<td>{{this.stp}}</td>
+			<td>
+				{{> orig_dest}}
+			</td>
+			<td>{{this.start_date}}</td>
+			<td>{{this.end_date}}</td>
+			<td>{{this.days}}</td>
+			<td>{{this.geo_generation}}</td>
+			<td>{{this.n_trains}}</td>
+			<td><a href="/schedule/{{this.id}}">🠊</a></td>
+		</tr>
+	{{/each}}
+</table>
+{{#if body.more}}
+<a href="/schedules?{{body.more}}" class="pagination-link">Next page</a>
+{{#if body.date}}
+<a href="/schedules?date={{body.date}}" class="pagination-link">Show today's schedules only</a>
+{{/if}}
+<a href="/schedules" class="pagination-link">Reset filters &amp; pagination</a>
+{{/if}}
+{{> footer }}

@@ -1,0 +1,21 @@
+{
+  "name": "osms-web",
+  "version": "0.0.1",
+  "description": "web frontend for trainsplorer",
+  "license": "AGPL-3.0",
+  "repository": "https://github.com/eeeeeta/trainsplorer",
+  "author": "eta <https://theta.eu.org>",
+  "dependencies": {
+    "accessible-autocomplete": "^1.6.1",
+    "govuk-frontend": "^2.5.1",
+    "leaflet": "^1.3.3",
+    "leaflet-draw": "^1.0.2"
+  },
+  "devDependencies": {
+    "gulp": "^4.0.0",
+    "gulp-cssimport": "^6.0.1",
+    "gulp-flatten": "^0.4.0",
+    "gulp-js-import": "^1.0.6",
+    "gulp-sass": "^4.0.1"
+  }
+}

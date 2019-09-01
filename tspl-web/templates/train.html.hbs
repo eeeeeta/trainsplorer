@@ -1,0 +1,140 @@
+{{> header}}
+<span class="govuk-caption-xl">Train running on {{body.date}}</span>
+<details class="govuk-details">
+	<summary class="govuk-details__summary">
+		<span class="govuk-details__summary-text">Technical information</span>
+	</summary>
+
+	<div class="govuk-details__text">
+		<dl class="govuk-summary-list">
+			<div class="govuk-summary-list__row">
+				<dt class="govuk-summary-list__key">
+				Running date
+				</dt>
+				<dd class="govuk-summary-list__value">
+				{{body.date}}
+				</dd>
+				<dd class="govuk-summary-list__actions">
+				</dd>
+			</div>
+			<div class="govuk-summary-list__row">
+				<dt class="govuk-summary-list__key">
+				Schedule UID
+				</dt>
+				<dd class="govuk-summary-list__value">
+				{{body.sched_uid}}
+				<dd class="govuk-summary-list__actions">
+				<a class="govuk-link" href="/schedule/{{body.parent_sched}}">
+					View schedule
+				</a>
+				</dd>
+				</dd>
+			</div>
+			<div class="govuk-summary-list__row">
+				<dt class="govuk-summary-list__key">
+				TRUST ID
+				</dt>
+				<dd class="govuk-summary-list__value">
+				{{#if body.trust_id}}
+					{{body.trust_id}}
+				{{/if}}
+				</dd>
+				<dd class="govuk-summary-list__actions">
+				</dd>
+			</div>
+			<div class="govuk-summary-list__row">
+				<dt class="govuk-summary-list__key">
+				Darwin RID
+				</dt>
+				<dd class="govuk-summary-list__value">
+				{{#if body.nre_id}}
+					{{body.nre_id}}
+				{{/if}}
+				</dd>
+				<dd class="govuk-summary-list__actions">
+				{{#if body.parent_nre_sched}}
+					<a class="govuk-link" href="/schedule/{{body.parent_nre_sched}}">
+						View Darwin schedule
+					</a>
+				{{/if}}
+				</dd>
+			</div>
+			<div class="govuk-summary-list__row">
+				<dt class="govuk-summary-list__key">
+				Signalling ID
+				</dt>
+				<dd class="govuk-summary-list__value">
+				{{#if body.signalling_id}}
+					{{body.signalling_id}}
+				{{/if}}
+				</dd>
+				<dd class="govuk-summary-list__actions">
+				</dd>
+			</div>
+		</dl>
+	</div>
+</details>
+{{#if body.cancelled}}
+	<div class="govuk-warning-text">
+		<span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+		<strong class="govuk-warning-text__text">
+			<span class="govuk-warning-text__assistive">Notice</span>
+			This train has been cancelled.
+		</strong>
+	</div>
+{{/if}}
+{{> symbols_guide}}
+<div class="mvts-list">
+	{{#each body.movements}}
+		<div class="mvts-list-mvt govuk-grid-row">
+			<div class="govuk-grid-column-one-half mvt-action-time">
+				<span class="mvt-action"><i class="far fa-{{this.action}}"></i></span>
+				<span class="mvt-time">{{this.time_scheduled}}</span>
+				<span class="mvt-dest">{{this.location}}</span>
+			</div>
+			<div class="govuk-grid-column-one-half mvt-extra-info">
+				{{#if this.time_actual}}
+					<span class="mvt-time-actual {{#if this.delayed}}mvt-time-delayed{{/if}}">
+							{{this.action_past_tense}} {{this.time_actual}}
+					</span>
+				{{else}}
+					{{#if ../body.cancelled}}
+						<span class="mvt-time-cancelled">Cancelled</span>
+					{{else}}
+						{{#if this.time_expected}}
+							{{#if this.delayed}}
+								<span class="mvt-time-expected mvt-time-delayed">
+									Expected {{this.time_expected}}
+								</span>
+							{{else}}
+								<span class="mvt-time-expected mvt-time-regular">
+									On time
+								</span>
+							{{/if}}
+						{{else}}
+							<span class="mvt-no-live-info">No live data available</span>
+						{{/if}}
+					{{/if}}
+				{{/if}}
+				{{#if this.pfm_suppr}}
+					<span class="mvt-platform-middot">
+						&middot;
+					</span>
+					<span class="mvt-platform-suppr">
+						Platform suppressed
+					</span>
+				{{else}}
+					{{#if this.platform}}
+						<span class="mvt-platform-middot">
+							&middot;
+						</span>
+						<span class="mvt-platform-container">
+							Platform <span class="mvt-platform-number {{#if this.pfm_changed}}mvt-platform-changed{{/if}}">{{this.platform}}</span>
+							</span>
+					{{/if}}
+				{{/if}}
+			</div>
+		</div>
+	{{/each}}
+</div>
+{{> footer}}

@@ -1,0 +1,43 @@
+{{> header }}
+<table class="govuk-table">
+	<th class="govuk-table__header"ead class="govuk-table__head">
+		<tr class="govuk-table__row">
+			<th class="govuk-table__header" scope="col">Location</th>
+			<th class="govuk-table__header" scope="col">Time</th>
+			<th class="govuk-table__header" scope="col">Path</th>
+		</tr>
+	</thead>
+	{{#each body.movements}}
+		<tr class="govuk-table__row">
+			<td class="govuk-table__cell">
+				<p class="schedule-location">
+				<a href="/stations/{{this.tiploc}}">{{this.location}}</a>&nbsp;<span class="schedule-location-tiploc">({{this.tiploc}})</span>
+				</p>
+				<p class="schedule-action">
+				({{this.action}})
+				</p>
+			</td>
+			<td class="govuk-table__cell">{{this.time_scheduled}}</td>
+			<td class="govuk-table__cell">
+				{{#if this.ends_path}}
+					→<a href="/paths/{{this.ends_path}}">{{this.ends_path}}</a>
+					{{#if this.starts_path}}
+						&middot;
+					{{/if}}
+				{{/if}}
+				{{#if this.starts_path}}
+					<a href="/paths/{{this.starts_path}}">{{this.starts_path}}</a>→
+				{{/if}}
+			</td>
+		</tr>
+	{{/each}}
+</table>
+
+
+<h3>Trains running to this schedule</h3>
+<ul>
+	{{#each body.trains}}
+	<li><a href="/train/{{this.id}}">{{this.date}} (#{{this.id}})</a></li>
+	{{/each}}
+</ul>
+{{> footer }}

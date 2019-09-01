@@ -1,0 +1,75 @@
+{{> header}}
+<span class="govuk-caption-xl">Trains passing through {{body.mvt_search.station}} at {{body.mvt_search.time}} on {{body.mvt_search.date}}</span>
+<details class="govuk-details">
+	<summary class="govuk-details__summary">
+		<span class="govuk-details__summary-text">Search again</span>
+	</summary>
+
+	<div class="govuk-details__text">
+		{{> movement_search}}
+	</div>
+</details>
+{{> symbols_guide}}
+<div class="mvts-list">
+	{{#each body.mvts}}
+		<div class="mvts-list-mvt govuk-grid-row">
+			<div class="govuk-grid-column-one-half mvt-action-time">
+				<span class="mvt-action"><i class="far fa-{{this.action}}"></i></span>
+				<span class="mvt-time">{{this.time}}</span>
+				<span class="mvt-to">to</span>
+				<span class="mvt-dest">{{this.orig_dest.dest}}</span>
+			</div>
+			<div class="govuk-grid-column-one-half mvt-extra-info">
+				{{#if this.canx}}
+					<span class="mvt-time-cancelled">Cancelled</span>
+				{{else}}
+					{{#if this.time_expected}}
+						{{#if this.delayed}}
+							<span class="mvt-time-expected mvt-time-delayed">
+								Expected {{this.time_expected}}
+							</span>
+						{{else}}
+							<span class="mvt-time-expected mvt-time-regular">
+								On time
+							</span>
+						{{/if}}
+					{{else}}
+						{{#if this.time_actual}}
+							<span class="mvt-time-actual {{#if this.delayed}}mvt-time-delayed{{/if}}">
+									{{this.action_past_tense}} {{this.time_actual}}
+							</span>
+						{{else}}
+							<span class="mvt-no-live-info">No live data available</span>
+						{{/if}}
+					{{/if}}
+				{{/if}}
+				{{#if this.pfm_suppr}}
+					<span class="mvt-platform-middot">
+						&middot;
+					</span>
+					<span class="mvt-platform-suppr">
+						Platform suppressed
+					</span>
+				{{else}}
+					{{#if this.platform}}
+						<span class="mvt-platform-middot">
+							&middot;
+						</span>
+						<span class="mvt-platform-container">
+							Platform <span class="mvt-platform-number {{#if this.pfm_changed}}mvt-platform-changed{{/if}}">{{this.platform}}</span>
+						</span>
+					{{/if}}
+				{{/if}}
+				<span class="mvt-extra-info-link">
+					{{#if this.parent_train}}
+						<a class="govuk-link" href="/train/{{this.parent_train}}">See all stops</a>
+					{{else}}
+						<a class="govuk-link" href="/schedule/{{this.parent_sched}}">See schedule</a>
+					{{/if}}
+				</span>
+			</div>
+		</div>
+	{{/each}}
+</div>
+
+{{> footer}}

@@ -20,6 +20,10 @@ osms-web/static/sass/*
 osms-web/static/js/*
 osms-web/static/ext/*
 osms-web/static/assets/*
+tspl-web/static/sass/*
+tspl-web/static/js/*
+tspl-web/static/ext/*
+tspl-web/static/assets/*
 k8s/tspl-secrets.yaml
 *.sqlite
 *.sqlite-*

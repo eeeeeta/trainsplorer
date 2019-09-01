@@ -1,0 +1,26 @@
+{{> header}}
+<div class="govuk-error-summary" aria-labelledby="error-summary-title" role="alert" tabindex="-1" data-module="error-summary">
+	<h2 class="govuk-error-summary__title" id="error-summary-title">
+		Not found (404)
+	</h2>
+	<div class="govuk-error-summary__body">
+		<p>
+		The requested URL, <code>{{body.uri}}</code>, couldn't be found.
+		If you typed in the URL manually, check that you typed it correctly.
+		If something else on this site linked you here...whoops, sorry about that.
+		We'll try to fix it.
+		</p>
+		<ul class="govuk-list govuk-error-summary__list">
+			<li>
+				<a href="https://github.com/eeeeeta/trainsplorer/issues">Report this issue to us!</a>
+			</li>
+			<li>
+				<a href="javascript:history.back()">Back one step</a>
+			</li>
+			<li>
+				<a href="/">Go to the homepage</a>
+			</li>
+		</ul>
+	</div>
+</div>
+{{> footer}}

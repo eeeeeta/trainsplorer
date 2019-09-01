@@ -1,0 +1,22 @@
+{{> header }}
+<script src="/js/main.js"></script>
+<link href="/sass/map.css" rel="stylesheet">
+<div id="mappy-map">
+</div>
+<div id="notifs">
+</div>
+<div id="problem-stations">
+	<h2 class="govuk-heading-l">Problematic stations ({{body.n_stations}})</h2>
+	<ul class="govuk-list">
+	{{#each body.problem_stations}}
+		<li>
+			<b>{{this.name}}</b>
+			{{#if this.stanox}}
+				(STANOX {{this.stanox}})
+			{{/if}}
+			(<a class="govuk-link" href="#" onclick="map.panTo({{this.latlon}})">jump to location</a>)
+		</li>
+	{{/each}}
+	</ul>
+</div>
+{{> footer }}

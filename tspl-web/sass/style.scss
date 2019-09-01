@@ -1,0 +1,162 @@
+@import url('https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700');
+
+$govuk-font-family: "Source Sans Pro";
+
+@import "../node_modules/govuk-frontend/all.scss";
+@import "../node_modules/accessible-autocomplete/dist/accessible-autocomplete.min.css";
+
+body {
+  font-family: $govuk-font-family;
+}
+.index-list-planned {
+  color: $govuk-secondary-text-colour;
+}
+.index-list-planned::after {
+  content: " (planned)";
+}
+strong, b {
+  font-weight: 700;
+}
+@media (min-width: 641px) {
+  #ts-tiploc-autocomplete {
+    width: 50%;
+  }
+}
+/* movements */
+.mvt-action-time span {
+  @extend .govuk-body-l;
+  margin-bottom: 0px;
+  padding-left: 3px;
+  padding-right: 6px;
+}
+span.mvt-action i.fa-arrow-alt-circle-right {
+  color: govuk-colour("red");
+}
+span.mvt-action i.fa-arrow-alt-circle-left {
+  color: govuk-colour("green");
+}
+span.mvt-action i.fa-arrow-alt-circle-up {
+  color: govuk-colour("bright-purple");
+}
+span.mvt-to {
+  color: $govuk-secondary-text-colour;
+}
+span.mvt-time {
+  font-weight: 700;
+}
+span.mvt-no-live-info {
+  color: $govuk-secondary-text-colour;
+}
+span.mvt-time-cancelled {
+  color: govuk-colour("red");
+  font-weight: 700;
+}
+span.mvt-time-delayed {
+  color: govuk-colour("bright-red");
+}
+span.mvt-time-regular {
+  color: govuk-colour("green");
+}
+span.mvt-platform-changed {
+  color: govuk-colour("red");
+  text-decoration: underline govuk-colour("red");
+}
+.mvt-extra-info span.mvt-platform-number {
+  font-weight: 700;
+  padding-left: 0px;
+  padding-right: 0px;
+}
+span.mvt-platform-suppr {
+  color: $govuk-secondary-text-colour;
+}
+.mvt-extra-info {
+  padding-top: 3px;
+}
+.mvt-extra-info span {
+  @extend .govuk-body;
+  margin-bottom: 0px;
+  padding-left: 3px;
+  padding-right: 3px;
+}
+.mvt-extra-info span.mvt-platform-middot {
+  padding-left: 0px;
+  padding-right: 0px;
+}
+.mvts-list-mvt {
+  margin-bottom: govuk-spacing(1);
+  margin-top: govuk-spacing(1);
+  //border-top: 1px solid $govuk-border-colour;
+}
+/* end movements */
+/* map */
+#mappy-map {
+  height: 500px;
+  margin-bottom: 20px;
+}
+/* end map */
+/* unconverted old code */
+.pagination-link {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background-color: #337ab7;
+  color: #fff;
+  text-decoration: none;
+  padding: 5px;
+  margin: 5px;
+  border-radius: 3px;
+}
+.schedule-location {
+  font-size: 20px;
+  display: inline-block;
+  float: left;
+  margin: 0;
+}
+.schedule-location-tiploc {
+  font-size: 16px;
+}
+.schedule-action {
+  display: inline-block;
+  float: right;
+  margin: 0;
+}
+table.fancytable {
+  border: 2px solid #FFFFFF;
+  width: 100%;
+  text-align: center;
+  border-collapse: collapse;
+}
+table.fancytable td, table.fancytable th {
+  border: 1px solid #FFFFFF;
+  padding: 3px 4px;
+}
+table.fancytable tbody td {
+  font-size: 13px;
+}
+table.fancytable td:nth-child(even) {
+  background: #EBEBEB;
+}
+table.fancytable thead {
+  background: #FFFFFF;
+  border-bottom: 4px solid #333333;
+}
+table.fancytable thead th {
+  font-size: 15px;
+  font-weight: bold;
+  color: #333333;
+  text-align: center;
+  border-left: 2px solid #333333;
+}
+table.fancytable thead th:first-child {
+  border-left: none;
+}
+
+table.fancytable tfoot {
+  font-size: 14px;
+  font-weight: bold;
+  color: #333333;
+  border-top: 4px solid #333333;
+}
+table.fancytable tfoot td {
+  font-size: 14px;
+}
