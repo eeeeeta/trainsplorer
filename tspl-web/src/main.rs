@@ -6,6 +6,8 @@ pub mod ctx;
 pub mod tmpl;
 pub mod templates;
 pub mod suggestions;
+pub mod movements;
+pub mod util;
 
 use log::*;
 use tspl_util::ConfigExt;

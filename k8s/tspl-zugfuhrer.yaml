@@ -6,6 +6,7 @@ metadata:
   labels:
     app: tspl-zugfuhrer
 spec:
+  type: NodePort
   ports:
   - port: 80
     name: rpc

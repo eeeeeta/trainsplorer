@@ -23,21 +23,21 @@
 				{{#if this.canx}}
 					<span class="mvt-time-cancelled">Cancelled</span>
 				{{else}}
-					{{#if this.time_expected}}
-						{{#if this.delayed}}
-							<span class="mvt-time-expected mvt-time-delayed">
-								Expected {{this.time_expected}}
-							</span>
-						{{else}}
-							<span class="mvt-time-expected mvt-time-regular">
-								On time
-							</span>
-						{{/if}}
+					{{#if this.actual}}
+						<span class="mvt-time-actual {{#if this.delayed}}mvt-time-delayed{{/if}}">
+								{{this.action_past_tense}} {{this.time}}
+						</span>
 					{{else}}
-						{{#if this.time_actual}}
-							<span class="mvt-time-actual {{#if this.delayed}}mvt-time-delayed{{/if}}">
-									{{this.action_past_tense}} {{this.time_actual}}
-							</span>
+						{{#if this.time_scheduled}}
+							{{#if this.delayed}}
+								<span class="mvt-time-expected mvt-time-delayed">
+									Expected {{this.time}}
+								</span>
+							{{else}}
+								<span class="mvt-time-expected mvt-time-regular">
+									On time
+								</span>
+							{{/if}}
 						{{else}}
 							<span class="mvt-no-live-info">No live data available</span>
 						{{/if}}

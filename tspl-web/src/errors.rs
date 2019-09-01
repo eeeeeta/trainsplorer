@@ -22,6 +22,15 @@ pub enum WebError {
     /// Request was missing a query parameter.
     #[fail(display = "query parameter missing")]
     QueryParameterMissing,
+    /// Invalid user input.
+    #[fail(display = "invalid user input")]
+    InvalidInput(String),
+    /// Schedule or train details fetch failed.
+    #[fail(display = "schedule/train details fetch failed")]
+    DetailsFetchFailed,
+    /// Remote invariants violated.
+    #[fail(display = "remote invariants violated")]
+    RemoteInvariantsViolated,
     /// RPC error.
     #[fail(display = "RPC: {}", _0)]
     Rpc(RpcError),
@@ -64,7 +73,16 @@ impl WebError {
                         reason: "Query parameter missing.".into()
                     }
                 }.render(hbs)?
-
+            },
+            InvalidInput(ref reason) => {
+                TemplateContext {
+                    template: "user_error",
+                    title: "Invalid input (400)".into(),
+                    body: UserErrorView {
+                        error_summary: "Invalid input (400)".into(),
+                        reason: reason.clone()
+                    }
+                }.render(hbs)?
             },
             _ => {
                 TemplateContext::title("ise", "").render(hbs)?
@@ -80,6 +98,7 @@ impl StatusCode for WebError {
         match *self {
             NotFound => 404,
             QueryParameterMissing => 400,
+            InvalidInput(_) => 400,
             Rpc(ref r) => r.status_code(),
             Pool(_) => 503,
             _ => 500
@@ -92,6 +111,7 @@ impl_from_for_error!(WebError,
                      SqlError => Sql,
                      PoolError => Pool,
                      RenderError => Hbs,
+                     String => InvalidInput,
                      RpcError => Rpc);
 
 pub type WebResult<T> = ::std::result::Result<T, WebError>;

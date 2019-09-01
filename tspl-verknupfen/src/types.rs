@@ -1,13 +1,13 @@
 //! API types.
 
 use chrono::prelude::*;
-use serde_derive::Serialize;
+use serde_derive::{Serialize, Deserialize};
 use std::collections::HashMap;
 use tspl_zugfuhrer::types::Train;
 use tspl_fahrplan::types::Schedule;
 
 /// A time, together with source information.
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct TimeWithSource {
     /// The source of this time. Mirrors the value of
     /// `TrainMvt::source`, from tspl-zugfuhrer, and uses those associated
@@ -18,14 +18,14 @@ pub struct TimeWithSource {
 }
 
 /// Source information for a deduplicated movement.
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum DeduplicatedMvtSource {
     Schedule(i64),
     Train(i64)
 }
 /// A deduplicated movement, providing aggregated information
 /// about a train's movement through a given location.
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DeduplicatedMvt {
     /// Where this movement is from, i.e. the ID of its parent schedule or train.
     pub src: DeduplicatedMvtSource,
@@ -52,7 +52,7 @@ pub struct DeduplicatedMvt {
 }
 
 /// The result of a call to get_mvts_passing_through().
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MvtQueryResponse {
     pub mvts: Vec<DeduplicatedMvt>,
     pub schedules: HashMap<i64, Schedule>,

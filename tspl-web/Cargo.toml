@@ -10,6 +10,7 @@ failure = "0.1"
 failure_derive = "0.1"
 handlebars = "2.0"
 log = "0.4"
+rayon = "1.2"
 reqwest = "0.9"
 rouille = "3.0"
 serde = "1.0"
@@ -27,6 +28,9 @@ path = "../tspl-fahrplan"
 
 [dependencies.tspl-verknupfen]
 path = "../tspl-verknupfen"
+
+[dependencies.tspl-zugfuhrer]
+path = "../tspl-zugfuhrer"
 
 [dependencies.tspl-nennen]
 path = "../tspl-nennen"
