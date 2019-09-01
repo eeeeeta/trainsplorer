@@ -12,10 +12,11 @@ use log::*;
 use crate::config::Config;
 use crate::tmpl::TemplateContext;
 use crate::errors::*;
+use crate::suggestions::*;
 
 pub struct App {
     hbs: Handlebars,
-    pool: TsplPool,
+    ss: StationSuggester,
     frpc: MicroserviceRpc,
     zrpc: MicroserviceRpc,
     vrpc: MicroserviceRpc
@@ -25,7 +26,8 @@ impl App {
         let frpc = MicroserviceRpc::new(user_agent!(), "fahrplan", cfg.service_fahrplan.clone());
         let zrpc = MicroserviceRpc::new(user_agent!(), "zugfuhrer", cfg.service_zugfuhrer.clone());
         let vrpc = MicroserviceRpc::new(user_agent!(), "verknupfen", cfg.service_verknupfen.clone());
-        App { hbs, pool, frpc, zrpc, vrpc }
+        let ss = StationSuggester::new(pool);
+        App { hbs, ss, frpc, zrpc, vrpc }
     }
     fn on_request(&self, req: &Request) -> WebResult<Response> {
         router!(req,
@@ -47,6 +49,12 @@ impl App {
                     }
                 };
                 Ok(tctx.render(&self.hbs)?)
+            },
+            (GET) (/station_suggestions) => {
+                let query = req.get_param("query")
+                    .ok_or(WebError::QueryParameterMissing)?;
+                let ret = self.ss.suggestions_for(&query)?;
+                Ok(Response::json(&ret))
             },
             _ => {
                 let asset_resp = rouille::match_assets(req, "static");

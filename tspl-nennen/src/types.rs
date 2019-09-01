@@ -25,6 +25,29 @@ pub struct StationName {
     /// The station's Customer Reservation System (CRS) code.
     pub crs: Option<String>
 }
+/// A `StationName` retrieved from the FTS5 full-text index.
+pub struct IndexedStationName {
+    /// The station's human-readable name.
+    ///
+    /// e.g. 'Clapham Junction', 'Waterloo East'
+    pub name: String,
+    /// The station's Timing Point Location (TIPLOC) code.
+    pub tiploc: Option<String>,
+    /// The station's Customer Reservation System (CRS) code.
+    pub crs: Option<String>
+}
+impl DbType for IndexedStationName {
+    fn table_name() -> &'static str {
+        "station_names_idx"
+    }
+    fn from_row(row: &Row, s: usize) -> RowResult<Self> {
+        Ok(Self {
+            name: row.get(s + 0)?,
+            tiploc: row.get(s + 1)?,
+            crs: row.get(s + 2)?,
+        })
+    }
+}
 impl DbType for StationName {
     fn table_name() -> &'static str {
         "station_names"

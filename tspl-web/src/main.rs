@@ -5,6 +5,7 @@ pub mod config;
 pub mod ctx;
 pub mod tmpl;
 pub mod templates;
+pub mod suggestions;
 
 use log::*;
 use tspl_util::ConfigExt;

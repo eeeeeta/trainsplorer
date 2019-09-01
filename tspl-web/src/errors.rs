@@ -43,6 +43,7 @@ impl WebError {
     pub fn as_rendered(&self, req: &Request, hbs: &Handlebars) -> Result<Response> {
         use self::WebError::*;
         use crate::templates::not_found::NotFoundView;
+        use crate::templates::user_error::UserErrorView;
 
         let resp = match *self {
             NotFound => {
@@ -53,6 +54,17 @@ impl WebError {
                         uri: req.url()
                     }
                 }.render(hbs)?
+            },
+            QueryParameterMissing => {
+                TemplateContext {
+                    template: "user_error",
+                    title: "Bad request (400)".into(),
+                    body: UserErrorView {
+                        error_summary: "Bad request (400)".into(),
+                        reason: "Query parameter missing.".into()
+                    }
+                }.render(hbs)?
+
             },
             _ => {
                 TemplateContext::title("ise", "").render(hbs)?
