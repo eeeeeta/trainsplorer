@@ -378,3 +378,11 @@ pub struct ConnectingMvtQueryResponse {
     /// their internal ID (for easy lookup).
     pub trains: HashMap<i64, Train>,
 }
+/// The complete details about a train stored in the database.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TrainDetails {
+    /// Actual train object.
+    pub train: Train,
+    /// Train movements, in the proper order.
+    pub mvts: Vec<TrainMvt>
+}

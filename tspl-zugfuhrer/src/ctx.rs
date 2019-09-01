@@ -39,6 +39,10 @@ impl HttpServer for App {
                 self.get_connecting_mvts(tiploc, ts, Duration::seconds(dur as _), conn)
                     .map(|x| Response::json(&x))
             },
+            (GET) (/train/{tid: Uuid}) => {
+                self.get_train_details(tid)
+                    .map(|x| Response::json(&x))
+            },
             (GET) (/trains/by-trust-id/{trust_id}/{date: NaiveDate}) => {
                 self.get_train_for_trust_id(trust_id, date)
                     .map(|x| Response::json(&x))
@@ -124,6 +128,14 @@ impl App {
         let rpc = MicroserviceRpc::new(user_agent!(), "fahrplan", cfg.service_fahrplan.clone());
         let activator = Activator::new(rpc, pool.clone());
         Self { pool, activator }
+    }
+    fn get_train_details(&self, tid: Uuid) -> ZugResult<TrainDetails> {
+        let db = self.pool.get()?;
+        let trains = Train::from_select(&db, "WHERE tspl_id = ?", &[&tid])?;
+        let train = trains.into_iter().nth(0)
+            .ok_or(ZugError::NotFound)?;
+        let mvts = TrainMvt::from_select(&db, "WHERE parent_train = ? ORDER BY day_offset, time, action, updates ASC", &[&train.id])?;
+        Ok(TrainDetails { train, mvts })
     }
     // FIXME: This function doesn't yet handle trains crossing over midnight.
     // There's no reason why it couldn't in the future though; I just want to
