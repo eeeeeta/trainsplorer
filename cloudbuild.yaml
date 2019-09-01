@@ -39,7 +39,7 @@ steps:
   args:
   - '-c'
   - |
-    [[ "$BRANCH_NAME" == "master" ]] && pkgs=("tspl-nrod" "tspl-fahrplan" "tspl-verknupfen"); for thing in ${pkgs[@]}; do kubectl -n tspl set image deployment "$thing" "$thing=gcr.io/trainsplorer/$thing:$COMMIT_SHA"; done
+    [[ "$BRANCH_NAME" == "master" ]] && pkgs=("tspl-nrod" "tspl-fahrplan" "tspl-verknupfen" "tspl-web"); for thing in ${pkgs[@]}; do kubectl -n tspl set image deployment "$thing" "$thing=gcr.io/trainsplorer/$thing:$COMMIT_SHA"; done
 
 - name: 'gcr.io/cloud-builders/kubectl'
   entrypoint: 'bash'
