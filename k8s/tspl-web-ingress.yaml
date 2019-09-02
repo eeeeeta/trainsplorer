@@ -1,0 +1,12 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: tspl-web-ingress 
+  namespace: tspl
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: 34.95.71.103
+    networking.gke.io/managed-certificates: tspl-managed-certificate
+spec:
+  backend:
+    serviceName: tspl-web
+    servicePort: 80
