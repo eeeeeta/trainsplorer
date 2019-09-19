@@ -13,6 +13,7 @@ use tspl_sqlite::uuid::Uuid;
 use tspl_sqlite::traits::*;
 use chrono::Duration;
 
+use crate::broadcast::BroadcastSender;
 use crate::config::Config;
 use crate::activation::Activator;
 use crate::errors::*;
@@ -20,6 +21,7 @@ use crate::types::*;
 
 pub struct App {
     pool: TsplPool,
+    cast: BroadcastSender,
     activator: Activator
 }
 impl HttpServer for App {
@@ -124,10 +126,10 @@ impl HttpServer for App {
     }
 }
 impl App {
-    pub fn new(pool: TsplPool, cfg: &Config) -> Self {
+    pub fn new(pool: TsplPool, cast: BroadcastSender, cfg: &Config) -> Self {
         let rpc = MicroserviceRpc::new(user_agent!(), "fahrplan", cfg.service_fahrplan.clone());
         let activator = Activator::new(rpc, pool.clone());
-        Self { pool, activator }
+        Self { pool, activator, cast }
     }
     fn get_train_details(&self, tid: Uuid) -> ZugResult<TrainDetails> {
         let db = self.pool.get()?;
@@ -364,6 +366,7 @@ impl App {
         tmvt.id = tmvt.insert_self(&trans)?;
         info!("Inserted new movement #{}", tmvt.id);
         trans.commit()?;
+        self.cast.send_mvt(tmvt.clone());
         Ok(tmvt)
     }
     fn process_trust_mvt_update(&self, tid: Uuid, upd: TrustMvtUpdate) -> ZugResult<TrainMvt> {
@@ -410,6 +413,7 @@ impl App {
         tmvt.id = tmvt.insert_self(&trans)?;
         info!("Inserted new movement #{}", tmvt.id);
         trans.commit()?;
+        self.cast.send_mvt(tmvt.clone());
         Ok(tmvt)
     }
     fn get_train_for_darwin_rid(&self, rid: String) -> ZugResult<Train> {
@@ -463,10 +467,12 @@ impl App {
         db.execute("UPDATE trains SET darwin_rid = ? WHERE id = ?",
                    params![rid, ret.id])?;
         ret.darwin_rid = Some(rid);
+        self.cast.send_activation(ret.clone());
         Ok(ret)
     }
     fn activate_train(&self, uid: String, start_date: NaiveDate, stp_indicator: String, source: i32, date: NaiveDate) -> ZugResult<Train> {
         let ret = self.activator.activate_train_nrod(uid, start_date, stp_indicator, source, date)?;
+        self.cast.send_activation(ret.clone());
         Ok(ret)
     }
 }

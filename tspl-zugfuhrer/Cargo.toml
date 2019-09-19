@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 chrono = "0.4"
+crossbeam-channel = "0.3"
 failure = "0.1"
 failure_derive = "0.1"
 log = "0.4"
