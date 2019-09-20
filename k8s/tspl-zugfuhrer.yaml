@@ -10,6 +10,8 @@ spec:
   ports:
   - port: 80
     name: rpc
+  - port: 3000
+    name: live
   selector:
     app: tspl-zugfuhrer
 ---
@@ -56,6 +58,8 @@ spec:
           value: "/data/zugfuhrer.sqlite"
         - name: TSPL_LISTEN
           value: "0.0.0.0:80"
+        - name: TSPL_LISTEN_LIVE
+          value: "0.0.0.0:3000"
         - name: TSPL_SERVICE_FAHRPLAN
           value: "http://tspl-fahrplan"
         - name: TSPL_USERNAME

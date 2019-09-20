@@ -7,6 +7,7 @@ use tspl_sqlite::TsplPool;
 use tspl_sqlite::traits::*;
 use serde_derive::Serialize;
 use chrono::prelude::*;
+use std::io::Write;
 use log::*;
 
 use crate::types::*;
@@ -73,6 +74,7 @@ pub struct LiveHandler {
 impl LiveHandler {
     fn send(&mut self, upd: &BroadcastPacket) -> Result<()> {
         serde_json::to_writer(&mut self.inner, upd)?;
+        self.inner.write_all(b"\n")?;
         Ok(())
     }
     fn run(mut self) -> Result<()> {
