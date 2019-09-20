@@ -80,9 +80,12 @@ impl LiveHandler {
     fn run(mut self) -> Result<()> {
         let addr = self.inner.peer_addr()?;
         info!("Synchronizing trains for live connection {}", addr);
-        let db = self.pool.get()?;
-        let today = Local::now().naive_utc().date();
-        let trains = Train::from_select(&db, "WHERE date = ? AND terminated != true", &[&today])?;
+        let trains = {
+            let db = self.pool.get()?;
+            let today = Local::now().naive_utc().date();
+            let trains = Train::from_select(&db, "WHERE date = ? AND terminated != true", &[&today])?;
+            trains
+        };
         let len = trains.len();
         for train in trains {
             let now = Utc::now().naive_utc();
