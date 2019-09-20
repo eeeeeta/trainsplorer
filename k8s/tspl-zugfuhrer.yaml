@@ -31,6 +31,7 @@ spec:
       namespace: tspl
       annotations:
         linkerd.io/inject: enabled
+        config.linkerd.io/skip-inbound-ports: "3000"
       labels:
         app: tspl-zugfuhrer
     spec:
